@@ -1,5 +1,12 @@
+import json
+import os
+import tempfile
+
 import fitz  # PyMuPDF
+
 from .models import db, Paper, PaperFile, Passage, Author
+
+OCR_JSON_DIR = os.path.join(os.path.expanduser('~'), '.papermeister', 'ocr_json')
 
 
 def extract_metadata_from_pdf(filepath):
@@ -54,17 +61,71 @@ def split_into_passages(text, min_length=50):
     return passages
 
 
+def _save_ocr_json(paper_file, raw_result):
+    """Save raw OCR JSON to ~/.papermeister/ocr_json/{hash}.json (atomic write)."""
+    os.makedirs(OCR_JSON_DIR, exist_ok=True)
+    out_path = os.path.join(OCR_JSON_DIR, f'{paper_file.hash}.json')
+    tmp = tempfile.NamedTemporaryFile(
+        mode='w', dir=OCR_JSON_DIR, suffix='.tmp', delete=False, encoding='utf-8',
+    )
+    try:
+        json.dump(raw_result, tmp, ensure_ascii=False, indent=2)
+        tmp.close()
+        os.replace(tmp.name, out_path)
+    except Exception:
+        tmp.close()
+        if os.path.exists(tmp.name):
+            os.unlink(tmp.name)
+        raise
+    return out_path
+
+
+def _load_ocr_json(paper_file):
+    """Load cached raw OCR JSON if it exists. Returns raw_result dict or None."""
+    path = os.path.join(OCR_JSON_DIR, f'{paper_file.hash}.json')
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding='utf-8') as f:
+        return json.load(f)
+
+
+def _pages_from_raw(raw_result):
+    """Extract (page_num, text) list from raw OCR result."""
+    pages = []
+    for page_data in raw_result.get('pages', []):
+        text = (
+            page_data.get('markdown')
+            or page_data.get('text')
+            or ''
+        ).strip()
+        page_num = page_data.get('page', 0) + 1  # 0-based → 1-based
+        if text:
+            pages.append((page_num, text))
+    return pages
+
+
 def process_paper_file(paper_file, ocr_progress_callback=None):
-    """OCR a PDF via RunPod, extract metadata, store in DB and FTS index."""
+    """OCR a PDF via RunPod (or use cached JSON), store text in DB and FTS index."""
     filepath = paper_file.path
     paper = paper_file.paper
     meta = extract_metadata_from_pdf(filepath)
 
-    from .ocr import ocr_pdf
-    ocr_results = ocr_pdf(filepath, progress_callback=ocr_progress_callback)
-    pages = [(r['page'], r['text']) for r in ocr_results]
+    # Use cached raw JSON if available, otherwise call RunPod
+    raw_result = _load_ocr_json(paper_file)
+    if raw_result:
+        pages = _pages_from_raw(raw_result)
+    else:
+        from .ocr import ocr_pdf
+        ocr_results, raw_result = ocr_pdf(filepath, progress_callback=ocr_progress_callback)
+        _save_ocr_json(paper_file, raw_result)
+        pages = [(r['page'], r['text']) for r in ocr_results]
 
     with db.atomic():
+        # Clear existing data for reprocessing
+        db.execute_sql('DELETE FROM passage_fts WHERE paper_id = ?', [paper.id])
+        Passage.delete().where(Passage.paper == paper).execute()
+        Author.delete().where(Author.paper == paper).execute()
+
         if meta['title']:
             paper.title = meta['title']
         if meta['year']:

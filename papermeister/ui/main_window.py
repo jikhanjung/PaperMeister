@@ -6,10 +6,8 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
-    QLabel,
     QLineEdit,
     QMainWindow,
-    QProgressBar,
     QPushButton,
     QSplitter,
     QTextEdit,
@@ -18,6 +16,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from .process_window import ProcessWindow
 
 
 # ── Workers ──────────────────────────────────────────────────
@@ -40,42 +40,6 @@ class ScanWorker(QThread):
         self.finished.emit(source.id, len(new_files))
 
 
-class ProcessWorker(QThread):
-    """OCR-processes all pending PaperFiles."""
-    progress = pyqtSignal(str)
-    file_done = pyqtSignal(int)  # paper_file.id
-    finished = pyqtSignal(int, int)  # processed, failed
-
-    def __init__(self, paper_file_ids):
-        super().__init__()
-        self.paper_file_ids = paper_file_ids
-
-    def run(self):
-        from ..models import PaperFile
-        from ..text_extract import process_paper_file
-
-        processed = failed = 0
-        total = len(self.paper_file_ids)
-        for i, pf_id in enumerate(self.paper_file_ids):
-            pf = PaperFile.get_by_id(pf_id)
-            name = os.path.basename(pf.path)
-            self.progress.emit(f'OCR [{i + 1}/{total}]: {name}')
-            try:
-                process_paper_file(
-                    pf,
-                    ocr_progress_callback=lambda c, t, msg: self.progress.emit(msg),
-                )
-                processed += 1
-            except Exception as e:
-                pf.status = 'failed'
-                pf.save()
-                failed += 1
-                self.progress.emit(f'Failed: {name} — {e}')
-            self.file_done.emit(pf_id)
-
-        self.finished.emit(processed, failed)
-
-
 # ── Main Window ──────────────────────────────────────────────
 
 class MainWindow(QMainWindow):
@@ -84,7 +48,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('PaperMeister')
         self.setMinimumSize(1200, 700)
         self._scan_worker = None
-        self._process_worker = None
+        self._process_window = ProcessWindow(self)
+        self._process_window.processing_updated.connect(self._on_processing_updated)
         self._setup_ui()
         self._setup_menu()
         self._refresh_source_tree()
@@ -100,6 +65,8 @@ class MainWindow(QMainWindow):
         import_action.setShortcut('Ctrl+I')
         import_action.triggered.connect(self._import_folder)
 
+        file_menu.addSeparator()
+
         process_action = file_menu.addAction('&Process Pending...')
         process_action.setShortcut('Ctrl+P')
         process_action.triggered.connect(self._process_pending)
@@ -107,6 +74,12 @@ class MainWindow(QMainWindow):
         retry_action = file_menu.addAction('&Retry Failed...')
         retry_action.setShortcut('Ctrl+R')
         retry_action.triggered.connect(self._retry_failed)
+
+        reindex_action = file_menu.addAction('Re&index from Cache...')
+        reindex_action.triggered.connect(self._reindex_from_cache)
+
+        reprocess_action = file_menu.addAction('Reprocess &All...')
+        reprocess_action.triggered.connect(self._reprocess_all)
 
         file_menu.addSeparator()
 
@@ -158,13 +131,6 @@ class MainWindow(QMainWindow):
         splitter.setSizes([250, 400, 550])
         layout.addWidget(splitter)
 
-        # Progress bar in status bar
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setMaximumWidth(200)
-        self.progress_bar.setVisible(False)
-        self.progress_label = QLabel()
-        self.statusBar().addPermanentWidget(self.progress_label)
-        self.statusBar().addPermanentWidget(self.progress_bar)
         self.statusBar().showMessage('Ready')
 
     # ── Source tree ───────────────────────────────────────────
@@ -177,17 +143,25 @@ class MainWindow(QMainWindow):
         for source in Source.select().order_by(Source.name):
             icon = '\U0001f4c1' if source.source_type == 'directory' else '\U0001f4da'
             source_item = QTreeWidgetItem([f'{icon} {source.name}'])
-            source_item.setData(0, Qt.ItemDataRole.UserRole, ('source', source.id))
             self.source_tree.addTopLevelItem(source_item)
 
-            # Add root folders (parent is None)
-            root_folders = (
+            root_folders = list(
                 Folder.select()
                 .where(Folder.source == source, Folder.parent.is_null())
                 .order_by(Folder.name)
             )
-            for folder in root_folders:
-                self._add_folder_item(source_item, folder)
+
+            # If single root folder matches source name, merge them
+            if len(root_folders) == 1:
+                root = root_folders[0]
+                source_item.setData(0, Qt.ItemDataRole.UserRole, ('folder', root.id))
+                children = Folder.select().where(Folder.parent == root).order_by(Folder.name)
+                for child in children:
+                    self._add_folder_item(source_item, child)
+            else:
+                source_item.setData(0, Qt.ItemDataRole.UserRole, ('source', source.id))
+                for folder in root_folders:
+                    self._add_folder_item(source_item, folder)
 
             source_item.setExpanded(True)
 
@@ -294,16 +268,12 @@ class MainWindow(QMainWindow):
         for result in results:
             paper = result['paper']
             matches = result['matches']
-            snippets = '; '.join(
-                f'p.{m["page"]}' for m in matches[:3]
-            )
             item = QTreeWidgetItem([
                 paper.title or '(Untitled)',
                 str(paper.year or ''),
                 f'{len(matches)} hits',
             ])
             item.setData(0, Qt.ItemDataRole.UserRole, paper.id)
-            # Store matches for detail display
             item.setData(0, Qt.ItemDataRole.UserRole + 1, result)
             self.paper_list.addTopLevelItem(item)
 
@@ -325,12 +295,9 @@ class MainWindow(QMainWindow):
     def _on_scan_finished(self, source_id, new_count):
         self._scan_worker = None
         self._refresh_source_tree()
-        self.statusBar().showMessage(
-            f'Scan complete: {new_count} new PDFs found'
-        )
+        self.statusBar().showMessage(f'Scan complete: {new_count} new PDFs found')
         self._update_status_counts()
 
-        # Auto-start OCR for pending files
         if new_count > 0:
             self._start_processing_source(source_id)
 
@@ -345,12 +312,12 @@ class MainWindow(QMainWindow):
                 .where(Folder.source_id == source_id, PaperFile.status == 'pending')
             )
         ]
-        if not pending_ids:
-            return
-        self._start_processing(pending_ids)
+        if pending_ids:
+            self._start_processing(pending_ids)
+
+    # ── Processing actions ───────────────────────────────────
 
     def _process_pending(self):
-        """Process all pending files across all sources."""
         from ..models import PaperFile
 
         pending_ids = [
@@ -363,56 +330,55 @@ class MainWindow(QMainWindow):
         self._start_processing(pending_ids)
 
     def _retry_failed(self):
-        """Reset failed files to pending and reprocess."""
         from ..models import PaperFile
 
-        failed = PaperFile.select().where(PaperFile.status == 'failed')
-        failed_ids = [pf.id for pf in failed]
+        failed_ids = [
+            pf.id for pf in
+            PaperFile.select(PaperFile.id).where(PaperFile.status == 'failed')
+        ]
         if not failed_ids:
             self.statusBar().showMessage('No failed files')
             return
         PaperFile.update(status='pending').where(PaperFile.status == 'failed').execute()
-        self.statusBar().showMessage(f'Retrying {len(failed_ids)} failed files...')
         self._start_processing(failed_ids)
 
-    def _start_processing(self, paper_file_ids):
-        if self._process_worker and self._process_worker.isRunning():
-            self.statusBar().showMessage('Processing already in progress')
+    def _reindex_from_cache(self):
+        from ..models import PaperFile, Passage
+        from ..text_extract import OCR_JSON_DIR
+
+        targets = []
+        for pf in PaperFile.select():
+            has_passages = Passage.select().where(Passage.paper == pf.paper).exists()
+            if has_passages:
+                continue
+            json_path = os.path.join(OCR_JSON_DIR, f'{pf.hash}.json')
+            if os.path.exists(json_path):
+                targets.append(pf.id)
+
+        if not targets:
+            self.statusBar().showMessage('No files to reindex')
             return
+        PaperFile.update(status='pending').where(PaperFile.id.in_(targets)).execute()
+        self._start_processing(targets)
 
-        self._process_total = len(paper_file_ids)
-        self._process_done = 0
-        self.progress_bar.setRange(0, self._process_total)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setVisible(True)
-        self.progress_label.setText(f'0/{self._process_total}')
+    def _reprocess_all(self):
+        from ..models import PaperFile
 
-        self._process_worker = ProcessWorker(paper_file_ids)
-        self._process_worker.progress.connect(
-            lambda msg: self.statusBar().showMessage(msg)
-        )
-        self._process_worker.file_done.connect(self._on_file_processed)
-        self._process_worker.finished.connect(self._on_processing_finished)
-        self._process_worker.start()
+        all_ids = [pf.id for pf in PaperFile.select(PaperFile.id)]
+        if not all_ids:
+            self.statusBar().showMessage('No files to reprocess')
+            return
+        PaperFile.update(status='pending').execute()
+        self._start_processing(all_ids)
 
-    def _on_file_processed(self, paper_file_id):
-        self._process_done += 1
-        self.progress_bar.setValue(self._process_done)
-        self.progress_label.setText(f'{self._process_done}/{self._process_total}')
+    def _start_processing(self, paper_file_ids):
+        self._process_window.start(paper_file_ids)
 
-        # Refresh current paper list to update status column
+    def _on_processing_updated(self):
+        # Refresh paper list and status counts
         current = self.source_tree.currentItem()
         if current:
             self._on_folder_selected(current, None)
-        self._update_status_counts()
-
-    def _on_processing_finished(self, processed, failed):
-        self._process_worker = None
-        self.progress_bar.setVisible(False)
-        self.progress_label.setText('')
-        self.statusBar().showMessage(
-            f'Processing complete: {processed} processed, {failed} failed'
-        )
         self._update_status_counts()
 
     # ── Status ───────────────────────────────────────────────

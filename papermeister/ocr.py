@@ -13,6 +13,7 @@ import base64
 import io
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 
 import fitz
@@ -227,7 +228,7 @@ def ocr_pdf(
     doc.close()
 
     all_page_indices = list(range(total_pages))
-    results = {}
+    raw_pages = {}  # page_idx -> raw page_data from RunPod
 
     # Process in batches
     batches = [
@@ -261,19 +262,34 @@ def ocr_pdf(
                     for page_data, page_idx in zip(
                         sub_output.get('pages', []), sub_indices
                     ):
-                        text = page_data.get('text', '')
-                        if text.strip():
-                            results[page_idx] = text.strip()
+                        page_data['page'] = page_idx
+                        raw_pages[page_idx] = page_data
                 except Exception:
                     pass
             continue
 
         for page_data, page_idx in zip(output.get('pages', []), chunk_indices):
-            text = page_data.get('text', '')
-            if text.strip():
-                results[page_idx] = text.strip()
+            page_data['page'] = page_idx
+            raw_pages[page_idx] = page_data
 
-    return [
-        {'page': idx + 1, 'text': results[idx]}
-        for idx in sorted(results.keys())
-    ]
+    # Build results: text-only list + full raw data
+    # Chandra2-vllm returns 'markdown' (full page text) and 'chunks' (structured blocks)
+    results = []
+    for idx in sorted(raw_pages.keys()):
+        text = (
+            raw_pages[idx].get('markdown')
+            or raw_pages[idx].get('text')
+            or ''
+        ).strip()
+        if text:
+            results.append({'page': idx + 1, 'text': text})
+
+    raw_result = {
+        'pdf': os.path.basename(pdf_path),
+        'processed_at': datetime.now().isoformat(),
+        'total_pages': total_pages,
+        'done_pages': len(raw_pages),
+        'pages': sorted(raw_pages.values(), key=lambda p: p['page']),
+    }
+
+    return results, raw_result
