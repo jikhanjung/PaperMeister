@@ -1,3 +1,5 @@
+import peewee
+
 from .models import db, Source, Folder, Paper, PaperFile, Passage
 
 
@@ -56,7 +58,7 @@ def get_paper_passages(paper_id):
 def get_papers_in_folder(folder_id):
     return list(
         Paper.select(Paper, PaperFile.status)
-        .join(PaperFile)
+        .join(PaperFile, peewee.JOIN.LEFT_OUTER)
         .where(Paper.folder_id == folder_id)
         .order_by(Paper.title)
     )
@@ -65,7 +67,7 @@ def get_papers_in_folder(folder_id):
 def get_papers_in_source(source_id):
     return list(
         Paper.select(Paper, PaperFile.status)
-        .join(PaperFile)
+        .join(PaperFile, peewee.JOIN.LEFT_OUTER)
         .switch(Paper)
         .join(Folder)
         .where(Folder.source_id == source_id)

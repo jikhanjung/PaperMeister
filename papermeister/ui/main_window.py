@@ -2,7 +2,9 @@ import html
 import os
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QCursor
 from PyQt6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
@@ -40,6 +42,93 @@ class ScanWorker(QThread):
         self.finished.emit(source.id, len(new_files))
 
 
+class ZoteroCollectionSyncWorker(QThread):
+    """Syncs Zotero collection tree to DB (no paper import)."""
+    finished = pyqtSignal()
+
+    def __init__(self, user_id, api_key):
+        super().__init__()
+        self.user_id = user_id
+        self.api_key = api_key
+
+    def run(self):
+        from ..ingestion import get_or_create_zotero_source, sync_zotero_collections
+        from ..zotero_client import ZoteroClient, load_cached_collections
+
+        client = ZoteroClient(self.user_id, self.api_key)
+        source = get_or_create_zotero_source(self.user_id)
+
+        # Use cache first, then refresh from API
+        cached = load_cached_collections()
+        if cached:
+            sync_zotero_collections(client, source, cached)
+
+        fresh = client.get_collections()  # also saves cache
+        sync_zotero_collections(client, source, fresh)
+        self.finished.emit()
+
+
+class ZoteroFetchItemsWorker(QThread):
+    """Fetches item metadata (no PDFs) for a Zotero collection."""
+    progress = pyqtSignal(str)
+    finished = pyqtSignal(int)  # new_count
+
+    def __init__(self, user_id, api_key, folder_id):
+        super().__init__()
+        self.user_id = user_id
+        self.api_key = api_key
+        self.folder_id = folder_id
+
+    def run(self):
+        from ..ingestion import fetch_zotero_collection_items, get_or_create_zotero_source
+        from ..models import Folder
+        from ..zotero_client import ZoteroClient
+
+        client = ZoteroClient(self.user_id, self.api_key)
+        source = get_or_create_zotero_source(self.user_id)
+        folder = Folder.get_by_id(self.folder_id)
+        new_count = fetch_zotero_collection_items(
+            client, source, folder,
+            progress_callback=lambda msg: self.progress.emit(msg),
+        )
+        self.finished.emit(new_count)
+
+
+class ZoteroScanWorker(QThread):
+    """Imports papers from selected Zotero collections."""
+    progress = pyqtSignal(str)
+    finished = pyqtSignal(int, int)  # source_id, new_file_count
+
+    def __init__(self, user_id, api_key, collections):
+        super().__init__()
+        self.user_id = user_id
+        self.api_key = api_key
+        self.collections = collections
+
+    def run(self):
+        from ..ingestion import (
+            _get_or_create_zotero_folder,
+            fetch_zotero_collection_items,
+            get_or_create_zotero_source,
+        )
+        from ..zotero_client import ZoteroClient
+
+        client = ZoteroClient(self.user_id, self.api_key)
+        source = get_or_create_zotero_source(self.user_id)
+        total_new = 0
+
+        for col in self.collections:
+            self.progress.emit(f'Importing collection: {col["name"]}')
+            folder = _get_or_create_zotero_folder(source, col)
+            new_count = fetch_zotero_collection_items(
+                client, source, folder,
+                progress_callback=lambda msg: self.progress.emit(msg),
+            )
+            total_new += new_count
+
+        self.finished.emit(source.id, total_new)
+
+
 # ── Main Window ──────────────────────────────────────────────
 
 class MainWindow(QMainWindow):
@@ -48,12 +137,15 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('PaperMeister')
         self.setMinimumSize(1200, 700)
         self._scan_worker = None
+        self._zotero_worker = None
+        self._zotero_sync_worker = None
         self._process_window = ProcessWindow(self)
         self._process_window.processing_updated.connect(self._on_processing_updated)
         self._setup_ui()
         self._setup_menu()
         self._refresh_source_tree()
         self._update_status_counts()
+        self._sync_zotero_collections()
 
     # ── Menu ─────────────────────────────────────────────────
 
@@ -64,6 +156,15 @@ class MainWindow(QMainWindow):
         import_action = file_menu.addAction('Import &Folder...')
         import_action.setShortcut('Ctrl+I')
         import_action.triggered.connect(self._import_folder)
+
+        zotero_action = file_menu.addAction('Import from &Zotero...')
+        zotero_action.setShortcut('Ctrl+Z')
+        zotero_action.triggered.connect(self._import_zotero)
+
+        file_menu.addSeparator()
+
+        prefs_action = file_menu.addAction('P&references...')
+        prefs_action.triggered.connect(self._open_preferences)
 
         file_menu.addSeparator()
 
@@ -182,10 +283,11 @@ class MainWindow(QMainWindow):
         self.paper_list.clear()
         self.detail_view.clear()
         for paper in papers:
-            status = ''
+            status = 'no PDF'
             try:
                 pf = paper.paperfile
-                status = pf.status
+                if pf:
+                    status = pf.status
             except Exception:
                 pass
             item = QTreeWidgetItem([
@@ -210,9 +312,46 @@ class MainWindow(QMainWindow):
             papers = get_papers_in_source(obj_id)
         else:
             papers = get_papers_in_folder(obj_id)
+            # Zotero folder with no papers yet → fetch from API
+            if not papers:
+                self._try_fetch_zotero_items(obj_id)
 
         self._load_papers(papers)
         self.statusBar().showMessage(f'{len(papers)} papers')
+
+    def _try_fetch_zotero_items(self, folder_id):
+        """If this is a Zotero folder, fetch its items from the API."""
+        from ..models import Folder
+        from ..preferences import get_pref
+
+        folder = Folder.get_by_id(folder_id)
+        if not folder.zotero_key:
+            return
+
+        user_id = get_pref('zotero_user_id', '')
+        api_key = get_pref('zotero_api_key', '')
+        if not user_id or not api_key:
+            return
+
+        if self._zotero_worker and self._zotero_worker.isRunning():
+            return
+
+        self.statusBar().showMessage(f'Fetching items from "{folder.name}"...')
+        QApplication.setOverrideCursor(QCursor(Qt.CursorShape.WaitCursor))
+        self._zotero_worker = ZoteroFetchItemsWorker(user_id, api_key, folder_id)
+        self._zotero_worker.progress.connect(lambda msg: self.statusBar().showMessage(msg))
+        self._zotero_worker.finished.connect(self._on_zotero_fetch_finished)
+        self._zotero_worker.start()
+
+    def _on_zotero_fetch_finished(self, new_count):
+        QApplication.restoreOverrideCursor()
+        self._zotero_worker = None
+        self.statusBar().showMessage(f'Fetched {new_count} new papers')
+        self._update_status_counts()
+        # Reload the currently selected folder
+        current = self.source_tree.currentItem()
+        if current:
+            self._on_folder_selected(current, None)
 
     # ── Paper detail ─────────────────────────────────────────
 
@@ -373,6 +512,71 @@ class MainWindow(QMainWindow):
 
     def _start_processing(self, paper_file_ids):
         self._process_window.start(paper_file_ids)
+
+    # ── Zotero import ───────────────────────────────────────────
+
+    def _open_preferences(self):
+        from .preferences_dialog import PreferencesDialog
+        dlg = PreferencesDialog(self)
+        if dlg.exec() == dlg.DialogCode.Accepted:
+            self._sync_zotero_collections()
+
+    def _sync_zotero_collections(self):
+        """Sync Zotero collection tree to source panel (background)."""
+        from ..preferences import get_pref
+        user_id = get_pref('zotero_user_id', '')
+        api_key = get_pref('zotero_api_key', '')
+        if not user_id or not api_key:
+            return
+        if self._zotero_sync_worker and self._zotero_sync_worker.isRunning():
+            return
+        self._zotero_sync_worker = ZoteroCollectionSyncWorker(user_id, api_key)
+        self._zotero_sync_worker.finished.connect(self._on_zotero_sync_done)
+        self._zotero_sync_worker.start()
+
+    def _on_zotero_sync_done(self):
+        self._zotero_sync_worker = None
+        self._refresh_source_tree()
+
+    def _import_zotero(self):
+        from ..preferences import get_pref
+
+        user_id = get_pref('zotero_user_id', '')
+        api_key = get_pref('zotero_api_key', '')
+
+        if not user_id or not api_key:
+            from .preferences_dialog import PreferencesDialog
+            dlg = PreferencesDialog(self)
+            if dlg.exec() != dlg.DialogCode.Accepted:
+                return
+            user_id = get_pref('zotero_user_id', '')
+            api_key = get_pref('zotero_api_key', '')
+            if not user_id or not api_key:
+                return
+
+        from .zotero_import_dialog import ZoteroImportDialog
+        dlg = ZoteroImportDialog(user_id, api_key, self)
+        if dlg.exec() != dlg.DialogCode.Accepted:
+            return
+
+        collections = dlg.selected_collections
+        if not collections:
+            return
+
+        self.statusBar().showMessage(f'Importing {len(collections)} Zotero collection(s)...')
+        self._zotero_worker = ZoteroScanWorker(user_id, api_key, collections)
+        self._zotero_worker.progress.connect(lambda msg: self.statusBar().showMessage(msg))
+        self._zotero_worker.finished.connect(self._on_zotero_scan_finished)
+        self._zotero_worker.start()
+
+    def _on_zotero_scan_finished(self, source_id, new_count):
+        self._zotero_worker = None
+        self._refresh_source_tree()
+        self.statusBar().showMessage(f'Zotero import complete: {new_count} new PDFs')
+        self._update_status_counts()
+
+        if new_count > 0:
+            self._start_processing_source(source_id)
 
     def _on_processing_updated(self):
         # Refresh paper list and status counts

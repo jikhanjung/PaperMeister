@@ -22,6 +22,7 @@ class Folder(BaseModel):
     name = peewee.TextField()
     parent = peewee.ForeignKeyField('self', null=True, backref='children', on_delete='CASCADE')
     path = peewee.TextField(default='')  # full path for directory folders
+    zotero_key = peewee.TextField(default='')  # Zotero collection key
 
 
 class Paper(BaseModel):
@@ -42,8 +43,9 @@ class Author(BaseModel):
 class PaperFile(BaseModel):
     paper = peewee.ForeignKeyField(Paper, backref='files', on_delete='CASCADE')
     path = peewee.TextField()
-    hash = peewee.TextField(unique=True)
+    hash = peewee.TextField(default='')
     status = peewee.TextField(default='pending')  # pending, processed, failed
+    zotero_key = peewee.TextField(default='')  # Zotero attachment key
 
 
 class Passage(BaseModel):

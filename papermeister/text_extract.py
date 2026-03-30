@@ -104,40 +104,105 @@ def _pages_from_raw(raw_result):
     return pages
 
 
-def process_paper_file(paper_file, ocr_progress_callback=None):
-    """OCR a PDF via RunPod (or use cached JSON), store text in DB and FTS index."""
-    filepath = paper_file.path
-    paper = paper_file.paper
-    meta = extract_metadata_from_pdf(filepath)
+def _resolve_filepath(paper_file):
+    """Return (filepath, is_temp) for a PaperFile.
 
-    # Use cached raw JSON if available, otherwise call RunPod
+    For Zotero files, downloads to a temp location. Caller must clean up if is_temp.
+    """
+    if paper_file.zotero_key:
+        from .preferences import get_pref
+        from .zotero_client import ZoteroClient
+        user_id = get_pref('zotero_user_id', '')
+        api_key = get_pref('zotero_api_key', '')
+        if not user_id or not api_key:
+            raise RuntimeError('Zotero credentials not configured')
+        client = ZoteroClient(user_id, api_key)
+        tmp_path = client.download_attachment(paper_file.zotero_key)
+        return tmp_path, True
+    return paper_file.path, False
+
+
+def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=None):
+    """OCR a PDF via RunPod (or use cached JSON), store text in DB and FTS index.
+
+    status_callback(msg): called with human-readable status at each stage.
+    """
+    paper = paper_file.paper
+    is_zotero = bool(paper_file.zotero_key)
+
+    filepath = None
+    is_temp = False
+
+    # Zotero files: download first to fill hash, then check cache
+    if is_zotero and not paper_file.hash:
+        if status_callback:
+            status_callback('Downloading PDF from Zotero...')
+        filepath, is_temp = _resolve_filepath(paper_file)
+        from .ingestion import hash_file
+        paper_file.hash = hash_file(filepath)
+        paper_file.save()
+
     raw_result = _load_ocr_json(paper_file)
+
     if raw_result:
+        if status_callback:
+            status_callback('Loading from OCR cache...')
         pages = _pages_from_raw(raw_result)
     else:
-        from .ocr import ocr_pdf
-        ocr_results, raw_result = ocr_pdf(filepath, progress_callback=ocr_progress_callback)
-        _save_ocr_json(paper_file, raw_result)
-        pages = [(r['page'], r['text']) for r in ocr_results]
+        # Need the actual file for OCR
+        if filepath is None:
+            if is_zotero:
+                if status_callback:
+                    status_callback('Downloading PDF from Zotero...')
+            filepath, is_temp = _resolve_filepath(paper_file)
+        try:
+            if status_callback:
+                status_callback('Running OCR...')
+            from .ocr import ocr_pdf
+            ocr_results, raw_result = ocr_pdf(filepath, progress_callback=ocr_progress_callback)
+            _save_ocr_json(paper_file, raw_result)
+            pages = [(r['page'], r['text']) for r in ocr_results]
+        except Exception:
+            if is_temp and filepath:
+                _cleanup_temp(filepath)
+            raise
+
+    # Extract metadata from PDF if we have the file and it's not a Zotero item
+    # (Zotero items already have metadata from the API)
+    meta = None
+    if not is_zotero:
+        if filepath is None:
+            filepath = paper_file.path
+        meta = extract_metadata_from_pdf(filepath)
+
+    # Clean up temp file now that OCR is done
+    if is_temp and filepath:
+        _cleanup_temp(filepath)
 
     with db.atomic():
-        # Clear existing data for reprocessing
+        # Clear existing passages and FTS data for reprocessing
         db.execute_sql('DELETE FROM passage_fts WHERE paper_id = ?', [paper.id])
         Passage.delete().where(Passage.paper == paper).execute()
-        Author.delete().where(Author.paper == paper).execute()
 
-        if meta['title']:
-            paper.title = meta['title']
-        if meta['year']:
-            paper.year = meta['year']
-        paper.save()
+        if is_zotero:
+            # Zotero metadata was set during import; build authors_str from existing records
+            authors = Author.select().where(Author.paper == paper).order_by(Author.order)
+            authors_str = ', '.join(a.name for a in authors)
+        else:
+            # Directory import: use PDF metadata
+            Author.delete().where(Author.paper == paper).execute()
+            if meta and meta['title']:
+                paper.title = meta['title']
+            if meta and meta['year']:
+                paper.year = meta['year']
+            paper.save()
 
-        authors_str = ''
-        if meta['author']:
-            names = [n.strip() for n in meta['author'].split(';') if n.strip()]
-            for i, name in enumerate(names):
-                Author.create(paper=paper, name=name, order=i)
-            authors_str = ', '.join(names)
+            authors_str = ''
+            if meta and meta['author']:
+                names = [n.strip() for n in meta['author'].split(';') if n.strip()]
+                for i, name in enumerate(names):
+                    Author.create(paper=paper, name=name, order=i)
+                authors_str = ', '.join(names)
 
         for page_num, text in pages:
             for passage_text in split_into_passages(text):
@@ -156,3 +221,11 @@ def process_paper_file(paper_file, ocr_progress_callback=None):
         paper_file.save()
 
     return paper
+
+
+def _cleanup_temp(filepath):
+    """Remove a temp file."""
+    try:
+        os.unlink(filepath)
+    except OSError:
+        pass

@@ -14,14 +14,10 @@ import io
 import os
 import time
 from datetime import datetime
-from pathlib import Path
 
 import fitz
 import requests
-from dotenv import load_dotenv
 from PIL import Image
-
-load_dotenv(Path(__file__).resolve().parent.parent / '.env')
 
 _BASE_URL = None
 _HEADERS = None
@@ -31,16 +27,23 @@ class PayloadTooLarge(Exception):
     pass
 
 
+def reset_config():
+    """Clear cached config so next call re-reads from preferences."""
+    global _BASE_URL, _HEADERS
+    _BASE_URL = None
+    _HEADERS = None
+
+
 def _ensure_config():
     global _BASE_URL, _HEADERS
     if _BASE_URL is not None:
         return
-    endpoint_id = os.environ.get('RUNPOD_ENDPOINT_ID')
-    api_key = os.environ.get('RUNPOD_API_KEY')
+    from .preferences import get_pref
+    endpoint_id = get_pref('runpod_endpoint_id', '')
+    api_key = get_pref('runpod_api_key', '')
     if not endpoint_id or not api_key:
         raise RuntimeError(
-            'RUNPOD_ENDPOINT_ID and RUNPOD_API_KEY must be set '
-            '(environment variables or .env file)'
+            'RunPod credentials not configured. Set them in Preferences.'
         )
     _BASE_URL = f'https://api.runpod.ai/v2/{endpoint_id}'
     _HEADERS = {
@@ -89,6 +92,24 @@ def is_ready() -> bool:
         return (w.get('idle', 0) + w.get('running', 0)) > 0
     except Exception:
         return False
+
+
+def get_worker_status() -> dict:
+    """Return worker status from health check.
+
+    Returns {'idle': int, 'running': int, 'throttled': int, 'ready': bool}.
+    """
+    try:
+        h = check_health()
+        w = h.get('workers', {})
+        return {
+            'idle': w.get('idle', 0),
+            'running': w.get('running', 0),
+            'throttled': w.get('throttled', 0),
+            'ready': (w.get('idle', 0) + w.get('running', 0)) > 0,
+        }
+    except Exception:
+        return {'idle': 0, 'running': 0, 'throttled': 0, 'ready': False}
 
 
 _workers_confirmed = False

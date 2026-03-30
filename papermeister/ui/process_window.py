@@ -2,8 +2,9 @@ import os
 from datetime import datetime
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QCursor
 from PyQt6.QtWidgets import (
+    QApplication,
     QHBoxLayout,
     QLabel,
     QProgressBar,
@@ -15,7 +16,7 @@ from PyQt6.QtWidgets import (
 
 
 class ProcessWorker(QThread):
-    """OCR-processes PaperFiles in background."""
+    """OCR-processes PaperFiles with parallel execution based on RunPod worker availability."""
     progress = pyqtSignal(str)
     file_done = pyqtSignal(int, str)  # paper_file.id, status ('processed'/'failed')
     finished = pyqtSignal(int, int)  # processed, failed
@@ -23,30 +24,82 @@ class ProcessWorker(QThread):
     def __init__(self, paper_file_ids):
         super().__init__()
         self.paper_file_ids = paper_file_ids
+        self._counter = 0
+        self._counter_lock = None
 
-    def run(self):
+    def _next_index(self):
+        with self._counter_lock:
+            self._counter += 1
+            return self._counter
+
+    def _process_one(self, pf_id):
+        """Process a single PaperFile. Runs in a thread pool thread."""
         from ..models import PaperFile
         from ..text_extract import process_paper_file
 
-        processed = failed = 0
+        pf = PaperFile.get_by_id(pf_id)
+        name = os.path.basename(pf.path)
+        idx = self._next_index()
         total = len(self.paper_file_ids)
-        for i, pf_id in enumerate(self.paper_file_ids):
-            pf = PaperFile.get_by_id(pf_id)
-            name = os.path.basename(pf.path)
-            self.progress.emit(f'[{i + 1}/{total}] Processing: {name}')
-            try:
-                process_paper_file(
-                    pf,
-                    ocr_progress_callback=lambda c, t, msg: self.progress.emit(f'  {msg}'),
-                )
-                processed += 1
-                self.file_done.emit(pf_id, 'processed')
-            except Exception as e:
-                pf.status = 'failed'
-                pf.save()
-                failed += 1
-                self.progress.emit(f'  FAILED: {e}')
-                self.file_done.emit(pf_id, 'failed')
+        prefix = f'[{idx}/{total}]'
+
+        self.progress.emit(f'{prefix} {name}')
+        try:
+            process_paper_file(
+                pf,
+                ocr_progress_callback=lambda c, t, msg: self.progress.emit(f'{prefix}   {msg}'),
+                status_callback=lambda msg: self.progress.emit(f'{prefix}   {msg}'),
+            )
+            self.file_done.emit(pf_id, 'processed')
+            return True
+        except Exception as e:
+            pf.status = 'failed'
+            pf.save()
+            self.progress.emit(f'{prefix}   FAILED: {e}')
+            self.file_done.emit(pf_id, 'failed')
+            return False
+
+    def run(self):
+        import threading
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        from ..ocr import ensure_workers_ready, get_worker_status
+
+        self._counter = 0
+        self._counter_lock = threading.Lock()
+
+        # Ensure at least one worker is up
+        try:
+            ensure_workers_ready()
+        except Exception as e:
+            self.progress.emit(f'RunPod not ready: {e}')
+            self.finished.emit(0, len(self.paper_file_ids))
+            return
+
+        # Determine concurrency from health check
+        status = get_worker_status()
+        idle = status['idle']
+        running = status['running']
+        max_concurrent = max(1, min(idle, 10))
+
+        self.progress.emit(
+            f'RunPod workers: {idle} idle, {running} running '
+            f'→ parallel: {max_concurrent}'
+        )
+
+        processed = 0
+        failed = 0
+
+        with ThreadPoolExecutor(max_workers=max_concurrent) as pool:
+            futures = {
+                pool.submit(self._process_one, pf_id): pf_id
+                for pf_id in self.paper_file_ids
+            }
+            for future in as_completed(futures):
+                if future.result():
+                    processed += 1
+                else:
+                    failed += 1
 
         self.finished.emit(processed, failed)
 
@@ -108,6 +161,7 @@ class ProcessWindow(QWidget):
 
         self._log_message(f'=== Starting: {self._total} files ===')
 
+        QApplication.setOverrideCursor(QCursor(Qt.CursorShape.WaitCursor))
         self._worker = ProcessWorker(paper_file_ids)
         self._worker.progress.connect(self._on_progress)
         self._worker.file_done.connect(self._on_file_done)
@@ -144,6 +198,7 @@ class ProcessWindow(QWidget):
         self.processing_updated.emit()
 
     def _on_finished(self, processed, failed):
+        QApplication.restoreOverrideCursor()
         self._worker = None
         self.current_label.setText('Finished')
         self._log_message(f'=== Complete: {processed} processed, {failed} failed ===')

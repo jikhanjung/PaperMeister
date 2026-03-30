@@ -14,6 +14,28 @@ def _migrate(database):
     if 'folder_id' not in columns:
         database.execute_sql('ALTER TABLE paper ADD COLUMN folder_id INTEGER REFERENCES folder(id)')
 
+    # Zotero integration columns
+    cursor = database.execute_sql("PRAGMA table_info('folder')").fetchall()
+    columns = {row[1] for row in cursor}
+    if 'zotero_key' not in columns:
+        database.execute_sql("ALTER TABLE folder ADD COLUMN zotero_key TEXT DEFAULT ''")
+
+    cursor = database.execute_sql("PRAGMA table_info('paperfile')").fetchall()
+    columns = {row[1] for row in cursor}
+    if 'zotero_key' not in columns:
+        database.execute_sql("ALTER TABLE paperfile ADD COLUMN zotero_key TEXT DEFAULT ''")
+
+    # Drop unique index on paperfile.hash (Zotero files start with empty hash)
+    indexes = database.execute_sql("PRAGMA index_list('paperfile')").fetchall()
+    for idx in indexes:
+        idx_name = idx[1]
+        idx_unique = idx[2]
+        if idx_unique:
+            cols = database.execute_sql(f"PRAGMA index_info('{idx_name}')").fetchall()
+            col_names = [c[2] for c in cols]
+            if col_names == ['hash']:
+                database.execute_sql(f'DROP INDEX "{idx_name}"')
+
 
 def init_db(db_path=None):
     path = db_path or DB_PATH

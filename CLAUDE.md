@@ -40,29 +40,34 @@ python main.py
 - **DB:** SQLite with FTS5 — `~/.papermeister/papermeister.db`
 - **ORM:** Peewee 4.x (`peewee.DatabaseProxy` + `peewee.SqliteDatabase`)
 - **PDF:** PyMuPDF (fitz) — 메타데이터 추출 + 페이지 렌더링
-- **OCR:** RunPod serverless (Chandra2-vllm) — `.env`에 API 키 필요
-- **Dependencies:** Pillow, requests, python-dotenv
+- **OCR:** RunPod serverless (Chandra2-vllm) — Preferences에서 API 키 설정
+- **Zotero:** pyzotero — Preferences에서 user_id + api_key 설정
+- **Settings:** `~/.papermeister/preferences.json` (RunPod, Zotero 자격증명)
+- **Dependencies:** Pillow, requests, pyzotero
 
 ## Data Model
 
 ```
-Source (directory|zotero) → Folder (계층구조) → Paper → PaperFile (hash, status)
-                                                     → Author (name, order)
-                                                     → Passage (page, text) → passage_fts (FTS5)
+Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → PaperFile (hash, status, zotero_key)
+                                                                 → Author (name, order)
+                                                                 → Passage (page, text) → passage_fts (FTS5)
 ```
 
 ## Architecture Notes
 
 - 텍스트 추출은 항상 RunPod OCR 사용 (텍스트 레이어 유무 불문, 일관성 위해). PyMuPDF는 메타데이터만.
 - Import 2단계: ScanWorker(폴더 구조 + PaperFile 생성, 빠름) → ProcessWorker(OCR, 느림)
-- Hash-based deduplication (SHA256) at ingestion
-- `PaperFile.status`: `pending` → `processed` / `failed`
+- Hash-based deduplication (SHA256) at ingestion. Zotero는 zotero_key 기반 dedup.
+- `PaperFile.status`: `pending` → `processed` / `failed`. PaperFile 없으면 `no PDF`.
 - FTS5 `passage_fts`: title(×10), authors(×5), text(×1) BM25 가중치
 - UI는 QThread로 비동기 처리, DB는 peewee thread-local 연결
 - OCR health 체크: `ensure_workers_ready()`로 세션당 한 번만 수행
-- `database.py`의 `_migrate()`가 기존 DB에 새 컬럼 자동 추가
+- OCR 병렬 처리: `get_worker_status()`로 idle worker 수 확인 → `ThreadPoolExecutor`로 병렬 제출
+- `database.py`의 `_migrate()`가 기존 DB에 새 컬럼/인덱스 변경 자동 적용
+- Zotero: 시작 시 컬렉션 자동 동기화, 컬렉션 클릭 시 아이템 fetch, PDF는 OCR 시점에만 임시 다운로드
+- 설정: `~/.papermeister/preferences.json` (RunPod, Zotero). `.env` 사용하지 않음.
 
 ## Future Phases
 
 - **Phase 2:** Hybrid search (BM25 + embeddings), LLM query interpretation
-- **Phase 3:** Entity extraction (taxon, locality), relation extraction, Zotero sync-back
+- **Phase 3:** Entity extraction (taxon, locality), relation extraction

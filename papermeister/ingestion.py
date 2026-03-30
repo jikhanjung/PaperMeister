@@ -1,8 +1,9 @@
 import hashlib
 import os
+import shutil
 from pathlib import Path
 
-from .models import db, Source, Folder, Paper, PaperFile
+from .models import db, Source, Folder, Paper, Author, PaperFile
 
 
 def hash_file(filepath):
@@ -85,3 +86,141 @@ def _scan_dir(source, dir_path, parent_folder, new_files, progress_callback):
                 progress_callback(f'Found: {entry}')
         elif os.path.isdir(full_path):
             _scan_dir(source, full_path, folder, new_files, progress_callback)
+
+
+# ── Zotero import ───────────────────────────────────────────
+
+
+def get_or_create_zotero_source(user_id):
+    """Get or create a Source for a Zotero library."""
+    source = Source.select().where(
+        Source.source_type == 'zotero',
+        Source.path == str(user_id),
+    ).first()
+    if not source:
+        source = Source.create(
+            name=f'Zotero ({user_id})',
+            source_type='zotero',
+            path=str(user_id),
+        )
+    return source
+
+
+def sync_zotero_collections(zotero_client, source, collections):
+    """Sync all Zotero collections to DB as Folders. No paper import.
+
+    Args:
+        zotero_client: ZoteroClient instance
+        source: Source record (type='zotero')
+        collections: list of dicts with key, name, parent_key
+    """
+    # First pass: create/update all folders
+    for col in collections:
+        folder = Folder.select().where(
+            Folder.source == source,
+            Folder.zotero_key == col['key'],
+        ).first()
+        if folder:
+            if folder.name != col['name']:
+                folder.name = col['name']
+                folder.save()
+        else:
+            Folder.create(
+                source=source,
+                name=col['name'],
+                parent=None,  # set in second pass
+                zotero_key=col['key'],
+            )
+
+    # Second pass: set parent relationships
+    for col in collections:
+        if not col['parent_key']:
+            continue
+        folder = Folder.select().where(
+            Folder.source == source,
+            Folder.zotero_key == col['key'],
+        ).first()
+        parent = Folder.select().where(
+            Folder.source == source,
+            Folder.zotero_key == col['parent_key'],
+        ).first()
+        if folder and parent and folder.parent != parent:
+            folder.parent = parent
+            folder.save()
+
+
+def _get_or_create_zotero_folder(source, collection):
+    """Get or create a Folder for a Zotero collection."""
+    folder = Folder.select().where(
+        Folder.source == source,
+        Folder.zotero_key == collection['key'],
+    ).first()
+    if not folder:
+        parent_folder = None
+        if collection.get('parent_key'):
+            parent_folder = Folder.select().where(
+                Folder.source == source,
+                Folder.zotero_key == collection['parent_key'],
+            ).first()
+        folder = Folder.create(
+            source=source,
+            name=collection['name'],
+            parent=parent_folder,
+            zotero_key=collection['key'],
+        )
+    return folder
+
+
+def fetch_zotero_collection_items(zotero_client, source, folder, progress_callback=None):
+    """Fetch items from a Zotero collection. Single API call.
+
+    Creates Paper records for all items, and PaperFile records for items with PDFs.
+    Returns number of new papers created.
+    """
+    if progress_callback:
+        progress_callback(f'Fetching items from "{folder.name}"...')
+
+    items = zotero_client.get_collection_items(folder.zotero_key)
+    new_count = 0
+
+    for i, item in enumerate(items):
+        if progress_callback:
+            progress_callback(f'[{i + 1}/{len(items)}] {item["title"][:60]}')
+
+        # Dedup: check if any PaperFile with this zotero item key exists
+        existing_by_key = (
+            Paper.select()
+            .where(Paper.folder == folder, Paper.title == item['title'])
+            .first()
+        )
+        if existing_by_key:
+            # Paper exists — but maybe we need to add PaperFile records
+            paper = existing_by_key
+        else:
+            with db.atomic():
+                paper = Paper.create(
+                    title=item['title'],
+                    year=item['year'],
+                    journal=item.get('journal', ''),
+                    doi=item.get('doi', ''),
+                    folder=folder,
+                )
+                for order, author_name in enumerate(item['authors']):
+                    Author.create(paper=paper, name=author_name, order=order)
+            new_count += 1
+
+        # Create PaperFile for each PDF attachment
+        for att in item.get('attachments', []):
+            existing_pf = PaperFile.select().where(
+                PaperFile.zotero_key == att['key'],
+            ).first()
+            if not existing_pf:
+                PaperFile.create(
+                    paper=paper,
+                    path=att['filename'],
+                    hash='',
+                    status='pending',
+                    zotero_key=att['key'],
+                )
+
+    return new_count
