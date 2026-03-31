@@ -1,0 +1,703 @@
+=== Page 1 ===
+SMALL SHELLY FOSSILS AND CONODONTS FROM THE MYOBONG AND DAEGI FORMATIONS IN BAEGUNSAN SYNCLINE, YEONGWEOL-JEONGSEON AREA, KANGWEON-DO
+
+Ha-Young LEE*, Dong-Seob ROH*, Byung-Su LEE*, Myung-Suk YI**
+
+* Department of Geology, Yonsei University, 120-749, Seoul
+** Graduate School of Education, Inha University, 402-751, Inchon
+
+ABSTRACT
+
+Cambrian small shelly fossils and conodonts are firstly described from the Myobong and Daegi Formations (Lower Paleozoic) distributed in the northern and southern wings of Baegunsan Syncline exposed in Yeongweol-Jeongseon area, Kangweon-do, and the two formations are stratigraphically correlated by the recovered fauna. Fifty-five samples were collected, and forty-five of them yielded 4,487 specimens of various kinds of microfossils. Microfauna in this study represents 22 species belonging to 21 genera of micro-skeletal assemblage composed of trilobites (4 species representing 4 genera), conodonts (2 species representing 3 genera), brachiopod (5 species representing 5 genera), hyolithids (3 species representing 2 genera), gastropod (1 species), coelenterate (1 species), sponge spicules (2 species representing 2 genera), and incerta sedis (4 species representing 4 genera). Microfaunas of both formations were compared with the previously reported faunas of Korea, China, etc. Microfauna in the present study indicates that Myobong Formation and Daegi Formation are ‘late Early to early Middle Cambrian’ and ‘middle Middle Cambrian’ in age, respectively.
+
+INTRODUCTION
+
+Since the beginning of study on the Lower Paleozoic conodonts of South Korea in 1970, the conodonts of Upper Cambrian to Middle Ordovician strata have been studied extensively to establish the solid biostratigraphic framework. Recently we have concentrated on finding conodonts from strata older than the Middle Cambrian in the northeastern part of the Okcheon Zone, where the Lower Paleozoic Choseon Supergroup is widely distributed. During this investigation, small shelly and sclerite fossils have been found in several different regions in Korea. One of these is Myobong Slate and Daegi Formation in Yeongweol-Jeongseon area. The only previous paleontological research on these formations was trilobite study by Kobaya-shi (1935 & 1966). Since that, there have not been any records of macro-or micro-paleontological approach. This study analyses and describes the microfaunas of both formations and considers the biostratigraphic implication of them.
+
+=== Page 2 ===
+STRATIGRAPHY AND SAMPLING LOCALITIES
+
+The Myobong Slate overlies the Jangsan Quartzite, which is the basal lithostratigraphic unit of the Choseon Supergroup in the Duwibong-type sequence. The formation consists mainly of dark grey and greenish grey slates and phyllites with several thin beds of sandstones. Thin beds of limestones with several centimetres to several metres in thickness are also intercalated. Eighteen samples for this study were collected entirely from these limestone beds. Kobayashi (1966) described such macrofossils as trilobites and brachiopods, and he recognized four biostratigraphic zones in the formation, namely Redlichia Zone, Elrathia Zone, Mapania Zone, and Bailiella Zone in ascending order. He dated the formation as Early Cambrian to early Middle Cambrian in age.
+
+The Daegi Formation overlies the Myobong Slate conformably. It is composed chiefly of milky white grey and dark grey massive limestones with intercalations of light pinkish or bluish grey limestones, dolomitic limestones, light pinkish limestones, and dark grey shales. Intraformational limestone conglomerates are rarely intercalated. Kobayashi(1966) described 23 species belonging to trilobites and brachiopods, and he established three biozones, namely Megagraulos Zone, Solenoparia Zone, and Olenoides Zone in ascending order. He also dated the formation as Middle Cambrian in age. Thirty-seven samples for the present study were collected from the Daegi Formation, and sampling localities and the number of collected samples are given in Fig. 1, and Table. 1, Table. 2, respectively.
+
+FOSSIL FAUNA
+
+A total of 55 samples were collected from the Myobong Slate and Daegi Foramtion(18 from the Myobong Slate and 37 from the Daegi Formation) in the south and north wings of the Baegunsan Syncline, 45 of them(13 from the Myobong Slate and 32 from the Daegi Formation) yielded 4,487 specimens of various kinds of microfossils(Tab. 1 & Tab. 2). State of preservation is relatively good, although most specimens represent fragmented natures. They are mostly calcium phosphatic in composition, and a few calcareous specimens represent as the internal mold states through the dissolution of the sampling processes. Constituents of some specimens were replaced or coated with the rough calcium phosphatic grains. Color of shells varies through light gray, medium gray, dark gray, light pink, and white.
+
+Microfauna in this study represents 22 species belonging to 21 genera of micro-skeletal assemblage composed of trilobites(4 species representing 4 genera), conodonts(2 species representing 2 genera), brachiopods(5 species representing 5 genera), hyolithids(3 species representing 2 genera), gastropod(1 species representing 1 genus), coelenterate(1 species representing 1 genus), sponge spicules(2 species representing 2 genera), and incertae sedis(4 species representing 4 genera), and the faunal component of each formation is as follows:
+
+Mybong Slate: Allatheca nanjiangensis, Hyolithellus tenuis, Hyolithellus sp., Allonnia erromenosa, Archiasterella quadratina, Ganloudina platybasala, Ernogia acculatus, Nanjiangofolliculus circocodonus, Microdictyon? sp. Phyllochites involutus, Uncinaspira ruidocostata in the northern wing; and Nanjiangofolliculus circocodonus, Microdictyon? sp. in the southern wing.
+
+Daegi Formation: Amictocracens teres, Ocruranus trulliformis, Treptotreta sp., Allatheca nanjiangensis, Hyolithellus tenuis, Hyolithellus sp., Allonnia erromenosa, Archiasterella quadratina, Ganloudina platybasala, Mirabifolliculus? sp., Phyllochites involutus in the northern wing; Kootenia punctata, Manchuriella minaformis?, Yinites sp., Drepanura? sp., Furnishina sp., Phakelodus te-
+
+=== Page 3 ===
+Fig. 1. Geologic maps and sampling localities in the Baegunsan Syncline area. Upper and lower map illustrate the northern and southern wings, respectively (K1~K7 and H1~H3 are sampling localities in each region).
+
+=== Page 4 ===
+nuis, Acrothele sp., Amictocracens teres, Lingulella sp., Treptotreta sp., Hyolithellus tenuis, Hyolithellus sp., Allatheca nanjiangensis, Microdictyon? sp. in the southern wing.
+
+The most striking difference between the two formations is that the trilobite taxa such as Kootenia punctata, Manchuriella minaformis?, Yinites sp., and Drepanura? sp., brachiopod taxa such as Amictocracens teres, Ocruranus trulliformis, Treptotreta sp., and Lingulella sp., and conodont taxa such as Furnishina sp. and Phakelodus tenuis are restricted to the Daegi Formation. Among these, trilobite and conodont species occur only in the southern wing area. Occurrences of small shelly and sclerite foils, assigned to several biological categories, also show interesting trends. Hyolithid species including Allatheca nanjiangensis, Hyolithellus tenuis, and Hyolithellus sp. show abundant occurrences in samples of the Myobong Slate and seldom occurrences in samples of the Daegi Formation in the northern wing area, whereas in the southern wing area, only the lowermost sample of the Daegi Formation yielded these taxa. Allonnia erromenosa, Archiasterella quadratina, Phyllochites involutus, Uncinaspira ruidocostata, and Ernogia acculatus are restricted in the northern wing area, and are mostly distributed in the Myobong Slate and seldom in the Daegi Formation. Ganloudina platybasala occurs only in the Myobong Slate in the northern wing area. Mirabifolliculus? chytroformis occurs only in two samples of the Daegi Formation in the northern wing and the only sample studied in the southern wing yielded a significant number of this species. Fragments of Microdictyon? sp. show a wide distribution in all samples studied herein. Conclusively, all the trilobite, brachiopod, and conodont species occur in the Daegi Formation only, and other small shelly and sclerite fossils are distributed mainly in the underlying Myobong Slate.
+
+Table. 1 and Table. 2 summarize the occurrence of fossil specimens in each sample of northern and southern wings of the Baegunsan Syncline, respectively.
+
+BIOSTRATIGRAPHIC CONSIDERATION
+
+Among the Myobong fauna consisting of 11 species of small shelly and sclerite fossils, the hyolithid species Allatheca nanjiangensis was firstly reported from the lowermost Cambrian Dengying Formation in northern Sichuan Province, China(Yang & He, 1984), and the other hyolithid species Hyolithellus tenuis was previously described from the lowermost Cambrian Meishucun Stage of Yunnan area,(Yang & He, 1984), and from the lowermost Cambrian strata of west Hubei Province in China(Qian & Bengtson, 1989 and Chen, 1984). Also such Cambrian strata in Korea as limestone beds of Mungyeong area(Lee, H.Y., 1987 and Lee, K.J., 1989) and Sambangsan Formation of Yeongweol area(Lee, H.Y. et al., 1986, Cheong, C.G., 1991, and Lee, B.S. et al., 1991) yielded this species. Table. 3 summarize the co-occurrences of taxa of the prersent study and other previous records.
+
+The chancellorid(sponge-spicule-like) species Allonnia erromenosa was reported from the Meishucun stage in China(Jiang, 1984 and Qian & Bengtson, 1989) and from the Middle Cambrian Sambangsan Formation, Korea(Cheong, C.G., 1991 and Lee, B.S. et al., 1991). Archiasterella quadratina was firstly reported from the Lower Cambrian strata in the Mungyeong area, Korea(Lee, H.Y., 1987). In addition, Ernogia acculatus, Ganloudina platybasala, Mirabifolliculus? chytroformis, and Nanjiangofolliculus also have previous records in the Meishucun Stage or the Dengying Formation, both of which are lowermost Cambrian strata in China.
+
+The traditional stratigraphic boundary problems include the Precambrian-Cambrian boundaries worldwide. During the last decade, paleontologists have been interested in the occurrences of the earliest Cambrian small shelly and sclerite fossils before the first appearance of
+
+=== Page 5 ===
+Table 1. Occurrence of small shelly fossils from productive samples in the northern wing area of the Baegunsan Syncline.
+
+| Taxa | Sample Number | MYOBONG | SLATE | DAEGI FORMATION | K1 | K2 | K3 | K4 | K5 | K6 | K7 | K8 | K9 | K10 | K11 | K12 | K13 | K14 | K15 | K16 | K17 | K18 | K19 | K20 | K21 | K22 | K23 | K24 | K25 | K26 | K27 | K28 | K29 | K30 | K31 | K32 | K33 | K34 | K35 | K36 | K37 | K38 | K39 | TOTAL |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| | | | | | | | | | | | | | | | | | | | | | | | | | | | | |
+
+=== Page 6 ===
+Table 2. Occurrence of small shelly fossils from productive samples in the southern wing area of the Baegunsan Syncline.
+
+| Taxa | Sample Number | M* | DAEGI FORMATION | H 1 | H 2 | H 3 | TOTAL |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| A | Kootenia punctata | | 7 | 6 | | | 13 |
+| | Manchuriella minaformis? | | 13 | 1 | | | 14 |
+| | Yinites sp. | | 3 | 1 | | | 4 |
+| | Drepanura sp. | | 1 | | | | 1 |
+| B | Furnishina sp. | | 1 | 1 | | | 2 |
+| | Phakelodus tenuis | | 1 | 1 | | | 2 |
+| C | Acrothelle sp. | | 1 | | | 2 | 3 |
+| | Amictocracens teres | | | 7 | 30 | 8 | 45 |
+| | Lingulella sp. | | 12 | 10 | | | 22 |
+| | Treptotreta sp. | | | | 51 | 153 | 204 |
+| D | Hyolithellus tenuis | | 7 | | | | 7 |
+| | Hyolithellus sp. | | 9 | | | | 9 |
+| | Allatheca nanjiangensis | | 22 | | | | 22 |
+| E | Nanjiangofolliculus circocodonus | 14 | | | | | 14 |
+| | Microdictyon? sp. | 3 | 2 | 1 | 5 | | 11 |
+| F | Indet | 5 | 519 | 644 | 157 | 19 | 1344 |
+| TOTAL | | 22 | 38 | 560 | 672 | 243 | 182 | 1717 |
+
+A: Trilobites, B: Conodonts, C: Brachiopods, D: Hyolithids, E: Incertae sedis, F: Other microfossil, M*: Myobong slate.
+
+The trilobite. They have described a numerous taxa from many parts of the world (Cowie, 1984 and Qian & Bengtson 1989), and a significant number of research was accomplished in the strata in south China where the boundary strata are relatively well developed (see Cowie, 1985 and Kirschvink et al. 1991 for discussion). The interests have been, so far, confined in the presence of the microfauna during the pre-trilobite time, and the systematic paleontology of them. The stratigraphic use of this microfauna during the earliest Cambrian or even the time after the first appearance of trilobite needs the accumulation of detailed data from many stratigraphic sections distributed in many regions. As discussed in Lee, H.Y. et al. (1992), the age of the Myobong Slate remains as late Early Cambrian to early Middle Cambrian on the basis of previously reported trilobite macrofauna (Kobayashi, 1966).
+
+The Daegi fauna consists mainly of four species of trilobite, two species of conodont and four species of brachiopod. The formation rarely include the hyolithid and related small shelly and sclerite fossils.
+
+The trilobite species *Manchuriella minaformis*? and *Kootenia punctata* were previously described in the *Solenoparia* Zone of the Daegi Formation and from the *Olenoides* Zone of the Machari Formation by Kobayashi (1935). Both biostratigraphic zones are Middle Cambrian in age (Kobayashi, 1966). *Yinites* sp. has previous records in the Lower Cambrian strata (Zhang et al., 1980), and the present study is the first report of this taxon in Korea. Since the species occurred in younger strata than the *Redlichia*-bearing Myobong Slate, the stratigraphic range
+
+=== Page 7 ===
+Table 3. Correlation of the fossils from the present study with the faunas from inland and foreign regions.
+
+| TAXA | OTHER CORRELATIVE FAUNAS | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| Trilobites | Kootenia punctata | * | | | | | | | | | | | | | | | |
+| | Manchuriella minaformis? | | * | | | | | | | | | | | | | | |
+| | Yinites sp. | | | * | | | | | | | | | | | | | | |
+
+Conodonts | Furnishina sp. | | | | | | | | | | * | | | * |
+| | Phakelodus tenuis | | | | | | | | | | | * | | | | * |
+
+Brachiopods | Acrothele sp. | | | | * | | | | | | | | | | |
+| | Amictocracens teres | | | | * | | | | | | | | | | | * |
+| | Lingullela sp. | | | | * | | | | | | | | | | | * |
+| | Treptotreta sp. | | | * | | | | | | | | | | | | * |
+| | Ocruranus trulliformis | | | | | | | | | | | | | * | | |
+
+Gastropod | Uncinaspira ruidocostata | | | | | | | | | * | | | | |
+Coelenterate | Phyllochites involutus | | | | | | | | * | | | | | | |
+Hyolithids | Allatheca nanjiangensis | | | | * | | | | | | | | | * | * |
+| | Hyolithellus tenuis | | | | | | * | | | | | | | * | * |
+| | Hyolithellus sp. | | | | | | * | | | | | | | * | * |
+
+Sponge spicules | Allonnia erromenosa | | | | * | | | | | | | | * | * |
+| | Archiasterella quadratina | | | | | | | | | | | * | | * | * |
+
+Incertae sedis | Ernogia acculatus | | | | | | | | | | | * | | |
+| | Ganloudina platybasala | | | | * | | | | | | | | | | | |
+| | Mirabifolliculus? chytroformis | | | | * | | | | | | | | | | | |
+| | Nanjiangofolliculus circocodonus | | | | * | | | | | | | | | | | |
+| | Microdictyon? sp. | | | | | | | | | | | | | | * | | |
+
+1. Kobayashi. 1935a. Lower Paleozoic. Neietsu(Yeongweol), Kangweondo.
+2. Kobayashi. 1936b. Lower Paleozoic. Doten(Dongjeom), Kangweondo.
+3. Zhang et al. 1980. Minghsinsu Fm. northern Guizhou Province.
+4. Henderson & Mackinnon. 1981. Tasman Fm. Australia & New Zealand.
+5. Yang & He. 1984. Dengying Fm. northern Sichuan Province.
+6. Jiang. 1984. Meishucun Stage. Yunnan Province.
+7. Chen. 1984. Meishucun Stage. west Hubei Province.
+8. Qian & Yin. 1984. Meishucun Stage. central-west & north Guizhou Province.
+9. Qian & Xiao. 1984. Meishucun Stage. Aksu-Wush. Xinjiang Proince.
+10. Lee, H.Y. et al. 1986. Sambangsan Formation. Yeongweol-Pyeongchang. Ka-ngweondo
+11. Lee, H.Y. et al. 1986. Sambangsan Formation. Yeongweol-Pyeongchang. Ka-ngweondo
+12. Lee, 1987. unnamed Lower Paleozoic Limestone. Kurangni, Mungyong.
+13. Qian & Bengtson. 1989. Meishucun Stage. Yunnan Province.
+14. Lee, K.J. 1989. unnamed Lower Paleozoic Limestone. Kurangni, Mungyong.
+15. Cheong, J.G. 1991. Sambangsan Formation. Yeongweol, Kangweondo.
+
+=== Page 8 ===
+of the species could be extended upward to probably Middle Cambrian at least in Korea. Another trilobite species *Drepanura*? sp. is a poorly preserved pygidium fragment.
+
+The brachiopod species *Amictocracens teres*, *Acrothele* sp., and *Treptotreta* sp. were previously reported from the Middle Cambrian strata. Among these, the range of *Treptotreta* extends to the early Late Cambrian time. Especially the brachiopod fauna of the Daegi Formation is closely related to the Middle to early Late Cambrian strata in western Queensland, Australia and the Tasman Formation in New Zealand (Henderson & MacKinnon, 1981). *Amictocracens teres*, *Acrothele* sp., *Treptotreta* sp., and long-ranging *Lingulella* sp. show common occurrences both in the Daegi formation and the strata of Australia and New Zealand. Only *Ocruranus trulliformis* among the brachiopod species studied herein was previously reported from the lowermost Cambrian Meishucun Stage, China (Qian & Bengtson, 1989).
+
+The long-ranging conodont species *Furnishina* sp. and *Phakelodus tenuis* were reported from the Middle to Late Cambrian strata worldwide. Thus, they do not provide any decisive criteria for the age determination.
+
+The Daegi Formation also includes a minor amount of small shelly and sclerite fossils. These are *Allatheca nanjiangensis*, *Hyolithellus tenuis*, *Hyolithellus* sp., *Allonia erromenosa*, *Archiasterella quadratina*, *Ganloudina platybasala*, *Mirabifolliculus*? chytroformis, and *Microdictyon*? sp. These fossils except *Microdictyon*? sp. were described mainly from the lowermost Cambrian strata in China. But considering the co-occurrence of these microfossils and trilobite, conodont, and brachiopod species in the Daegi Formation, these small shelly and sclerite fossils have limitations in any stratigraphic use. In this study, possible age of the Daegi Formation is tentatively assigned to the middle Middle Cambrian.
+
+RESULTS AND CONCLUSIONS
+
+Fifty-five samples were collected from the Myobong Slate and the Daegi Formation in Baegunsan Syncline area of Yeongweol-Jeongseon region. These include 18 samples from the Myobong Slate and 37 from the Daegi Formation. Forty-five samples of them yielded 4,487 specimens of various kinds of microfossils.
+
+Microfauna in this study was differentiated into 22 species belonging to 21 genera of micro-skeletal assemblage. These include trilobites(4 species representing 4 genera), conodonts(2 species representing 2 genera), brachiopods(5 species representing 5 genera), hyolithids(3 species representing 2 genera), gastropod(1 species), coelenterate(1 species), sponge spicules(2 species representing 2 genera), and incertae sedis(4 species representing 4 genera).
+
+Through the biostratigraphic consideration of fossil contents of the Myobong Slate and Daegi Formation, the age of the formations are thought to be late Early to early Middle Cambrian and middle Middle Cambrian, respectively.
+
+SYSTEMATIC PALEONTOLOGY
+
+1. Trilobites
+
+=== Page 9 ===
+Phylum ARTHROPODA
+Class TRILOBITA Walch, 1771
+Order PTYCHOPARIIDA Swinnerton, 1915
+Suborder PTYCHOPARIINA Richter, 1933
+Superfamily DAMESELLACEA Kobayashi, 1935
+Family DAMESELLIDAE Kobayashi, 1935
+Subfamily DREPANURINAE Hupé, 1953
+Genus DREPANURA Bergeron, 1899
+
+Type species: Drepanura premesnili Bergeron, 1899
+
+Drepanura? sp.
+Pl.1, fig. 7
+
+Description: Pygidium rectangular in outline; long lateral spines; posterior margin between lateral spines serrated; axial ring slightly convex, half the width of pleural region, tapering towards the end.
+
+Remarks: Only one pygidium is included in this study. General morphological features are close to the genus Drepanura. The poor state of preservation and the paucity of occurrence, however, discourage even the generic assignment.
+
+Occurrence: Sample H2-3
+
+Material: 1.
+
+Superfamily ASAPHISCACEA Raymond, 1924
+Family ASAPHISCIDAE Raymond, 1924
+Subfamily ASAPHISCINAE Raymond, 1924
+Genus MANCHURIELLA Kobayashi, 1935
+
+Type species: Manchuriella typa Kobayashi, 1935
+
+Manchuriella minaformis? Kobayashi, 1935
+Pl. 1, figs. 3,4
+
+1935 Manchuriella minaformis Kobayashi: p. 300, pl. 14, fig. 16, pl. 20, fig. 5.
+
+Description: Glabella semi-elliptical, slightly tapering towards the anterior side; glabellar furrows are not observable; occipital ring rounded and convex at the posterior margin; palpebral area wide, protruded towards the lateral sides and constricted at the posterior end to form the hemicircular shape; eye ridges not prominent; preglabella field flat and wide; surface granulate.
+
+Remarks: Only cranidia are observed in this study. Characteristics of the present species agree well with the original description. The lack of a keel in the axis of glabella, however, makes it difficult to assign this species to Manchuriella minaformis Kobayashi with certainty. Granulate surface texture might be the result of later precipitation of the mineral matters which could obscure such ornamentation as a keel and glabellar furrows.
+
+Occurrence: Samples H2-3, H2-4.
+
+Material: 14.
+
+=== Page 10 ===
+Order CORYNEXOCHIDA Kobayashi, 1935
+Family DORYPYGIDAE Kobayashi, 1935
+Genus KOOTENIA Walcott, 1888
+
+Type species: Bathyuriscus(Kootenia) dawsoni Walcott, 1888
+
+Kootenia punctata Kobayashi, 1935
+Pl. 1. figs. 1,2
+
+1935 Kootenia punctata Kobayashi: pp. 157-158, pl. 15, figs. 14-21.
+
+Description: Glabella convex, parallel-sided, and deeply impressed laterally, anterior side straight to slightly round; glabellar furrows not clearly discernible; occipital ring produces a sharply defined spine which points posteriorly although the spine is not prominent in some specimens; fixigena(fixed cheek) nearly as wide as glabella at the base, and decreasing in width towards the anterior to reach the half the glabella width in anterior portion beyond the position of the eye; palpebral area medium in size, and located in the middle; eye ridge not prominent; preglabella field nearly as wide as or slightly narrower than the cheek; punctate surface is not readily observable due to the probable taphonomic processes.
+
+Remarks: All specimens studied are represented as cranidiums only. The species is characterized by the spine developed at the back side of occipital ring and the parallel-sided glabella. The characteristics of the species is identical to the original description by Kobayashi, except the wide preglabella field observed in the present species. This difference is regarded here as an intraspecific variation.
+
+Occurrence: Samples H2-3, H2-4.
+
+Material: 13.
+
+Order REDLICHIIDA Richter, 1933
+Suborder REDLICHIINA Harrington, 1959
+Superfamily REDLICHIACEA Poulsen, 1927
+Family YINITIDAE Hupé, 1953
+Genus YINITES Lu, 1946
+
+Type species: Yinites typicalis Lu, 1946
+
+Yinites sp.
+Pl. 1, figs. 5, 6
+
+Description: Glabella elliptical, convex; occipital and pre-occipital furrows convex posteriorly; a small mesial occipital node developed; palpebral area hemicircular, constricted at its anterior end so that the facial suture almost meet the axial furrow; surface smooth but some specimens covered by densely distributed nodes.
+
+Remarks: The present specimens represent only as cranidia. Sinuate fixed cheek at the anterior end of palpebral area and the presence of preoccipital furrow characterize this species. General features of some specimens show very similar characteristics of Yinites typicalis, Lu illustrated by kobayashi(1961). In this study, the specific assignment is withheld due to the fractural state of preservation in most specimens.
+
+Occurrence: Samples H2-3, H2-4.
+
+Material: 4
+
+=== Page 11 ===
+Undifferentiated Trilobite 1.
+Pl. 1, fig. 8
+
+Description: Pygidium rounded rectangular; axial ring not clearly defined, but the central region gently convex upward; lateral and posterior margins flat.
+
+Remarks: Specimens included in this category show the close resemblances to the taxa belonged to the Agnostidae.
+
+Occurence: Sample H2-3.
+
+Material: 18.
+
+2. Conodonts
+
+Phylum CONODONTA
+Gens FURNISHINA Müller, 1959
+
+Type species: Furnishina furnishi Müller, 1959
+
+Furnishina sp.
+Pl. 1, fig. 11
+
+Description: See Lee, H.Y. (1975, P. 178).
+
+Remarks: Two specimens encountered in this study show close similarities to Furnishina furnishi reported in numerous studies.
+
+PLATE 1
+
+Fig. 1-2. Kootenia punctata Kobayashi, 1935, cranidia, 1: Daegi Limestone, H2-4, X38, YSUG 1060. 2: Daegi Limestone, H2-4, X42, YSUG 1061. Fig. 3-4. Manchuriella minaformis? Kobayashi, 1935, cranidia, 3: Daegi Limestone, H2-3, X60, YSUG 1062. 4: Daegi Limestone, H2-4, X70, YSUG 1063. Fig. 5-6. Yinites sp. cranidia fragments, 5: Daegi Limestone, H2-3, X35, YSUG 1064. 6: Daegi Limestone, H2-3, X35, YSUG 1065. Fig. 7. Drepanura? sp. pygidium, Daegi Limestone, H2-3, X96, YSUG 1066. Fig. 8. Undifferentiated trilobite 1, pygidium, Daegi Limestone, H2-3, X64, YSUG 1067. Fig. 9-11. Undifferentiated trilobites pygidia, 9: Daegi Limestone, H2-4, X83, YSUG 1068. 10: Daegi Limestone, H2-3, X46, YSUG 1069. 11: Daegi Limestone, H2-3, X50, YSUG 1070. Fig. 12. Furnishina sp. lateral view, Daegi Limestone, H2-3, X64, YSUG 1071. Fig. 13. Phakelodus tenuis (Müller, 1959) Miller, 1984, lateral view, Daegi Limestone, H2-4, X70, YSUG 1072. Fig. 14-15. Acrothele sp. outer views of dorsal valves, 14: Daegi Limestone, H3-6, X46, YSUG 1073. 15: Daegi Limestone, H2-5, X46, YSUG 1074. Fig. 16-19. Amictocracens teres Henderson & MacKinnon, 1981, outer views of dorsal valves (16, 17) and inner views of ventral valves (18, 19), 16: Daegi Limestone, H2-5, X60, YSUG 1075. 17: Daegi Limestone, H2-5, 96, YSUG 1076. 18: Daegi Limestone, K6-30, X77, YSUG 1077. 19: Daegi Limestone, H2-5, X55, YSUG 1078. Fig. 20-21. Ocruranus trulliformis Jiang, 1980 outer views of dorsal valves, 20: Daegi Limestone, K6-28, X77, YSUG 1079. 21: Daegi Limestone, K6-33, X64, YSUG 1080.
+
+=== Page 12 ===
+PLATE 1
+
+1 2 3 4
+5 6 7 8
+9 10 11 12 13
+14 15 16 17
+18 19 20 21
+
+=== Page 13 ===
+Occurrence: Samples H2-3, H2-4
+Material: 2
+
+Genus PHAKELODUS Miller, 1984
+Type species: Oneotodus tenuis Müller, 1959
+
+Phakelodus tenuis(Müller, 1959) Miller, 1984
+
+Synonymy and Description: See Lee, H.Y.(1975, PP. 179-180).
+Remarks: The present species is identical to the species described by H.Y.Lee(1975) and B.S.Lee(1987).
+Occurrence: Samples H2-3, H2-4.
+Material: 2.
+
+3. Brachiopods
+
+Phylum BRACHIOPODA
+Class INARTICULATA Huxley, 1869
+Order LINGULIDA Waagen, 1885
+Superfamily LINGULACEA Menke, 1828
+Family OBOLIDAE King, 1846
+Subfamily OBOLINAE KING, 1846
+Genus LINGULELLA Salter, 1866
+Type species: Lingula davisii M’Coy, 1851
+
+Lingulella sp.
+Pl. 2, figs. 1-3
+
+Description: Shell elongate oval to sub-triangular; thin-shelled; growth line concentric, moderately spaced.
+Occurrence: Samples H2-3, H2-4.
+Material: 22.
+
+Order ACROTRETIDA Kuhn, 1949
+Suborder ACROTRETIDINA Kuhn, 1949
+Superfamily ACROTRETACEA Schuchert, 1893
+Family ACROTHELIDAE Walcott & Schuchert, 1908
+Subfamily ACROTHELINAE Walcott & Schuchert, 1908
+Genus ACROTHELE Linnarsson, 1876
+Type species: Acrothele coriacea Linnarsson, 1876
+
+Acrothele sp. 1
+Pl. 1, figs. 13, 14
+
+1981 Acrothele sp.: Henderson & MacKinnon, p. 305, fig. 12.
+
+Description: Two protegula distinct and might have been spinose; surface of protegular
+
+=== Page 14 ===
+area finely pitted; beyond the protegular margin, micro-ornament of the shell surface finely granular but moderately dense array of impersistent microlaminae.
+
+Remarks: Only the ventral valves are studied, and the protegular spines are not observed. The general feature of the species are similar to those of Australasian species (Henderson & MacKinnon, 1981)
+
+Occurrence: Samples H2-3, H3-6.
+
+Material: 3.
+
+Genus TREPTOTRETA Henderson & MacKinnon, 1981
+
+Type species: Treptotreta jucunda Henderson & MacKinnon, 1981
+
+Treptotreta sp.
+Pl.2, figs. 4-8
+
+Description: Shell conical, slightly wider than long; blunt apex distinct, broadening anteriorly, lateral view of the ventral valve shows straight to weakly convex anterior portion and straight posterior portion; median septum triangular; growth lines fine, regular.
+
+Remarks: General morphological features of the species described herein are very similar to Treptotreta jucunda originally described by Henderson & MacKinnon (1981). The specific assignment, however, is withheld due to the poor preservation of the present specimens.
+
+Occurrence: Samples H2-5, H3-6, K4-18, K4-19, K4-20, K4-21, K4-22, K6-29, K6-30, K6-32, K6-33, K6-34, K6-35.
+
+Material: 461
+
+Genus AMICTOCRACENS Henderson & MacKinnon, 1981
+
+Type species: Amictocracens teres Henderson & MacKinnon, 1981
+
+Amictocracens teres Henderson & MacKinnon, 1981
+Pl. 1, figs. 15-18
+
+1981 Amictocracens teres Henderson & MacKinnon: pp. 295-297, figs. 5-6.
+
+Description: Shell conical; a little wider than long; protegular nodes conspicuous, and apex declined; remaining growth stages with fine closely spaced growth lines; median septum well developed, triangular and blade-like, continues posteriorly as a ridge which ultimately forms a buttress to the pseudointerarea; cardinal muscle scars not conspicuous.
+
+Remarks: Australasian species originally described by Henderson & MacKinnon (1981) is identical to the present species.
+
+Occurrence: Samples H2-4, H2-5, H3-6, K6-30, K6-31, K6-32, K6-33.
+
+Material: 241.
+
+Phylum, Class, Order, & Family Uncertain
+Genus OCRURANUS Liu, 1979
+
+Type species: Ocruranus finalis Liu, 1979
+
+Ocruranus trulliformis (Jiang, 1980) Qian & Bengtson, 1989
+Pl. 1, figs. 19,20
+
+=== Page 15 ===
+1989 Ocruranus trulliformis (Jiang, 1980) Qian & Bengtson: pp. 107-108, fig. 69
+
+Description: Conical shell bears wide aperture at its base; subapical field as wide as half of the shell surface; apex declined and slightly overturned posteriorly; upfolded margin of the subapical field forms a smooth transition to the lateral shell margin; aperture circular to somewhat flattened posteriorly.
+
+Remarks: The convex posterior part of the subapical field is not prominent in the studied specimens, compared to the species described by Qian & Bengtson (1989).
+
+Occurrence: Samples K4-16, K6-28, K6-29, K6-32, K6-33, K7-38.
+
+Material: 49.
+
+4. Hyolithids
+
+Phylum MOLLUSCA
+Class HYOLITHA Marek, 1963
+Family ALLATHECIDAE Missarzhevsky, 1969
+Genus ALLATHECA Missarzhevsky, 1969
+
+Allatheca nanjiangensis Yang & He, 1984
+Pl. 2, figs. 10-12
+
+1984 Allatheca nanjiangensis Yang & He: p. 38, pl. 1, figs. 6-10.
+
+PLATE 2
+
+Fig. 1-3. Lingulella sp. outer(1, 2) and inner(3) views of dorsal valves, 1: Daegi Limestone, H2-4, X42, YSUG1081. 2: Daegi Limestone, H2-4, X55, YSUG1082. 3: Daegi Limestone, H2-4, X46, YSUG1083. Fig. 4-8. Treptotreta sp. inner(4), outer(6), and lateral(7) views of dorsal valves, 4: Daegi Limestone, H2-5, X96, YSUG1084. 6: Daegi Limestone, H2-5, X55, YSUG1086. 7: Daegi Limestone, H6-32, X50, YSUG1087. inner(5, 8) views of ventral valves, 5: Daegi Limestone, H2-5, X50, YSUG1085. 8: Daegi Limestone, K6-30, X46, YSUG1088. Fig. 9-10. Undifferentiated brachiopods, outer views of dorsal valves, 9: Daegi Limestone, H2-3, X38, YSUG1089. 10: Daegi Limestone, H2-3, X69, YSUG1090. Fig. 11-13. Allatheca nanjiangensis Yang & He, 1984 dorsal(11, 12) and lateral(13) views, 11: Daegi Limestone, H2-2, X49, YSUG1091. 12: Myobong Slate, K3-10, X33, YSUG1092. 13: Daegi Limestone, H2-2, X41, YSUG1093. Fig. 14-15. Hyolithellus tenuis Missarzhevsky, 1966, lateral views, 14: Myobong Slate, K3-12, X29, YSUG1094. 15: Daegi Limestone, H2-2, X70, YSUG1095. Fig. 16. Hyolithellus sp., dorsal view, Daegi Limestone, H2-2, X70, YSUG1096. Fig. 17. Uncinaspira ruidocostata He, 1984 lateral view, Myobong Slate, K3-9, X50, YSUG1097. Fig. 18-19. Phyllochites involutus Qian & Yin, 1984 outer views, 18: Myobong Slate, K3-5, X38, YSUG1098. 19: Myobong Slate, K3-9, X38, YSUG1099.
+
+=== Page 16 ===
+PLATE 2
+
+1
+2
+3
+4
+5
+6
+8
+7
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+
+=== Page 17 ===
+Description: Straight to slightly curved conch; conch cross section variable, most specimens included in this study show high, rounded, convex dorsum, broadly convex venter, and rounded ventro-lateral margins.
+
+Remarks: This species is identical to the Chinese species *Allatheca nanjiangensis* described by Yang & He. Also it is noticed that the similarity of this species to *Allatheca degeeri* reported from the strata distributed in Massachusetts, U.S.A. by Landing(1988). Also some specimens involved in Cheong, C.G.(1991) could be assignable to this species. An attempt to synonymize these species, however, is withheld because of the paucity of well preserved specimens in this study.
+
+Occurrence: Samples H2-2, K3-5. K3-6, K3-8, K3-9, K3-10, K3-12, K4-18, K4-21, K6-36.
+
+Material: 223
+
+Order ORTHOTHECIDA Marek, 1966
+Family HYOLITHELLIDAE Walcott, 1886
+Genus HYOLITHELLUS Billingsi, 1878
+
+*Hyolithellus tenuis* Chen, 1984
+Pl. 2, fig. 13, 14
+
+1984 *Hyolithellus tenuis* Chen: p. 55, pl. 2, figs. 16 & 17.
+
+Description: Conch small, slender, straight to slightly curved; conch cross section circular; surface smooth
+
+Remarks: The long slender conch with circular transverse section characterize the species. Chinese species described by Chen and the species reported from the Sambangsan Formation(Cheong, C.G., 1991) seem to be identical to the present species.
+
+Occurrence: Samples H2-2, K3-5, K3-7, K3-12. K6-35, K6-36, K7-38, K7-39.
+
+Material: 88.
+
+5. Coelenterate
+
+Phylum COELENTERATA
+Class, Order, & Family Uncertain
+Genus *PHYLLOCHITES* Qian & Yin, 1984
+
+Type species: *Phyllochites involutus* Qian & Yin, 1984
+
+*Phyllochites involutus* Qian & Yin, 1984
+Pl. 2, figs. 18, 19
+
+1984 *Phyllochites involotus* (sic.) Qian & Yin: p. 111, pl. 6, figs. 1-4. (*Phyllochites involotus* should read *Phyllochites involutus*)
+
+Description: Shell palmate, margins forming shelf-like overturned curvatures towards inside; middle longitudinal portion depressed.
+
+Remarks: Palmate feature of the species is characteristic. Original description of the species(Qian & Yin, 1984) includes specimen with only one margin forming a overturned curva-
+
+=== Page 18 ===
+ture. In this study, this difference is regarded as an intraspecific variation, and both features are included in the species characteristics.
+
+Occurrence: Samples K3-5, K3-6, K3-9, K3-10, K3-12, K7-38.
+
+Material: 125.
+
+6. Sponge spicules
+
+Phylum PORIFERA
+Class & Order Uncertain
+Genus ALLONNIA Dore & Reid, 1965
+
+Allonnia erromenosa Jiang, 1984
+Pl. 3, figs. 1, 2
+
+1984 Allonnia erromenosa Jiang: p. 4, fig. 12.
+
+Description: Unit consists of three radial arms which slightly curve upwards; arms conical, and meet at their proximal ends at approximately 120° each other; stout arms are uniform in size and shape; three arms contact at their proximal ends and form a triple junction; downward side of each spicule contains a small round pit towards its proximity; surface smooth.
+
+Remarks: Three radial spicules and a triple junction at their proximity characterize the species. Species illustrated by Jiang(1984) is identical to the present species in its characteristic features. Allonnia tripodophora Dore & Reid described by Qian & Xiao(1984) has long, slender arms compared to the present species.
+
+Occurrence: Samples K3-9, K3-10, K3-11, K4-18.
+
+Material: 146.
+
+Genus ARCHIASTERELLA Sdzuy, 1969
+
+Type species: Archiasterella pentactina Sdzuy, 1969
+
+Archiasterella quadratina Lee, 1987
+Pl. 3, figs. 3, 4
+
+1987 Archiasterella quadratina Lee: p. 105, pl. 1, fig. 12.
+
+Description: See Lee, H.Y.(1987). p. 105)
+
+Remarks: The specimens involved in this study are identical to the species originally described by Lee(1987). The present specimens have slightly curved arms to the upward side. Also the downward side of each arm contains a small round pit towards its proximal end.
+
+Occurrence: Samples K3-6, K4-20, K6-35.
+
+Material: 37.
+
+7. Gastropod
+
+=== Page 19 ===
+Phylum MOLLUSCA
+Class GASTROPODA Cuvier, 1797
+Family PELAGIELLIDAE Knight, 1956
+Genus UNCINASPIRA He, 1984
+
+Type species: Uncinaspira pristina He, 1984
+
+Uncinaspira ruidocostata He, 1984
+Pl. 2, fig. 17
+
+1984 Uncinaspira ruidocostata He: pp. 25-26, pl. 2, figs. 10-13.
+
+Description: Shell tightly coiled, curved throughout its length through an angle of almost 90°; coiling nearly planispiral; shell cross section elliptical; aperture flared, elliptical; regularly spaced annulation subdued near the apex.
+
+Remarks: Only one specimen studied here is a broken piece. Apex and a part of aperture are lost, although the general feature enables the present authors to assign it to the species originally described in China (He, 1984). Lapworthella rete Yue, 1987 described by Qian & Bengtson (1989) is similar to the present species, but the former has rounded rectangular cross section. Annulation pattern of Archaeospira ornata Yu, 1979 of the same study shows wider distribution pattern than that of the species studied here.
+
+Occurrence: Sample K3-9.
+
+Material: 1.
+
+8. Incertae sedis
+
+Group CONODONTIFORMES
+Family DISTACODIDAE
+Genus GANLOUDINA He, 1980
+
+PLATE 3
+
+Fig. 1-2. Allonnia erromenosa Jiang, 1982 upper views, 1: Myobong Slate, K3-9, X63, YSUG 1100. 2: Myobong Slate, K3-9, X60, YSUG 1101. Fig. 3-4. Archiasterella quadratina Lee, 1987. upper views, 3: Myobong Slate, K6-6, X55, YSUG 1102. 4: Myobong Slate K6-6, X90, YSUG 1103. Fig. 5-6. Ganloudina platybasala Yang & He, 1984 lateral views, 5: Myobong Slate, K3-1, X38, YSUG 1104. 6: Myobong Slate, K3-1, X42, YSUG 1105. Fig. 7-9. Ernogia acculatus Jiang, 1982 inner views, 7: Myobong Slate, K3-11, X38, YSUG 1106. 8: Myobong Slate, K3-6, X26, YSUG 1107. 9: Myobong Slate, K3-7, X50, YSUG 1108. Fig. 10-11. Mirabifolliculus chytroformis Yang & He, 1984 lateral views, 10: Daegi Limestone, K6-35, X45, YSUG 1109. 11: Daegi Limestone, K6-35, X50, YSUG 1110. Fig. 12-13. Nanjiangofolliculus circodonus Yang & He, 1984 upper views 12: Myobong Slate, H1-1, X50, YSUG 1111. 13: Myobong Slate, H1-1, X65, YSUG 1112. Fig. 14. Microdictyon? sp. 14: Daegi Limestone, K4-17, X58, YSUG 1113. Fig. 15-17. Undifferentiated small shelly fossils 15: Daegi Limestone, H2-2, X37, YSUG 1114. 16: Daegi Limestone, K4-18, X58, YSUG 1115. 17: Daegi Limestone, H2-3, X38, YSUG 1116.
+
+=== Page 20 ===
+PLATE 3
+
+1 2 3 4
+5 6 7 8 9
+10 11 12 13
+14 15 16 17
+
+=== Page 21 ===
+Gonloudina platybasala Yang & He, 1984
+Pl. 3, figs. 5, 6
+
+1984 Gonloudina platybasala Yang & He: p. 39, pl. 4, figs. 1, 2, 4, & 5.
+
+Description: Conical shell depressed laterally, slightly inclined posteriorly; base is projected posteriorly; basal cavity deep, and elliptical in cross section.
+
+Remarks: Morphological features of the species are identical to those of Chinese species originally described by Yang & He(1984). Some specimens included in this study, however, show indistinct posterior projections of their bases.
+
+Occurrence: Samples K3-5, K3-6, K3-7, K3-8, K3-9, K3-10, K3-11, K3-12, K4-18.
+
+Material: 105.
+
+Genus MIRABIFOLLICULUS Yang & He, 1984
+
+Type species: Mirabifolliculus chytroformis Yang & He, 1984
+
+Mirabifolliculus? chytroformis Yang & He, 1984
+Pl. 3, fig. 10
+
+1984 Mirabifolliculus chytroformis Yang & He: p. 42, pl. 3, figs. 13-15.
+
+Description: Shell vase-shaped, upper portion is expanded to make rounded triangular shape, neck is rather narrow and long; aperture at upper end is slightly elongate in outline, lower end is slightly convex; surface smooth.
+
+Remarks: Chinese species described by Yang & He(1984) has a basal portion expanded to form a flat, wide base. Otherwise, it is identical to the present species.
+
+Occurrence: Samples K6-34, K6-35.
+
+Material: 9.
+
+Genus NANJIANGOFOLLICULUS Yang & He, 1984
+
+Type species: Nanjiangofolliculus circocodonus Ynag & He, 1984
+Nanjiangofolliculus circocodonus Yang & He, 1984
+Pl. 3, figs. 11, 12
+
+1984 Nanjiangofolliculus circocodonus Yang & He: p. 43, pl. 3, figs. 8-12.
+
+Description: Shell spherical to bowl-shaped; shape of the central cavity is equicentric sphere; aperture circular; wall thick and surface smooth.
+
+Remarks: Walls of specimens included in the study are almost exclusively recrystallized.
+
+Occurrence: Samples H1-14, K1-1.
+
+Material: 35.
+
+Family Uncertain
+Genus ERNOGIA Jiang, 1982
+
+Type species: Ernogia acculatus Jiang in Luo et al., 1982
+
+Ernogia acculatus Jiang, 1989
+Pl. 3, figs. 7-9
+
+=== Page 22 ===
+1989 *Ernogia acculatus* Jiang: Quan & Bengtson, pp. 100-101, fig. 64.
+
+**Description**: Shell ovately triangular in plan view, shell curved so that the lateral view is almost bow-shaped, curvature is not prominent is some specimens; surface covered by faint nodes.
+
+**Remarks**: Beak-like structure at the apex described by Qian & Bengtson (1989) is not noticed in the specimens studied here, probably due to the poor state of preservation.
+
+**Occurrence**: Samples K3-6, K3-7, K3-9, K3-10, K3-11, K3-12, K7-38.
+
+**Material**: 83.
+
+Group & Family Uncertain
+Genus *MICRODICTYON* Bengtson, Matthews & Missarzhevsky, 1981
+Type species: *Microdictyon effusum* Bengtson, Matthews & Missarzhevsky, 1981
+
+*Microdictyon*? sp.
+Pl. 3, fig. 13
+
+**Description**: Frameworks connected at different angles to form a three dimensional reticulate pattern; outgrowth of frameworks form the elliptical pores; surface smooth.
+
+**Remarks**: Only fragmented specimens are included in this study. *Microdictyon* spp. described by Bengtson et al. (1986) have similar morphological features to the specimens studied here.
+
+**Occurrence**: Samples H1-1, H2-3, H2-4, H2-5, K3-9, K4-13, K4-14, K4-16, K4-17, K4-18, K4-21, K4-22, K4-23, K4-24, K4-25, K6-27, K6-28, K6-30, K6-31.
+
+**Material**: 113.
+
+**ACKNOWLEDGMENT**
+
+The present study was supported by the Basic Science Research Institute Progran, Ministry of Education, BSRI-92-508. Graduate and undergraduate students of the paleontology laboratory in the Yonsei University were willing to help in the field work, lab processes, and manuscript illustrations. A part of photography was conducted with the aid of the SEM facility in the Geology Department of the Chungnam National University. We are grateful to all the assistances.
+
+=== Page 23 ===
+강원도 영원—정선지역의 백은산항사대에 분포하는
+료붕축과 대기축에 대한 미화석연구
+
+이하영* 노동석* 이벤수* 이명석**
+
+* 연세대학교 지급학과 ** 인학대학교 교육대학원
+
+요 약
+
+강원도 영원 및 정선지역의 백은산항사대에 분포하는 료붕축과 대기축에서 산출된 책류리아기의 미화석을 최초로 기재하고, 이들 화석균에 의하여 두 종을 증사하적으로 연구하였다. 책류된 55개의 시로종 45개의 시로에서 4,487개체의 다양한 미화석이 산출되었다. 이들은 산출된 4층 4층, 코노트트 2층 2층, 완종류 5층 5층, Hyolithids 2층 3층, 복동류 1층, 강장동물 1층, 해면동물 과각부 2층 2층, 및 소속붕명 4층 4층 등 21층 22층으로 분포되었다. 기재된 미화석균은 기준의 국내, 증국, 호주등의 지환에서 산출된 화석균과 대비되었으며, 이들이 지시하는 시대는 료붕축과 대기축이 각각 'late Early to early Middle Cambrian' 및 'middle Middle Cambrian'으로 발행되었다.
+
+REFERENCES
+
+Bengtson, S., Matthews, S.C., & Missarzhevsky, V.V., 1986: The Cambrian netlike fossi Microdictyon. In: Hoffman, A. & Nitecki, M.H.(eds.), Problematic Fossil Taxa. Oxford Monographs on Geology and Geophysics 5, Oxford University Press, pp. 97-115.
+
+Chen, P., 1984: Discovery of Lower Cambrian small shelly fossils from Jijiapo, Yichang, west Hubei and its significance. Professional Papers of Stratigraphy and Paleontology, v.13, pp. 55-56, 4 pls.
+
+Cheong, C.G., 1991: Biostratigraphic study on the Sambangsan Formation in the Yeongweol area with particular reference to conodonts and small shelly fossils. Unpublished M.S. thesis, Yonsei University, Seoul, 54p.
+
+Cowie, J.W., 1984: Introduction to papers on the Precambrina-Cambrian boundary. Geological Magazine, v.121, pp. 137-138.
+
+Cowie, J.W., 1985: Continuing work on the Precambrian-Cambrian boundary. Episodes. v. 8, no. 2, pp. 93-97.
+
+He, T., 1984: Discovery of Lapworthella bella assemblage from Lower Cambrian Meishucun Stage in Niuniuzhai Leibo County, Sichuan Province. Professional Papers of Stratigraphy and Paleontology, v. 13, pp. 23-24.
+
+Henderson, R.A. & MacKinnon, D.I., 1981: New Cambrian inarticulate brachiopoda from Australia and the age of the Tasman Formation. Alcheringa, v. 5, pp. 289-309.
+
+Jiang, Z., 1984: Evolution of early shelly metazoans and basic characteristics of Meishucun Fauna. Professional Papers of Stratigraphy and Paleontology, v. 13, pp. 1-22.
+
+Kirschvink, J.L., Magaritz, M., Ripperdan, R.L., Zhuravlev, A.Y., & Rozanov, A.U., 1991: The Precambrian/Cambrian boundary: magnetostratigraphy and carbon isotopes resolve
+
+=== Page 24 ===
+correlation problems between Siberia, Morocco, and South China. *GSA Today*, v. 1, no. 4, pp. 69-71, pp. 87-88, & p. 91.
+
+Kovayashi, T., 1935: The Cambro-Ordovician formations and faunas of South Chosen, Palaeontology Part III, Cambrian faunas of South Chosen with a special study on the Cambrian trilobite genera and families. *Journal of the Faculty of Science, University of Tokyo*, Sec. 2, v. 12, pt. 2, pp. 330-420, pls. 19-21.
+
+Kobayashi, T., 1961: The Cambro-Ordovician formations and faunas of South Korea Part X, Stratigraphy of the Chosen Group in Korea and South Manchuria and its rerlation to the Cambro-Ordovician formation of other areas, Section A, The Chosen Group of South Korea, *Journal of the Faculty of Science, University of Tokyo*, Sec. 2, v. 16, pt. 1, pp. 1-84.
+
+Landing, E., 1988: Lower Cambrian of eastern Massachusetts: Stratigraphy and small shelly fossils. *Journal of Paleontogy*, v. 62, pp. 661-695.
+
+Lee, B.S., 1987: Conodont biostratigraphy of the Hwajeol Formation (Upper Cambrian) in the Baegunsan Synclinal Zone, eastern Yeongweol and Samcheog areas, Kangweon-Do, Korea. Unpublished Ph.D. dissertation, Yonsei University, Seoul, 135p.
+
+Lee, B.S., Lee, H.Y., Cheong, C.G. & Lee, S.J., 1991: Microfossils from the Sambangsan Formation in the Yeongweol area, Kangweon-Do and its stratigraphic implication. *Journal of the Paleontological Society of Korea*, v. 7, no. 2, pp. 116-137.
+
+Lee, H.Y., 1975: Conodonts from the Upper Cambrian formations, Kangweon-Do, South Korea. *Journal of the Geological Society of Korea*, v. 11, no. 3, pp. 172-185.
+
+Lee, H.Y., 1987: Dicsovery of the Early Cambrian small shelly fossils from the Choseon Supergroup at the Kurangni Area, Mungyong-Kun, South Korea. *Journal of the Paleontological Society of Korea*, v. 3, no. 2, pp. 93-107.
+
+Lee, H.Y., Yu, K.M., & Lee, J.D., 1986: Sedimentological, stratigraphical and paleontological study on the Sambangsan Formation and its adjacent formations in the Yeongweol-Pyeongchang area, Kangweondo. *Journal of the Geological Society of Korea*, v. 22, no. 1, pp. 69-86.
+
+Lee, H.Y., Lee, B.S., & Yi, M.S., 1992: Cambrian small shelly and sclerite fossils from South Korea and their biostratigraphic and bioprovincial implications. *In*: Choi, D.K., Lee, J.D., & Yun, H. (eds), *Paleontological Society of Korea Special Publication*, no. 1, pp. 35-53.
+
+Lee, K.J., 1989: A study on stratigraphy and paleontology of the Choseon Supergroup in the Mungyeong coalfield, Gyeongsangbugdo, Korea. Unpublished M.S. Thesis, Yonsei University, Seoul, 109p.
+
+Qian, J. & Xiao, B., 1984: An Early Cambrian small shelly fauna from Aksu-Wush Region, Xinjiang. *Professional Paper of the Stratigraphy and Paleontology*, v. 13, pp. 65-90.
+
+Qian, Y & Bengtson, S., 1989: Paleontology and biostratigraphy of the Early Cambrian Meishucunian Stage in Yunnan Province, South China. *Fossil & Strata*, v. 24, 156p.
+
+Qian, Y. & Yin G., 1984: Small shelly fossils from the Lowest Cambrian in Guizhou. *Professional Papers of the Stratigraphy and Paleontology*, v. 13, pp. 91-123.
+
+Yang, X. & He, T., 1984: New small shelly fossils from Lower Cambrian Meishucun stage of Nanjiang area, Northern Sichuan. *Professional Papers of the Stratigraphy and Paleontology*, v. 13, pp. 35-47.
+
+Zhang, W., Lu, Y., Zhu, Z., Qian, Y., Lin, H., Zhou, Z., Zhang, S., & Yuan, J., 1980: Cambrian trilobite faunas of Southeastern China, *Science press*, 497p.
+

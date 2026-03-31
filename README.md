@@ -66,6 +66,8 @@ python main.py
 ## 프로젝트 구조
 
 ```
+scripts/
+└── test_ollama_ocr.py     # Ollama OCR 테스트 스크립트
 papermeister/
 ├── models.py          # DB 모델 (Source, Folder, Paper, Author, PaperFile, Passage)
 ├── database.py        # DB 초기화 + 마이그레이션

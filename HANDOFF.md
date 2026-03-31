@@ -48,6 +48,7 @@ Zotero API 연동 완료. OCR 병렬 처리 구현 (health check 기반).
 | Zotero key 저장 | PaperFile.zotero_key | 첨부파일 key, Folder.zotero_key는 collection key |
 | Zotero 컬렉션 | 시작 시 자동 동기화 | 캐시 → API 순서, 소스 트리에 표시 |
 | Zotero 아이템 | 컬렉션 클릭 시 fetch | API 1회 호출로 parent+attachment 매칭 |
+| OCR 엔진 | Chandra2 유지 | glm-ocr 평가 후 탈락 (한국어 정확도 부족) |
 
 ---
 
@@ -58,6 +59,14 @@ Zotero API 연동 완료. OCR 병렬 처리 구현 (health check 기반).
 ---
 
 ## 최근 세션 요약
+
+**2026-03-31 (세션 4)**
+- Ollama glm-ocr 로컬 OCR 엔진 평가 테스트
+  - 테스트 스크립트 작성 (`scripts/test_ollama_ocr.py`)
+  - docs/ PDF 3개 전체 페이지 OCR 처리 → `docs/ocr_results/`에 결과 저장
+  - Chandra2 vs glm-ocr 비교: 한국어 학술 용어 인식 정확도 glm-ocr 심각하게 낮음
+  - 결론: glm-ocr 탈락, Chandra2 유지
+  - devlog: `20260331_005_Ollama_GLM-OCR_Test.md`
 
 **2026-03-31 (세션 3)**
 - Zotero 연동 디버깅 및 최적화:
