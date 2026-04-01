@@ -45,12 +45,31 @@ class ZoteroClient:
         except Exception:
             return False
 
-    def get_collections(self):
+    def get_library_version(self):
+        """Get the current library version number (int)."""
+        return self._zot.last_modified_version()
+
+    def get_collections(self, since=None):
         """Return all collections as list of dicts with key, name, parent_key.
 
+        If since= is given, only returns collections modified after that library version.
         Results are automatically saved to cache.
         """
-        raw = self._zot.everything(self._zot.collections())
+        if since is not None:
+            changed = self._zot.collection_versions(since=since)
+            if not changed:
+                return None  # nothing changed
+            # Fetch only changed collections
+            raw = []
+            for key in changed:
+                try:
+                    col = self._zot.collection(key)
+                    raw.append(col)
+                except Exception:
+                    pass
+        else:
+            raw = self._zot.everything(self._zot.collections())
+
         results = []
         for col in raw:
             data = col['data']
@@ -60,7 +79,11 @@ class ZoteroClient:
                 'parent_key': data.get('parentCollection') or '',
             })
         results.sort(key=lambda c: c['name'].lower())
-        save_collections_cache(results)
+
+        if since is None:
+            # Full fetch — overwrite cache
+            save_collections_cache(results)
+
         return results
 
     def _parse_item_metadata(self, data):

@@ -8,11 +8,12 @@
 
 ## 현재 단계
 
-**Phase: MVP + Zotero 연동 + 병렬 OCR 구현 완료**
+**Phase: MVP + Zotero 연동 + 병렬 OCR + CLI 구현 완료**
 
 GUI 실행 확인. RunPod OCR 실 연동 성공 (Chandra2-vllm).
 Zotero API 연동 완료. OCR 병렬 처리 구현 (health check 기반).
 설정은 Preferences 다이얼로그에서 관리 (.env 사용하지 않음).
+**CLI 추가:** `python cli.py` — PyQt6 없이 리눅스에서 사용 가능.
 
 ---
 
@@ -49,6 +50,7 @@ Zotero API 연동 완료. OCR 병렬 처리 구현 (health check 기반).
 | Zotero 컬렉션 | 시작 시 자동 동기화 | 캐시 → API 순서, 소스 트리에 표시 |
 | Zotero 아이템 | 컬렉션 클릭 시 fetch | API 1회 호출로 parent+attachment 매칭 |
 | OCR 엔진 | Chandra2 유지 | glm-ocr 평가 후 탈락 (한국어 정확도 부족) |
+| CLI | `cli.py` (argparse) | PyQt6 의존 없음, GUI와 동일 DB 공유 |
 
 ---
 
@@ -59,6 +61,15 @@ Zotero API 연동 완료. OCR 병렬 처리 구현 (health check 기반).
 ---
 
 ## 최근 세션 요약
+
+**2026-04-01 (세션 5)**
+- CLI 버전 구현 (`cli.py`)
+  - 서브커맨드: import, process, search, list, show, config, status, zotero
+  - PyQt6 의존 없이 리눅스에서 사용 가능
+  - GUI와 동일한 DB(`~/.papermeister/papermeister.db`) 공유
+  - 병렬 OCR 처리 (ThreadPoolExecutor, GUI 버전과 동일 로직)
+  - **인터랙티브 모드** (`python cli.py`): Zotero 컬렉션 테이블 + 선택적 fetch/process
+  - `process -c <컬렉션>`: 특정 컬렉션만 OCR 처리 가능
 
 **2026-03-31 (세션 4)**
 - Ollama glm-ocr 로컬 OCR 엔진 평가 테스트

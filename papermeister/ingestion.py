@@ -148,6 +148,16 @@ def sync_zotero_collections(zotero_client, source, collections):
             folder.parent = parent
             folder.save()
 
+    # Save last sync timestamp and library version
+    from datetime import datetime
+    from .preferences import set_pref
+    set_pref('zotero_last_sync', datetime.now().isoformat())
+    try:
+        version = zotero_client.get_library_version()
+        set_pref('zotero_library_version', version)
+    except Exception:
+        pass
+
 
 def _get_or_create_zotero_folder(source, collection):
     """Get or create a Folder for a Zotero collection."""
