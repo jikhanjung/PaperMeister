@@ -487,7 +487,7 @@ def cmd_zotero(args):
         if last_sync:
             print(f'  Last sync: {last_sync[:19]}  (version: {saved_version})')
 
-        _collection_table(folders)
+        _collection_table(folders, page=args.page, page_size=args.page_size)
 
     return 0
 
@@ -502,8 +502,8 @@ def _prompt(msg, default=''):
     return input(f'{msg}: ').strip()
 
 
-def _collection_table(folders):
-    """Print a numbered table of collections with status info."""
+def _collection_table(folders, page=1, page_size=20):
+    """Print a numbered table of collections with status info and pagination."""
     rows = []
     for f in folders:
         total = Paper.select().where(Paper.folder == f).count()
@@ -527,15 +527,24 @@ def _collection_table(folders):
         )
         rows.append((f, total, pending, processed, failed))
 
+    total_pages = max(1, (len(rows) + page_size - 1) // page_size)
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * page_size
+    end = start + page_size
+    page_rows = rows[start:end]
+
     # Header
     print()
     print(f'  {"#":>3}  {"Collection":<40} {"Papers":>6} {"Pending":>8} {"Done":>6} {"Fail":>6}')
     print(f'  {"─"*3}  {"─"*40} {"─"*6} {"─"*8} {"─"*6} {"─"*6}')
-    for i, (f, total, pending, processed, failed) in enumerate(rows, 1):
+    for i, (f, total, pending, processed, failed) in enumerate(page_rows, start + 1):
         name = f.name[:40]
         print(f'  {i:>3}  {name:<40} {total:>6} {pending:>8} {processed:>6} {failed:>6}')
+
+    if total_pages > 1:
+        print(f'\n  Page {page}/{total_pages} (showing {start+1}-{start+len(page_rows)} of {len(rows)})')
     print()
-    return rows
+    return rows, page, total_pages
 
 
 def cmd_interactive(args):
@@ -591,6 +600,9 @@ def cmd_interactive(args):
         else:
             print('Using cached collections.')
 
+    current_page = 1
+    page_size = 20
+
     while True:
         # Reload folders each loop
         folders = list(Folder.select().where(
@@ -606,7 +618,7 @@ def cmd_interactive(args):
         if last_sync:
             print(f'  Last sync: {last_sync[:19]}')
 
-        rows = _collection_table(folders)
+        rows, current_page, total_pages = _collection_table(folders, page=current_page, page_size=page_size)
 
         total_pending = sum(r[2] for r in rows)
         total_papers = sum(r[1] for r in rows)
@@ -619,6 +631,9 @@ def cmd_interactive(args):
         print('    fa          Fetch ALL collections')
         print('    pa          Process ALL pending files')
         print('    s <query>   Search')
+        if total_pages > 1:
+            print('    n           Next page')
+            print('    b           Previous page')
         print('    q           Quit')
         print()
 
@@ -633,6 +648,21 @@ def cmd_interactive(args):
 
         if cmd.lower() == 'q':
             break
+
+        # ── pagination ──
+        if cmd.lower() == 'n':
+            if current_page < total_pages:
+                current_page += 1
+            else:
+                print('Already on the last page.')
+            continue
+
+        if cmd.lower() == 'b':
+            if current_page > 1:
+                current_page -= 1
+            else:
+                print('Already on the first page.')
+            continue
 
         # ── search ──
         if cmd.lower().startswith('s '):
@@ -794,7 +824,9 @@ def build_parser():
     zf.add_argument('-c', '--collection', help='Collection key or name (default: all)')
     zr = zsub.add_parser('run', help='Fetch + OCR in one step')
     zr.add_argument('-c', '--collection', help='Collection key or name (default: all)')
-    zsub.add_parser('collections', help='List synced Zotero collections')
+    zc = zsub.add_parser('collections', help='List synced Zotero collections')
+    zc.add_argument('--page', type=int, default=1, help='Page number (default: 1)')
+    zc.add_argument('--page-size', type=int, default=20, help='Items per page (default: 20)')
 
     return parser
 
