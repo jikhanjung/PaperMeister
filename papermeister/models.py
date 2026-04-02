@@ -31,6 +31,7 @@ class Paper(BaseModel):
     journal = peewee.TextField(default='')
     doi = peewee.TextField(default='')
     folder = peewee.ForeignKeyField(Folder, null=True, backref='papers', on_delete='SET NULL')
+    zotero_key = peewee.TextField(default='')  # Zotero parent item key
     created_at = peewee.DateTimeField(default=datetime.datetime.now)
 
 

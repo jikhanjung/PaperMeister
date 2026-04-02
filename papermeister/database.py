@@ -20,6 +20,11 @@ def _migrate(database):
     if 'zotero_key' not in columns:
         database.execute_sql("ALTER TABLE folder ADD COLUMN zotero_key TEXT DEFAULT ''")
 
+    cursor = database.execute_sql("PRAGMA table_info('paper')").fetchall()
+    columns = {row[1] for row in cursor}
+    if 'zotero_key' not in columns:
+        database.execute_sql("ALTER TABLE paper ADD COLUMN zotero_key TEXT DEFAULT ''")
+
     cursor = database.execute_sql("PRAGMA table_info('paperfile')").fetchall()
     columns = {row[1] for row in cursor}
     if 'zotero_key' not in columns:

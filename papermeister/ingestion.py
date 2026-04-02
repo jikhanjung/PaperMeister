@@ -197,14 +197,24 @@ def fetch_zotero_collection_items(zotero_client, source, folder, progress_callba
         if progress_callback:
             progress_callback(f'[{i + 1}/{len(items)}] {item["title"][:60]}')
 
-        # Dedup: check if any PaperFile with this zotero item key exists
+        # Dedup: check by zotero parent item key first, then fall back to title
         existing_by_key = (
             Paper.select()
-            .where(Paper.folder == folder, Paper.title == item['title'])
+            .where(Paper.zotero_key == item['key'])
             .first()
         )
+        if not existing_by_key:
+            existing_by_key = (
+                Paper.select()
+                .where(Paper.folder == folder, Paper.title == item['title'])
+                .first()
+            )
+            if existing_by_key and not existing_by_key.zotero_key:
+                # Backfill zotero_key for legacy records
+                existing_by_key.zotero_key = item['key']
+                existing_by_key.save()
+
         if existing_by_key:
-            # Paper exists — but maybe we need to add PaperFile records
             paper = existing_by_key
         else:
             with db.atomic():
@@ -214,6 +224,7 @@ def fetch_zotero_collection_items(zotero_client, source, folder, progress_callba
                     journal=item.get('journal', ''),
                     doi=item.get('doi', ''),
                     folder=folder,
+                    zotero_key=item['key'],
                 )
                 for order, author_name in enumerate(item['authors']):
                     Author.create(paper=paper, name=author_name, order=order)

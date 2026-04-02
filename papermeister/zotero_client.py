@@ -129,6 +129,7 @@ class ZoteroClient:
 
         parent_items = {}
         pdf_attachments = {}
+        standalone_pdfs = []
 
         for it in all_items:
             data = it['data']
@@ -142,6 +143,8 @@ class ZoteroClient:
                             'key': data['key'],
                             'filename': data.get('filename', f'{data["key"]}.pdf'),
                         })
+                    else:
+                        standalone_pdfs.append(data)
             elif item_type != 'note':
                 parent_items[data['key']] = data
 
@@ -150,6 +153,23 @@ class ZoteroClient:
             item = self._parse_item_metadata(data)
             item['attachments'] = pdf_attachments.get(item_key, [])
             results.append(item)
+
+        # Standalone PDFs (no parent item) — create as their own item
+        for data in standalone_pdfs:
+            filename = data.get('filename', f'{data["key"]}.pdf')
+            title = data.get('title', '') or os.path.splitext(filename)[0]
+            results.append({
+                'key': data['key'],
+                'title': title,
+                'authors': [],
+                'year': None,
+                'doi': '',
+                'journal': '',
+                'attachments': [{
+                    'key': data['key'],
+                    'filename': filename,
+                }],
+            })
 
         return results
 
