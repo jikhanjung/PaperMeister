@@ -86,14 +86,15 @@ def _run_process(pending):
     max_concurrent = max(1, min(status['idle'], 10))
     print(f'Workers: {status["idle"]} idle, {status["running"]} running → parallel: {max_concurrent}')
 
-    counter = {'done': 0, 'failed': 0}
+    counter = {'started': 0, 'done': 0, 'failed': 0}
     counter_lock = threading.Lock()
     total = len(pending)
 
     def process_one(pf):
         name = os.path.basename(pf.path)
         with counter_lock:
-            idx = counter['done'] + counter['failed'] + 1
+            counter['started'] += 1
+            idx = counter['started']
         prefix = f'[{idx}/{total}]'
         print(f'{prefix} {name}')
         try:
@@ -547,6 +548,37 @@ def _collection_table(folders, page=1, page_size=20):
     return rows, page, total_pages
 
 
+def _parse_indices(text, max_idx):
+    """Parse a selection string like '1,3,5-8' into a sorted list of 0-based indices.
+
+    Returns list of valid indices or None on parse error.
+    """
+    indices = set()
+    for part in text.split(','):
+        part = part.strip()
+        if not part:
+            continue
+        if '-' in part:
+            bounds = part.split('-', 1)
+            try:
+                lo, hi = int(bounds[0]), int(bounds[1])
+            except ValueError:
+                return None
+            if lo > hi:
+                lo, hi = hi, lo
+            for i in range(lo, hi + 1):
+                if 1 <= i <= max_idx:
+                    indices.add(i - 1)
+        else:
+            try:
+                i = int(part)
+            except ValueError:
+                return None
+            if 1 <= i <= max_idx:
+                indices.add(i - 1)
+    return sorted(indices) if indices else None
+
+
 def cmd_interactive(args):
     """Interactive mode: sync Zotero, browse collections, fetch & process."""
     from papermeister.preferences import get_pref
@@ -625,7 +657,7 @@ def cmd_interactive(args):
         print(f'  Total: {total_papers} papers, {total_pending} pending')
         print()
         print('  Commands:')
-        print('    <number>    Select collection → fetch & process')
+        print('    <number>    Select collection → fetch & process  (e.g. 1,3,5-8)')
         print('    f <number>  Fetch items only (no OCR)')
         print('    p <number>  Process (OCR) pending files only')
         print('    fa          Fetch ALL collections')
@@ -706,60 +738,76 @@ def cmd_interactive(args):
 
         # ── f <num> — fetch specific ──
         if cmd.lower().startswith('f '):
-            try:
-                idx = int(cmd.split()[1]) - 1
-                folder = folders[idx]
-            except (ValueError, IndexError):
-                print('Invalid number.')
+            sel = cmd[2:].strip()
+            indices = _parse_indices(sel, len(folders))
+            if indices is None:
+                print('Invalid selection.')
                 continue
-            print(f'\nFetching "{folder.name}"...')
-            new = fetch_zotero_collection_items(
-                client, source, folder,
-                progress_callback=lambda msg: print(f'  {msg}'),
-            )
-            print(f'Fetch complete: {new} new paper(s).')
+            total_new = 0
+            for idx in indices:
+                folder = folders[idx]
+                print(f'\nFetching "{folder.name}"...')
+                new = fetch_zotero_collection_items(
+                    client, source, folder,
+                    progress_callback=lambda msg: print(f'  {msg}'),
+                )
+                total_new += new
+                if new:
+                    print(f'  {folder.name}: {new} new')
+            print(f'Fetch complete: {total_new} new paper(s).')
             continue
 
         # ── p <num> — process specific ──
         if cmd.lower().startswith('p '):
-            try:
-                idx = int(cmd.split()[1]) - 1
-                folder = folders[idx]
-            except (ValueError, IndexError):
-                print('Invalid number.')
+            sel = cmd[2:].strip()
+            indices = _parse_indices(sel, len(folders))
+            if indices is None:
+                print('Invalid selection.')
                 continue
-            pending = _get_pending_files(folder_id=folder.id)
-            if not pending:
-                print(f'No pending files in "{folder.name}".')
-            else:
-                print(f'\nProcessing "{folder.name}" ({len(pending)} pending)...')
-                _run_process(pending)
+            all_pending = []
+            for idx in indices:
+                folder = folders[idx]
+                pf_list = _get_pending_files(folder_id=folder.id)
+                if pf_list:
+                    all_pending.extend(pf_list)
+                else:
+                    print(f'No pending files in "{folder.name}".')
+            if all_pending:
+                print(f'\nProcessing {len(all_pending)} pending file(s)...')
+                _run_process(all_pending)
             continue
 
         # ── <num> — fetch + process ──
-        try:
-            idx = int(cmd) - 1
-            folder = folders[idx]
-        except (ValueError, IndexError):
+        indices = _parse_indices(cmd, len(folders))
+        if indices is None:
             print('Unknown command. Type q to quit.')
             continue
 
-        print(f'\n=== {folder.name} ===')
+        # Fetch all selected
+        total_new = 0
+        selected_folder_ids = []
+        for idx in indices:
+            folder = folders[idx]
+            selected_folder_ids.append(folder.id)
+            print(f'\n=== {folder.name} ===')
+            print('Fetching items...')
+            new = fetch_zotero_collection_items(
+                client, source, folder,
+                progress_callback=lambda msg: print(f'  {msg}'),
+            )
+            total_new += new
+            print(f'Fetched: {new} new paper(s).')
 
-        # Fetch
-        print('Fetching items...')
-        new = fetch_zotero_collection_items(
-            client, source, folder,
-            progress_callback=lambda msg: print(f'  {msg}'),
+        # Process all pending from selected folders
+        all_pending = list(
+            PaperFile.select(PaperFile, Paper)
+            .join(Paper)
+            .where(PaperFile.status == 'pending', Paper.folder_id.in_(selected_folder_ids))
         )
-        print(f'Fetched: {new} new paper(s).')
-
-        # Process
-        pending = _get_pending_files(folder_id=folder.id)
-        if pending:
-            answer = _prompt(f'Process {len(pending)} pending file(s)? (y/n)', 'y')
+        if all_pending:
+            answer = _prompt(f'Process {len(all_pending)} pending file(s)? (y/n)', 'y')
             if answer.lower() in ('y', 'yes', ''):
-                _run_process(pending)
+                _run_process(all_pending)
         else:
             print('No pending files to process.')
 
