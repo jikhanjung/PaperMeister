@@ -220,7 +220,58 @@ def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=N
         paper_file.status = 'processed'
         paper_file.save()
 
+    # Upload OCR JSON as Zotero sibling attachment (opt-in, best-effort)
+    from .preferences import get_pref
+    if is_zotero and get_pref('zotero_upload_ocr_json', False):
+        existing_json = (
+            PaperFile.select()
+            .where(
+                (PaperFile.paper == paper)
+                & (PaperFile.path.endswith('.json'))
+            )
+            .first()
+        )
+        if not existing_json:
+            try:
+                if status_callback:
+                    status_callback('Uploading OCR JSON to Zotero...')
+                _upload_ocr_json_to_zotero(paper_file)
+            except Exception as e:
+                if status_callback:
+                    status_callback(f'OCR JSON upload failed: {e}')
+
     return paper
+
+
+def _upload_ocr_json_to_zotero(paper_file):
+    """Upload cached OCR JSON as a sibling Zotero attachment.
+
+    On success, creates a new PaperFile row for the JSON attachment.
+    """
+    json_path = os.path.join(OCR_JSON_DIR, f'{paper_file.hash}.json')
+    if not os.path.exists(json_path):
+        return
+
+    from .preferences import get_pref
+    from .zotero_client import ZoteroClient
+    from .ingestion import hash_file
+    user_id = get_pref('zotero_user_id', '')
+    api_key = get_pref('zotero_api_key', '')
+    if not user_id or not api_key:
+        return
+
+    client = ZoteroClient(user_id, api_key)
+    new_key = client.upload_sibling_attachment(paper_file.zotero_key, json_path)
+    if not new_key:
+        return
+
+    PaperFile.create(
+        paper=paper_file.paper,
+        path=os.path.basename(json_path),
+        hash=hash_file(json_path),
+        status='processed',
+        zotero_key=new_key,
+    )
 
 
 def _cleanup_temp(filepath):

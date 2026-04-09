@@ -486,7 +486,7 @@ class MainWindow(QMainWindow):
         from ..text_extract import OCR_JSON_DIR
 
         targets = []
-        for pf in PaperFile.select():
+        for pf in PaperFile.select().where(~PaperFile.path.endswith('.json')):
             has_passages = Passage.select().where(Passage.paper == pf.paper).exists()
             if has_passages:
                 continue

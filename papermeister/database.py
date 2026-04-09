@@ -1,10 +1,10 @@
 import os
 import peewee
-from .models import db, Source, Folder, Paper, Author, PaperFile, Passage
+from .models import db, Source, Folder, Paper, Author, PaperFile, Passage, PaperBiblio
 
 DB_PATH = os.path.join(os.path.expanduser('~'), '.papermeister', 'papermeister.db')
 
-ALL_TABLES = [Source, Folder, Paper, Author, PaperFile, Passage]
+ALL_TABLES = [Source, Folder, Paper, Author, PaperFile, Passage, PaperBiblio]
 
 
 def _migrate(database):
@@ -29,6 +29,12 @@ def _migrate(database):
     columns = {row[1] for row in cursor}
     if 'zotero_key' not in columns:
         database.execute_sql("ALTER TABLE paperfile ADD COLUMN zotero_key TEXT DEFAULT ''")
+
+    # PaperBiblio: needs_visual_review column
+    cursor = database.execute_sql("PRAGMA table_info('paperbiblio')").fetchall()
+    bib_columns = {row[1] for row in cursor}
+    if bib_columns and 'needs_visual_review' not in bib_columns:
+        database.execute_sql("ALTER TABLE paperbiblio ADD COLUMN needs_visual_review INTEGER DEFAULT 0")
 
     # Drop unique index on paperfile.hash (Zotero files start with empty hash)
     indexes = database.execute_sql("PRAGMA index_list('paperfile')").fetchall()

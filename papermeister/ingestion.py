@@ -230,17 +230,23 @@ def fetch_zotero_collection_items(zotero_client, source, folder, progress_callba
                     Author.create(paper=paper, name=author_name, order=order)
             new_count += 1
 
-        # Create PaperFile for each PDF attachment
+        # Create PaperFile for each attachment (PDF, JSON, etc.)
         for att in item.get('attachments', []):
             existing_pf = PaperFile.select().where(
                 PaperFile.zotero_key == att['key'],
             ).first()
             if not existing_pf:
+                # JSON attachments are derived OCR output → already processed
+                ct = att.get('content_type', '')
+                fname = att['filename']
+                is_derived = (
+                    ct == 'application/json' or fname.lower().endswith('.json')
+                )
                 PaperFile.create(
                     paper=paper,
-                    path=att['filename'],
+                    path=fname,
                     hash='',
-                    status='pending',
+                    status='processed' if is_derived else 'pending',
                     zotero_key=att['key'],
                 )
 

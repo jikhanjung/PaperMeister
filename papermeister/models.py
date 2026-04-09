@@ -49,6 +49,26 @@ class PaperFile(BaseModel):
     zotero_key = peewee.TextField(default='')  # Zotero attachment key
 
 
+class PaperBiblio(BaseModel):
+    """LLM-extracted bibliographic info. Non-destructive: separate from Paper."""
+    paper = peewee.ForeignKeyField(Paper, backref='biblio_extractions', on_delete='CASCADE')
+    file_hash = peewee.TextField(default='')   # PDF hash this extraction came from
+    title = peewee.TextField(default='')
+    authors_json = peewee.TextField(default='[]')
+    year = peewee.IntegerField(null=True)
+    journal = peewee.TextField(default='')
+    doi = peewee.TextField(default='')
+    abstract = peewee.TextField(default='')
+    doc_type = peewee.TextField(default='unknown')
+    language = peewee.TextField(default='')
+    confidence = peewee.TextField(default='')
+    needs_visual_review = peewee.BooleanField(default=False)
+    notes = peewee.TextField(default='')
+    source = peewee.TextField(default='')      # 'llm-haiku', 'llm-sonnet', etc.
+    model_version = peewee.TextField(default='')
+    extracted_at = peewee.DateTimeField(default=datetime.datetime.now)
+
+
 class Passage(BaseModel):
     paper = peewee.ForeignKeyField(Paper, backref='passages', on_delete='CASCADE')
     page = peewee.IntegerField()

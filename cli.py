@@ -197,7 +197,11 @@ def cmd_list(args):
             print('No papers.')
             return 0
         for p in papers:
-            pf = PaperFile.select().where(PaperFile.paper == p).first()
+            pf = (
+                PaperFile.select()
+                .where((PaperFile.paper == p) & (~PaperFile.path.endswith('.json')))
+                .first()
+            )
             status = pf.status if pf else 'no PDF'
             year_str = f' ({p.year})' if p.year else ''
             print(f'  [{p.id}] {p.title}{year_str} [{status}]')
@@ -256,7 +260,11 @@ def cmd_show(args):
     if paper.doi:
         print(f'DOI:     {paper.doi}')
 
-    pf = PaperFile.select().where(PaperFile.paper == paper).first()
+    pf = (
+        PaperFile.select()
+        .where((PaperFile.paper == paper) & (~PaperFile.path.endswith('.json')))
+        .first()
+    )
     if pf:
         print(f'File:    {pf.path}')
         print(f'Status:  {pf.status}')

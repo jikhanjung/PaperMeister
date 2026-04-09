@@ -43,6 +43,7 @@ python main.py
 - **OCR:** RunPod serverless (Chandra2-vllm) — Preferences에서 API 키 설정
 - **Zotero:** pyzotero — Preferences에서 user_id + api_key 설정
 - **Settings:** `~/.papermeister/preferences.json` (RunPod, Zotero 자격증명)
+- **LLM 서지 추출:** `claude -p` (Haiku 텍스트, Sonnet vision) — Max 플랜 사용량 차감
 - **Dependencies:** Pillow, requests, pyzotero
 
 ## Data Model
@@ -51,6 +52,7 @@ python main.py
 Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → PaperFile (hash, status, zotero_key)
                                                                  → Author (name, order)
                                                                  → Passage (page, text) → passage_fts (FTS5)
+                                                                 → PaperBiblio (LLM 추출 서지정보, source 필드로 모델 구분)
 ```
 
 ## Architecture Notes
@@ -66,8 +68,33 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 - `database.py`의 `_migrate()`가 기존 DB에 새 컬럼/인덱스 변경 자동 적용
 - Zotero: 시작 시 컬렉션 자동 동기화, 컬렉션 클릭 시 아이템 fetch, PDF는 OCR 시점에만 임시 다운로드
 - 설정: `~/.papermeister/preferences.json` (RunPod, Zotero). `.env` 사용하지 않음.
+- OCR JSON → Zotero 자동 업로드: `zotero_upload_ocr_json` pref로 opt-in (기본 OFF)
+- Zotero attachment sync: 모든 타입(PDF+JSON) 수집, JSON은 status='processed'로 자동 설정
+- LLM 서지 추출: `PaperBiblio` 테이블에 비파괴 보관 (source 필드로 모델/버전 구분)
+  - 텍스트 추출: Haiku (`scripts/extract_biblio.py`). needs_visual_review 자가 보고
+  - Vision pass: Sonnet (`scripts/extract_biblio_vision.py`). CJK/표지/TOC에 필수
+  - Standalone promote: `scripts/promote_standalone.py` (confidence=high만 자동)
+  - In-place update: `scripts/update_promoted_items.py` (itemType 변경 시 template 재생성)
+- CJK 저자 이름 분리: 4글자→2/2(일본), 3글자→1/2(한국)
+
+## Scripts (scripts/ 디렉토리)
+
+| 스크립트 | 용도 |
+|---------|------|
+| `resync_zotero.py` | Zotero DB 초기화 + 전체 재동기화 |
+| `update_hashes.py` | NAS storage에서 PDF hash 계산 + OCR 캐시 매칭 |
+| `upload_ocr_json.py` | OCR JSON을 Zotero sibling attachment로 일괄 업로드 |
+| `build_eval_set.py` | 서지 추출 평가셋 구축 (stratified sampling) |
+| `run_baseline.py` | 정규식 baseline 평가 |
+| `run_haiku_eval.py` | LLM 서지 추출 평가 (--model 지정 가능) |
+| `extract_biblio.py` | 본격 LLM 서지 추출 (--scope, --paper-ids) |
+| `extract_biblio_vision.py` | Vision pass 서지 추출 (PyMuPDF 렌더 + Claude vision) |
+| `promote_standalone.py` | Standalone PDF → Zotero parent item 생성 |
+| `update_promoted_items.py` | 기존 Zotero parent item in-place 수정 |
+| `preview_standalone_biblio.py` | Standalone PDF 추출 결과 미리보기 (read-only) |
 
 ## Future Phases
 
+- **Phase 1.5 (진행 중):** LLM 서지정보 추출 → Zotero 메타데이터 보강
 - **Phase 2:** Hybrid search (BM25 + embeddings), LLM query interpretation
 - **Phase 3:** Entity extraction (taxon, locality), relation extraction

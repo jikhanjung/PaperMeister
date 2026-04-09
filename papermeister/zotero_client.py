@@ -116,19 +116,23 @@ class ZoteroClient:
         }
 
     def get_collection_items(self, collection_key):
-        """Return all items in a collection with PDF attachment info.
+        """Return all items in a collection with attachment info.
 
         Single API call — attachments are matched by parentItem field.
+        Picks up ALL attachment types (PDF, JSON, etc.) so re-sync can recreate
+        every PaperFile relationship, including derived files like OCR JSONs.
+
         Returns list of dicts:
-            {key, title, authors, year, doi, journal, attachments: [{key, filename}]}
-        Items without PDF attachments have attachments=[].
+            {key, title, authors, year, doi, journal,
+             attachments: [{key, filename, content_type}]}
+        Items without attachments have attachments=[].
         """
         all_items = self._zot.everything(
             self._zot.collection_items(collection_key)
         )
 
         parent_items = {}
-        pdf_attachments = {}
+        attachments_by_parent = {}     # parent_key -> list of attachment dicts
         standalone_pdfs = []
 
         for it in all_items:
@@ -136,14 +140,17 @@ class ZoteroClient:
             item_type = data.get('itemType', '')
 
             if item_type == 'attachment':
-                if data.get('contentType') == 'application/pdf':
-                    parent_key = data.get('parentItem', '')
-                    if parent_key:
-                        pdf_attachments.setdefault(parent_key, []).append({
-                            'key': data['key'],
-                            'filename': data.get('filename', f'{data["key"]}.pdf'),
-                        })
-                    else:
+                content_type = data.get('contentType', '')
+                parent_key = data.get('parentItem', '')
+                if parent_key:
+                    attachments_by_parent.setdefault(parent_key, []).append({
+                        'key': data['key'],
+                        'filename': data.get('filename', f'{data["key"]}'),
+                        'content_type': content_type,
+                    })
+                else:
+                    # Standalone — only PDFs are first-class items in our model
+                    if content_type == 'application/pdf':
                         standalone_pdfs.append(data)
             elif item_type != 'note':
                 parent_items[data['key']] = data
@@ -151,7 +158,7 @@ class ZoteroClient:
         results = []
         for item_key, data in parent_items.items():
             item = self._parse_item_metadata(data)
-            item['attachments'] = pdf_attachments.get(item_key, [])
+            item['attachments'] = attachments_by_parent.get(item_key, [])
             results.append(item)
 
         # Standalone PDFs (no parent item) — create as their own item
@@ -168,6 +175,7 @@ class ZoteroClient:
                 'attachments': [{
                     'key': data['key'],
                     'filename': filename,
+                    'content_type': 'application/pdf',
                 }],
             })
 
@@ -189,3 +197,26 @@ class ZoteroClient:
             f.write(content)
 
         return out_path
+
+    def upload_sibling_attachment(self, pdf_attachment_key, file_path):
+        """Upload a file as a sibling attachment to the parent of an existing PDF attachment.
+
+        Returns the new attachment's Zotero key, or None on failure.
+        Raises if the PDF attachment is standalone (no parent item).
+        """
+        pdf_item = self._zot.item(pdf_attachment_key)
+        parent_key = pdf_item['data'].get('parentItem', '')
+        if not parent_key:
+            raise RuntimeError(f'PDF attachment {pdf_attachment_key} is standalone (no parent item)')
+
+        result = self._zot.attachment_simple([file_path], parentid=parent_key)
+        if not isinstance(result, dict):
+            return None
+        successes = result.get('success', [])
+        if successes:
+            return successes[0].get('key', '')
+        # Already uploaded (same md5) — pyzotero returns it in 'unchanged'
+        unchanged = result.get('unchanged', [])
+        if unchanged:
+            return unchanged[0].get('key', '')
+        return None
