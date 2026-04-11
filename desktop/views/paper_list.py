@@ -13,15 +13,15 @@ from desktop.services import paper_service
 from desktop.theme.tokens import COLORS_DARK, FONT, RADIUS
 
 
-COLUMNS = ['Status', 'Title', 'Authors', 'Year', 'Source']
+COLUMNS = ['Status', 'Authors', 'Title', 'Year']
 
 
 _STATUS_STYLES: dict[str, tuple[QColor, QColor, str]] = {
-    # key: (background, foreground, label)
-    'processed': (QColor(74, 222, 128, 40),  QColor(74, 222, 128),  'processed'),
-    'pending':   (QColor(107, 112, 128, 46), QColor(160, 165, 180), 'pending'),
-    'failed':    (QColor(248, 113, 113, 38), QColor(248, 113, 113), 'failed'),
-    'review':    (QColor(251, 191, 36, 38),  QColor(251, 191, 36),  'review'),
+    # key: (background, foreground, short_label)
+    'processed': (QColor(74, 222, 128, 40),  QColor(74, 222, 128),  'done'),
+    'pending':   (QColor(107, 112, 128, 46), QColor(160, 165, 180), 'wait'),
+    'failed':    (QColor(248, 113, 113, 38), QColor(248, 113, 113), 'err'),
+    'review':    (QColor(251, 191, 36, 38),  QColor(251, 191, 36),  'rev'),
     'none':      (QColor(43, 47, 61, 0),     QColor(107, 112, 128), '—'),
 }
 
@@ -48,8 +48,8 @@ class StatusPillDelegate(QStyledItemDelegate):
 
         # Compute pill geometry — vertical center, padded horizontally.
         rect = option.rect
-        pad_x = 10
-        pad_y = 5
+        pad_x = 6
+        pad_y = 4
         font = QFont(painter.font())
         font.setPointSize(FONT['size.xs'])
         font.setWeight(QFont.Weight.Medium)
@@ -59,14 +59,14 @@ class StatusPillDelegate(QStyledItemDelegate):
         text_h = metrics.height()
         pill_w = text_w + pad_x * 2
         pill_h = text_h + pad_y
-        pill_x = rect.x() + 10
+        pill_x = rect.x() + 6
         pill_y = rect.y() + (rect.height() - pill_h) // 2
         pill_rect = QRectF(pill_x, pill_y, pill_w, pill_h)
 
         if label == '—':
             # Muted dash, no pill.
             painter.setPen(QPen(fg))
-            painter.drawText(rect.adjusted(12, 0, 0, 0),
+            painter.drawText(rect.adjusted(8, 0, 0, 0),
                              Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                              '—')
         else:
@@ -81,7 +81,7 @@ class StatusPillDelegate(QStyledItemDelegate):
 
     def sizeHint(self, option, index):
         hint = super().sizeHint(option, index)
-        return QSize(max(hint.width(), 100), max(hint.height(), 28))
+        return QSize(max(hint.width(), 56), max(hint.height(), 26))
 
 
 class PaperListView(QTreeWidget):
@@ -101,14 +101,16 @@ class PaperListView(QTreeWidget):
         self.setFrameShape(QTreeWidget.Shape.NoFrame)
         self.setIndentation(0)
 
+        # All columns user-resizable (Interactive); Title stretches to fill.
         header = self.header()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
-        self.setColumnWidth(2, 260)
-        self.setColumnWidth(4, 160)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)  # Status
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)  # Authors
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)      # Title (fills)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)  # Year
+        header.setStretchLastSection(False)
+        self.setColumnWidth(0, 60)   # Status (small)
+        self.setColumnWidth(1, 160)  # Authors (narrow)
+        self.setColumnWidth(3, 64)   # Year
 
         self._pill_delegate = StatusPillDelegate(self)
         self.setItemDelegateForColumn(0, self._pill_delegate)
@@ -144,24 +146,25 @@ class PaperListView(QTreeWidget):
         self.clear()
         for row in rows:
             year = str(row.year) if row.year is not None else '—'
-            title = row.title if not row.is_stub else f'— {row.title}'
+            # Stub papers are conveyed via italic; no text prefix (it looked like
+            # an empty-field placeholder next to real em-dash blanks).
+            title = row.title
             status_cell = status_override or (row.status if row.status != 'none' else 'none')
             item = QTreeWidgetItem([
                 status_cell,
-                title,
                 row.authors or '—',
+                title,
                 year,
-                row.source_name or '—',
             ])
             item.setData(0, Qt.ItemDataRole.UserRole, row.paper_id)
             if row.is_stub:
-                font = item.font(1)
+                font = item.font(2)
                 font.setItalic(True)
-                item.setFont(1, font)
+                item.setFont(2, font)
             self.addTopLevelItem(item)
 
     def _show_error(self, msg: str):
-        item = QTreeWidgetItem(['', msg, '', '', ''])
+        item = QTreeWidgetItem(['', '', msg, ''])
         item.setFlags(Qt.ItemFlag.NoItemFlags)
         self.clear()
         self.addTopLevelItem(item)
