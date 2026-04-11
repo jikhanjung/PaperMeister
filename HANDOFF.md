@@ -90,7 +90,14 @@
 
 ## 최근 세션 요약
 
-**2026-04-11 (세션 7)**
+**2026-04-11 (세션 7, 후반)** — [devlog 020](./devlog/20260411_020_Docs_Source_Cleanup_And_Portability.md)
+- `docs` directory source 및 관련 Paper/PaperFile 3건 DB에서 제거 (Zotero source만 남음)
+- Paper 9,786 → 9,783 / PaperFile 11,981 → 11,978
+- Windows 이식성 점검 완료: `~/.papermeister/`에 Linux 절대경로 0건 (Zotero 파일명만), cross-platform 안전
+- `~/papermeister.tar.gz` (334 MB) 생성 — Windows 이식용 일회성 아티팩트
+- 세션 중 노출된 RunPod / Zotero API 키 모두 revoke + 재발급 완료
+
+**2026-04-11 (세션 7)** — [devlog 019](./devlog/20260411_019_New_Desktop_App_Scaffold_And_P08_Runner.md)
 - P07 개정: 현재 구현 상태 매트릭스 추가, entity×state machine 모델, Paper 정체성 비대칭(Zotero vs filesystem stub), Phase 재순서(biblio 반영 → 검색)
 - P08 작성: PaperBiblio → Paper 반영 정책. auto-commit 조건(high confidence + 필수 필드 + stub Paper), override 정책(빈 슬롯만), needs_review taxonomy
 - P09 작성: 새 데스크탑 UI 설계. custom QSS + design tokens, 4-layer 구조(views/services/components/workers), 화면별 상태/액션 매트릭스
