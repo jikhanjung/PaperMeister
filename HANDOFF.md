@@ -8,21 +8,35 @@
 
 ## 현재 단계
 
-**Phase: MVP + Zotero 연동 + 병렬 OCR + CLI + LLM 서지정보 추출 구현 중**
+**Phase: 새 데스크탑 앱 스캐폴드 완료, P07 Phase 3 착수 중**
 
-GUI/CLI 실행 확인. RunPod OCR 실 연동. Zotero 읽기/쓰기 연동.
-LLM(Haiku) 기반 서지정보 추출 파이프라인 구축 및 평가 완료.
-Vision pass(Sonnet)로 journal issue 표지 등 시각적 메타데이터 추출 구현.
-Standalone PDF → Zotero parent item promote 워크플로 완성.
+기존 GUI/CLI 동작. RunPod OCR + Zotero 연동 + Haiku/Sonnet 서지 추출 파이프라인 완성.
+
+**2026-04-11 새 단계**: 기존 `papermeister/ui/`는 동결하고, 새 모던 UI를 `desktop/` 패키지로 분리.
+- P07 개정 (현재 구현 상태 매트릭스 + entity×state machine + Phase 재순서)
+- P08 작성: PaperBiblio → Paper 반영 정책
+- P09 작성: 새 데스크탑 UI 설계 (custom QSS + design tokens)
+- `desktop/` 스캐폴드: `python -m desktop` 실행, 3-pane + Library/Sources 이중 네비 + 상세 패널 동작
 
 ---
 
 ## 다음 할 일
 
+### 새 desktop 앱 (P07 Phase 2~4)
+- [ ] `papermeister/biblio_reflect.py` — P08 정책 러너 구현 (auto_commit / needs_review / skip)
+- [ ] `scripts/reflect_biblio.py` — batch 진입점 (dry-run / apply / single paper)
+- [ ] DB migration: `PaperBiblio.status`, `PaperFile.failure_reason` 컬럼 추가
+- [ ] desktop: 상세 패널 Apply Biblio 버튼 활성화 (single paper 반영)
+- [ ] desktop: source/folder 단위 batch Reflect 트리거 + 결과 다이얼로그
+- [ ] desktop: background worker (biblio 추출 / OCR 트리거)
+- [ ] desktop: PaperList 상태 셀에 StatusBadge delegate 렌더링
+- [ ] desktop: OCR 미리보기 카드 — ocr_json 캐시에서 로드
+- [ ] desktop: list_by_library('needs_review') 쿼리 수정 (현재 count와 list 불일치)
+
+### 기존 백로그
 - [ ] 1960s 컬렉션 standalone PDF 226편 OCR 진행 중 (RunPod)
 - [ ] OCR 완료 후 → Haiku biblio 추출 → promote
 - [ ] Phase D 본격 추출: OCR 완료된 전체 ~2,000편에 Haiku biblio 추출
-- [ ] PaperBiblio 결과를 사용자 검토 후 Paper에 반영하는 워크플로/UI
 - [ ] 병렬 OCR 실 테스트 (max worker 올린 상태에서 처리 속도 확인)
 - [ ] 검색 결과 매칭 패시지 하이라이트 표시
 - [ ] 에러 핸들링 보강 (암호화된 PDF 등)
@@ -75,6 +89,21 @@ Standalone PDF → Zotero parent item promote 워크플로 완성.
 ---
 
 ## 최근 세션 요약
+
+**2026-04-11 (세션 7)**
+- P07 개정: 현재 구현 상태 매트릭스 추가, entity×state machine 모델, Paper 정체성 비대칭(Zotero vs filesystem stub), Phase 재순서(biblio 반영 → 검색)
+- P08 작성: PaperBiblio → Paper 반영 정책. auto-commit 조건(high confidence + 필수 필드 + stub Paper), override 정책(빈 슬롯만), needs_review taxonomy
+- P09 작성: 새 데스크탑 UI 설계. custom QSS + design tokens, 4-layer 구조(views/services/components/workers), 화면별 상태/액션 매트릭스
+- `desktop/` 패키지 스캐폴드:
+  - `python -m desktop` 실행, 기존 `papermeister/ui/`와 완전 독립
+  - 다크 모던 테마 (Linear/Zed/Raycast 류)
+  - 3-pane 레이아웃 + 좌측 rail + 상단 검색 바 + 하단 상태바
+  - Library 이중 네비 (All/Pending/Processed/Failed/Needs Review/Recent)
+  - Sources 트리 (Zotero 45 컬렉션 + Local)
+  - 우측 상세 패널 (Metadata / Extracted Biblio / File 카드)
+  - stub Paper는 italic + banner 표시
+- PyQt6 6.6.1 → 6.11 업그레이드 (PyQt6-Qt6 6.11 런타임과 맞춤, `QFont::tagToString` 심볼 이슈 해결)
+- requirements.txt: `PyQt6>=6.7,<6.12`
 
 **2026-04-08~09 (세션 6)**
 - Zotero DB 초기화 후 전체 재동기화 (scripts/resync_zotero.py)
