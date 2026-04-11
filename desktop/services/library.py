@@ -8,6 +8,30 @@ from datetime import datetime, timedelta
 from papermeister.models import Paper, PaperBiblio, PaperFile
 
 
+def needs_review_paper_ids() -> list[int]:
+    """Paper ids whose best biblio is flagged `needs_review` (P08 §5).
+
+    Single source of truth for both the count in the Library tree and the
+    list shown by `paper_service.list_by_library('needs_review')` — sharing
+    this helper makes it structurally impossible for the two to diverge.
+    """
+    seen: list[int] = []
+    in_set: set[int] = set()
+    # Iterate rather than SQL DISTINCT: dedupe in Python so the count and
+    # list paths share the exact same result set, regardless of how peewee
+    # renders `.distinct()` across versions.
+    for b in (
+        PaperBiblio
+        .select(PaperBiblio.paper)
+        .where(PaperBiblio.status == 'needs_review')
+    ):
+        pid = b.paper_id
+        if pid not in in_set:
+            in_set.add(pid)
+            seen.append(pid)
+    return seen
+
+
 @dataclass(frozen=True)
 class LibraryFolder:
     key: str
@@ -35,13 +59,7 @@ def _count_status(status: str) -> int:
 
 def _count_needs_review() -> int:
     """Papers whose best biblio is flagged needs_review (P08 §5)."""
-    query = (
-        PaperBiblio
-        .select(PaperBiblio.paper)
-        .distinct()
-        .where(PaperBiblio.status == 'needs_review')
-    )
-    return query.count()
+    return len(needs_review_paper_ids())
 
 
 def _count_recent() -> int:

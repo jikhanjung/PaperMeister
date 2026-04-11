@@ -8,7 +8,7 @@
 
 ## 현재 단계
 
-**Phase: P07 Phase 2 종료 (Zotero write-back 포함) / Phase 3 스캐폴드 완료 / Phase 4 진행 중**
+**Phase: P07 Phase 2 완전 종료 / Phase 3 스캐폴드 완료 / Phase 4 진행 중**
 
 기존 GUI/CLI 동작. RunPod OCR + Zotero 연동 + Haiku/Sonnet 서지 추출 파이프라인 완성.
 
@@ -25,7 +25,7 @@
 
 ## 다음 할 일
 
-### P07 Phase 2 마무리
+### P07 Phase 2 마무리 ✅
 - [x] `papermeister/biblio_reflect.py` — P08 정책 러너 구현 (019 세션)
 - [x] `scripts/reflect_biblio.py` — batch 진입점 (019 세션) + `--force` 플래그 (022 세션)
 - [x] DB migration: `PaperBiblio.status`, `PaperFile.failure_reason` 컬럼 추가 (019 세션)
@@ -35,7 +35,8 @@
 - [x] **P08 §3.5 추가** — Zotero write-back 경로 정책 (022 세션)
 - [x] **`papermeister/zotero_writeback.py`** — 실제 write-back 구현, paper 9 end-to-end 검증 (022 세션)
 - [x] **Paper.year 파서 버그 수정** + 1,671편 bulk backfill (022 세션)
-- [ ] desktop `list_by_library('needs_review')` 쿼리 수정 (현재 count와 list 불일치) — Phase 2 잔여
+- [x] **`needs_review_paper_ids()` 공유 헬퍼** — count와 list가 구조적으로 일치 보장 (세션 10)
+- [x] **P07 매트릭스 + Phase 2 완료 기준 갱신** (세션 10)
 
 ### P07 Phase 4 (desktop hookup)
 - [x] desktop: 상세 패널 Apply Biblio 버튼 wire (019 세션, 021에서 백엔드 검증)
@@ -45,12 +46,11 @@
 - [ ] desktop: PaperList 상태 셀에 StatusBadge delegate 렌더링
 - [ ] desktop: OCR 미리보기 카드 — ocr_json 캐시에서 로드
 
-### P07 매트릭스 갱신 (다음 세션)
+### P07 매트릭스 갱신 ✅ (세션 10에서 반영 완료)
 - line 58 `high-confidence auto-commit 러너` ❌ → ✅
 - line 57 `PaperBiblio → Paper 반영 정책` ❌ → ✅ (P08 + §3.5 + §4.2.1)
-- Phase 2 완료 기준 중 "high-confidence 값 Paper 일괄 반영" → ✅
-- 새 항목: Zotero write-back → ✅ (`papermeister/zotero_writeback.py`)
-- 새 항목: `Paper.date` 컬럼 (Zotero round-trip 무손실 mirror)
+- Phase 2 모든 완료 기준 → ✅
+- 새 항목 추가: Zotero write-back, `Paper.date` 컬럼, 날짜 파서 수정, Review 쿼리 헬퍼
 
 ### 기존 백로그
 - [ ] 1960s 컬렉션 standalone PDF 226편 OCR 진행 중 (RunPod)
@@ -108,6 +108,13 @@
 ---
 
 ## 최근 세션 요약
+
+**2026-04-11 (세션 10)** — [devlog 023](./devlog/20260411_023_Phase2_Cleanup_And_Needs_Review_Helper.md)
+- `desktop/services/library.py::needs_review_paper_ids()` 공유 헬퍼 신설. `_count_needs_review()`와 `list_by_library('needs_review')`가 모두 이 헬퍼를 호출 → count와 list가 구조적으로 일치 보장. 이전에는 각자 `PaperBiblio.select().distinct().count()` / list 이터레이션으로 독립 쿼리를 돌려서 peewee `.distinct()` 렌더 차이에 취약했음
+- 처음 측정 시 count=0, list=0 (일치)이었던 이유: 오늘 세션 동안 real batch reflect(`--dry-run` 아닌)를 한 번도 안 돌렸기 때문. dry-run은 status를 persist하지 않음. `scripts/reflect_biblio.py` (no dry-run) 한 번 실행 → 31편 biblio가 `status='needs_review'`로 스탬프됨 → Library 트리의 "Needs Review" 폴더가 이제 실제로 31편 표시
+- P07 매트릭스 갱신: Phase 2의 모든 ❌ 항목 → ✅, 새 항목 추가 (Zotero write-back, Paper.date, 파서 수정, Review 쿼리 헬퍼), Phase 2 완료 기준 전부 체크됨
+- P07 "바로 해야 할 일" 섹션 재작성 — Phase 2 관련 항목 제거, Phase 4 hookup + Phase D 위주로
+- **Phase 2 완전 종료**. 남은 목표는 Phase 4 (desktop hookup) + Phase D (대량 Haiku 추출)
 
 **2026-04-11 (세션 9)** — [devlog 022](./devlog/20260411_022_Zotero_Writeback_And_Date_Parser.md)
 - 021의 "7편 local-only drift" 문제 해결: Zotero를 source of truth로 두는 단방향 sync 경로 구축

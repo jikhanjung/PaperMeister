@@ -98,14 +98,10 @@ def list_by_library(key: str, limit: int = 500) -> list[PaperRow]:
             .order_by(Paper.id.desc())
         )
     elif key == 'needs_review':
-        biblio_paper_ids = [
-            b.paper_id for b in (
-                PaperBiblio
-                .select(PaperBiblio.paper)
-                .distinct()
-                .where(PaperBiblio.status == 'needs_review')
-            )
-        ]
+        # Same helper the Library tree uses for the count — guaranteed
+        # to return the identical set of paper_ids.
+        from .library import needs_review_paper_ids
+        biblio_paper_ids = needs_review_paper_ids()
         if not biblio_paper_ids:
             return rows
         query = (

@@ -33,7 +33,7 @@
   - 새 GUI 앱의 UI 설계는 [P09](./20260411_P09_New_Desktop_UI_Design.md)로 분리
   - 기존 `papermeister/ui/`는 동결, 새 앱을 별도 패키지로 구현
 
-## 현재 구현 상태 (2026-04-11 기준)
+## 현재 구현 상태 (2026-04-11 기준, 세션 10 갱신)
 
 구현 계획을 실행 가능한 것으로 만들기 위해, 이미 존재하는 자산을 먼저 식별한다.
 
@@ -52,21 +52,23 @@
 | **Phase 1 완료 기준** | ✅ **대체로 충족** | 남은 건 "DB 삭제 후 복구 경로" 실증 테스트 |
 | LLM 서지 추출 (Haiku 텍스트) | ✅ 완료 | `scripts/extract_biblio.py`, `papermeister/biblio.py` |
 | Vision pass (Sonnet) | ✅ 완료 | `scripts/extract_biblio_vision.py` |
-| PaperBiblio 저장 | ✅ 완료 | `papermeister/models.py::PaperBiblio` |
+| PaperBiblio 저장 | ✅ 완료 | `papermeister/models.py::PaperBiblio` (`status`, `review_reason`, `needs_visual_review` 추가됨) |
 | 평가 파이프라인 | ✅ 완료 | `biblio_eval.py`, `run_*eval.py` |
-| `PaperBiblio → Paper` 반영 정책 | ❌ **미결** | **P08에서 정의 필요** |
-| high-confidence auto-commit 러너 | ❌ 없음 | Phase 2의 실제 착수 지점 |
-| Review 대상 식별 쿼리 | ❌ 없음 | "needs_review" 뷰의 재료 |
+| `PaperBiblio → Paper` 반영 정책 | ✅ 완료 | [P08](./20260411_P08_PaperBiblio_Reflection_Policy.md) + §3.5 (write-back 경로) + §4.2.1 (`curated_author_shortfall`) |
+| high-confidence auto-commit 러너 | ✅ 완료 | `papermeister/biblio_reflect.py`, `scripts/reflect_biblio.py` (devlog 021/022 검증) |
+| Zotero write-back | ✅ 완료 | `papermeister/zotero_writeback.py` — fresh fetch → empty-slot patch against Zotero → update_item → re-fetch (network-atomic) |
+| `Paper.date` 컬럼 | ✅ 완료 | Zotero `data.date` raw string (round-trip 무손실). `Paper.year`는 derived int index |
+| Zotero 날짜 파서 버그 수정 | ✅ 완료 | `meta.parsedDate` 우선 사용 + regex fallback. backfill로 1,671편 year 복구 |
+| Review 대상 식별 쿼리 | ✅ 완료 | `desktop/services/library.py::needs_review_paper_ids()` — count와 list가 이 헬퍼 공유 |
 | standalone PDF promote | ✅ 스크립트 | `scripts/promote_standalone.py` (GUI 통합 ❌) |
-| Zotero write-back | 🟡 부분 | 스크립트 존재, 정책 부재 |
-| 3-pane GUI (기존) | 🟡 존재 | `papermeister/ui/main_window.py` — 동결 |
-| 새 GUI (모던 디자인) | ❌ 미착수 | P09에서 설계, 본 문서 Phase 3에서 구현 |
-| Library/Sources 이중 네비 | ❌ 없음 | 기존 앱은 Sources만 |
-| Search UI (filter/sort/snippet) | 🟡 부분 | 검색 입력만, filter/sort 미완 |
+| 3-pane GUI (기존) | 🟡 동결 | `papermeister/ui/main_window.py` — 신규 개발 중단 |
+| 새 GUI (모던 디자인) | 🟡 스캐폴드 | `desktop/` 패키지, 3-pane + Library/Sources 이중 네비 + 상세 패널. Apply Biblio 버튼은 백엔드 연결됨 (GUI 클릭 실증은 미검증) |
+| Library/Sources 이중 네비 | ✅ 완료 | `desktop/views/source_nav.py`, `desktop/services/library.py` |
+| Search UI (filter/sort/snippet) | 🟡 부분 | 기존 앱에 검색 입력만. desktop 쪽은 상단 바만 있음 |
 | Review queue UI | ❌ 없음 | Phase 5 |
 | PDF viewer 최소 기능 | ❌ 없음 | MVP 보강 후보 (본 문서에서 승격) |
 
-요약: **Phase 1은 사실상 완료**, Phase 2는 **재료(PaperBiblio) 있음 + 정책/러너 없음**, Phase 3~5는 대부분 미착수.
+요약 (세션 10 기준): **Phase 1·2는 완료**, **Phase 3 스캐폴드 완료 + Phase 4 진행 중** (Apply Biblio 단일 경로 검증됨, batch Reflect UI / background worker / StatusBadge delegate / OCR 미리보기 미완), Phase 5~7 미착수.
 
 ## 구현 목표
 
@@ -168,7 +170,7 @@ source, OCR, 캐시, 상태 모델을 먼저 안정화한다.
 - ~~pending/processed/failed 상태가 일관된다~~ ✅
 - [ ] DB를 지워도 source와 OCR JSON으로 복구 가능하다 (미실증)
 
-## Phase 2. Bibliographic Corpus Layer (부분 완료)
+## Phase 2. Bibliographic Corpus Layer ✅ (완료)
 
 ### 목표
 
@@ -177,24 +179,28 @@ source, OCR, 캐시, 상태 모델을 먼저 안정화한다.
 ### 상태
 
 - ✅ `papermeister/biblio.py` + `scripts/extract_biblio*.py` 로 추출 가능
-- ✅ `PaperBiblio` 테이블 존재
-- ❌ **`PaperBiblio → Paper` 반영 정책 미정 → [P08](./20260411_P08_PaperBiblio_Reflection_Policy.md)**
-- ❌ high-confidence auto-commit 러너 (GUI 또는 CLI) 없음
-- ❌ review 대상 식별 쿼리/뷰 없음
+- ✅ `PaperBiblio` 테이블 + `status` / `review_reason` 컬럼 추가
+- ✅ [P08](./20260411_P08_PaperBiblio_Reflection_Policy.md) 정책 확정 (§3.5 write path, §4.2.1 curated_author_shortfall 포함)
+- ✅ `papermeister/biblio_reflect.py` + `scripts/reflect_biblio.py` — single/batch/force 모두 검증 (devlog 021/022)
+- ✅ `papermeister/zotero_writeback.py` — Zotero-sourced Paper 반영 경로 (network-atomic)
+- ✅ `desktop/services/library.py::needs_review_paper_ids()` — count와 list가 공유하는 단일 helper (세션 10)
 
-### 작업 항목
+### 작업 항목 (모두 완료)
 
-- **P08 정책 문서 작성** (선행 조건)
-- `papermeister/biblio_reflect.py` 신설: P08 정책에 따라 Paper를 update
-- `scripts/reflect_biblio.py` (batch 진입점)
-- review 대상 조회 helper: `status='needs_review'` 대체물
+- ~~P08 정책 문서 작성~~ ✅
+- ~~`papermeister/biblio_reflect.py` 신설~~ ✅
+- ~~`scripts/reflect_biblio.py` batch 진입점~~ ✅ (+`--force` 플래그)
+- ~~review 대상 조회 helper~~ ✅
+- ~~Zotero write-back 경로~~ ✅ (§3.5 구현)
+- ~~날짜 파서 버그 수정 + `Paper.date` 컬럼 추가~~ ✅ (세션 9 발견)
 
 ### 완료 기준
 
 - ~~processed 문서에 대해 `PaperBiblio` 생성 가능~~ ✅
 - ~~title/authors/year/journal/doc_type가 구조적으로 보관된다~~ ✅
-- [ ] P08 정책에 따라 high-confidence 값이 Paper에 일괄 반영된다
-- [ ] review 대상과 auto-commit 대상이 쿼리 하나로 구분된다
+- ~~P08 정책에 따라 high-confidence 값이 Paper에 일괄 반영된다~~ ✅ (devlog 021 검증)
+- ~~review 대상과 auto-commit 대상이 쿼리 하나로 구분된다~~ ✅ (`needs_review_paper_ids()`)
+- ~~Zotero-sourced Paper의 write-back이 drift-free로 동작한다~~ ✅ (devlog 022)
 
 ## Phase 3. Desktop UI Foundation (새 앱)
 
@@ -411,19 +417,28 @@ Phase 6에서 `WorkflowTask(type, target_id, status)` 테이블을 추가할 때
 6. search UI
 7. review queue
 
-## 바로 해야 할 일 (2026-04-11 갱신)
+## 바로 해야 할 일 (2026-04-11 세션 10 갱신)
 
-검토 반영 후, "지금 바로 착수할 수 있는" 항목만 남긴다. 나머지 정책 문서는 해당 Phase 착수 시점에 작성한다.
+Phase 2가 닫히면서 남은 작업은 거의 Phase 4의 hookup 쪽으로 옮겨갔다.
 
-1. ✅ [P08: PaperBiblio → Paper 반영 정책](./20260411_P08_PaperBiblio_Reflection_Policy.md) 작성 — Phase 2/4의 선행 조건
-2. ✅ [P09: 새 데스크탑 UI 설계](./20260411_P09_New_Desktop_UI_Design.md) 작성 — Phase 3의 선행 조건
-3. Phase 3 착수: `desktop/` 패키지 스캐폴딩 + 테마 + 3-pane shell
-4. Phase 2 러너 구현: `biblio_reflect.py` (P08 정책 적용)
+1. ✅ [P08: PaperBiblio → Paper 반영 정책](./20260411_P08_PaperBiblio_Reflection_Policy.md) — §3.5 write path + §4.2.1 curated_author_shortfall 포함
+2. ✅ [P09: 새 데스크탑 UI 설계](./20260411_P09_New_Desktop_UI_Design.md)
+3. ✅ Phase 2 러너 구현 + 검증 (devlog 021/022)
+4. ✅ Zotero write-back + `Paper.date` 컬럼 + 날짜 파서 fix (devlog 022)
+5. ✅ `needs_review_paper_ids()` 공유 헬퍼 (세션 10)
+6. Phase 3 스캐폴드 ✅ — **Phase 4 hookup 진행 중**:
+   - desktop GUI 실제 실행 + Apply Biblio 버튼 클릭 실증 (백엔드는 검증됨)
+   - desktop batch Reflect 트리거 UI + 결과 다이얼로그
+   - desktop background worker (biblio 추출 / OCR 트리거)
+   - desktop PaperList StatusBadge delegate
+   - desktop OCR 미리보기 카드 (`ocr_json` 캐시)
+7. Phase D (대량 운영): OCR 완료 ~2,000편에 Haiku biblio 추출 → Zotero write-back의 진짜 batch 시험대
 
 **뒤로 미루는 것**:
-- Zotero write-back 정책 문서 → Phase 6 착수 시점
+- ~~Zotero write-back 정책 문서~~ → P08 §3.5로 흡수됨
 - Preferences 스키마 재확정 → Phase 3 중반 (새 앱에서 필요한 것만)
 - MVP 마일스톤 체크리스트 → HANDOFF.md에서 관리
+- writeback batch rate limiting / 412 auto-retry → Phase D 착수 시점
 
 ## 결론
 
