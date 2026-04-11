@@ -139,6 +139,22 @@ class PaperListView(QTreeWidget):
         rows = paper_service.list_by_source(source_id)
         self._populate(rows)
 
+    def load_search(self, query: str):
+        """Populate with FTS5 search results in BM25 rank order."""
+        from desktop.services.search_service import search_papers
+        try:
+            rows = search_papers(query)
+        except Exception as exc:
+            self._show_error(f'Search failed: {exc}')
+            return
+        if not rows:
+            self.clear()
+            item = QTreeWidgetItem(['', '', f'No results for "{query}"', ''])
+            item.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.addTopLevelItem(item)
+            return
+        self._populate(rows)
+
     def clear_rows(self):
         self.clear()
 

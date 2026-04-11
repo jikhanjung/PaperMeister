@@ -106,6 +106,8 @@ class MainWindow(QMainWindow):
         self.source_nav.selection_changed.connect(self._on_nav_selection)
         self.paper_list.paper_selected.connect(self.detail_panel.show_paper)
         self.detail_panel.apply_completed.connect(self._on_apply_completed)
+        self.search_bar.returnPressed.connect(self._on_search_submitted)
+        self.search_bar.textChanged.connect(self._on_search_text_changed)
 
     # ── Rail handlers ────────────────────────────────────────
 
@@ -170,12 +172,41 @@ class MainWindow(QMainWindow):
 
     def _on_nav_selection(self, kind: str, value):
         self._current_selection = (kind, value)
+        # Clicking nav implicitly cancels any active search. Clear the box
+        # without re-triggering textChanged → _restore_library_view, which
+        # would double-load the same view.
+        self.search_bar.blockSignals(True)
+        self.search_bar.clear()
+        self.search_bar.blockSignals(False)
+        self._apply_current_selection()
+
+    def _apply_current_selection(self):
+        """Load paper_list according to `_current_selection`, defaulting to All Files."""
+        kind, value = self._current_selection or ('library', 'all')
         if kind == 'library':
             self.paper_list.load_library(str(value))
         elif kind == 'source':
             self.paper_list.load_source(int(value))
         elif kind == 'folder':
             self.paper_list.load_folder(int(value))
+
+    # ── Search handlers ──────────────────────────────────────
+
+    def _on_search_submitted(self):
+        query = self.search_bar.text().strip()
+        if not query:
+            self._apply_current_selection()
+            self.status_bar.set_task('Idle')
+            return
+        self.paper_list.load_search(query)
+        self.status_bar.set_task(f'Search: "{query}"')
+
+    def _on_search_text_changed(self, text: str):
+        # Clearing the box (via X button or backspace) restores the last
+        # nav selection so the list doesn't stay stuck on stale results.
+        if text == '':
+            self._apply_current_selection()
+            self.status_bar.set_task('Idle')
 
     def _on_apply_completed(self, paper_id: int, changed: bool, action: str):
         # Refresh counts and the library tree (needs_review bucket may change).
