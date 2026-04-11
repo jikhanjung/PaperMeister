@@ -36,6 +36,18 @@ def _migrate(database):
     if bib_columns and 'needs_visual_review' not in bib_columns:
         database.execute_sql("ALTER TABLE paperbiblio ADD COLUMN needs_visual_review INTEGER DEFAULT 0")
 
+    # P08 reflection policy: PaperBiblio.status + review_reason
+    if bib_columns and 'status' not in bib_columns:
+        database.execute_sql("ALTER TABLE paperbiblio ADD COLUMN status TEXT DEFAULT 'extracted'")
+    if bib_columns and 'review_reason' not in bib_columns:
+        database.execute_sql("ALTER TABLE paperbiblio ADD COLUMN review_reason TEXT DEFAULT ''")
+
+    # PaperFile.failure_reason
+    cursor = database.execute_sql("PRAGMA table_info('paperfile')").fetchall()
+    pf_columns = {row[1] for row in cursor}
+    if 'failure_reason' not in pf_columns:
+        database.execute_sql("ALTER TABLE paperfile ADD COLUMN failure_reason TEXT DEFAULT ''")
+
     # Drop unique index on paperfile.hash (Zotero files start with empty hash)
     indexes = database.execute_sql("PRAGMA index_list('paperfile')").fetchall()
     for idx in indexes:

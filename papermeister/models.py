@@ -46,6 +46,7 @@ class PaperFile(BaseModel):
     path = peewee.TextField()
     hash = peewee.TextField(default='')
     status = peewee.TextField(default='pending')  # pending, processed, failed
+    failure_reason = peewee.TextField(default='')  # free-form, e.g. ocr_failed|download_failed|encrypted
     zotero_key = peewee.TextField(default='')  # Zotero attachment key
 
 
@@ -67,6 +68,9 @@ class PaperBiblio(BaseModel):
     source = peewee.TextField(default='')      # 'llm-haiku', 'llm-sonnet', etc.
     model_version = peewee.TextField(default='')
     extracted_at = peewee.DateTimeField(default=datetime.datetime.now)
+    # P08 reflection policy status: extracted | needs_review | auto_committed | applied | rejected
+    status = peewee.TextField(default='extracted')
+    review_reason = peewee.TextField(default='')  # missing_title|low_confidence|... (see P08)
 
 
 class Passage(BaseModel):
