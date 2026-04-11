@@ -8,58 +8,47 @@
 
 ## 현재 단계
 
-**Phase: P07 Phase 2 완전 종료 / Phase 3 스캐폴드 완료 / Phase 4 진행 중**
+**Phase: P07 Phase 2 완전 종료 / Phase 3 스캐폴드 완료 / Phase 4 진행 중 / Phase D 대기**
 
-기존 GUI/CLI 동작. RunPod OCR + Zotero 연동 + Haiku/Sonnet 서지 추출 파이프라인 완성.
+### 안정적으로 돌아가는 것
+- 기존 GUI (`papermeister/ui/` — **동결**, 신규 개발 없음)
+- CLI (`cli.py`) — import/process/search/list/show/config/zotero
+- RunPod OCR 파이프라인 (serverless + 병렬)
+- Zotero 양방향 동기화: pull(기존) + **push/write-back(`papermeister/zotero_writeback.py`)**
+- Haiku/Sonnet 서지 추출 파이프라인 + PaperBiblio 저장
+- P08 반영 러너 (`scripts/reflect_biblio.py`): single / batch / `--force` 세 경로 모두 실DB에서 검증됨
 
-**2026-04-11 새 단계**: 기존 `papermeister/ui/`는 동결하고, 새 모던 UI를 `desktop/` 패키지로 분리.
-- P07 개정 (현재 구현 상태 매트릭스 + entity×state machine + Phase 재순서)
-- P08 작성: PaperBiblio → Paper 반영 정책 (+ §3.5 Zotero write-back, §4.2.1 `curated_author_shortfall`)
-- P09 작성: 새 데스크탑 UI 설계 (custom QSS + design tokens)
-- `desktop/` 스캐폴드: `python -m desktop` 실행, 3-pane + Library/Sources 이중 네비 + 상세 패널 동작
-- **P08 러너 end-to-end 검증 완료** — single / batch / manual override 세 경로 모두 실DB에서 확인 (devlog 021)
-- **Zotero write-back 경로 구현 + 검증 완료** — `papermeister/zotero_writeback.py`, `--force` 플래그, end-to-end (paper 9) 실제 API write 성공 (devlog 022)
-- **Paper.date 컬럼 + 날짜 파서 버그 수정** — 1,671편 year 복구 (기존 파서가 `08/2017` 같은 M/YYYY 형식을 못 먹고 pre-1900도 필터링하던 버그) (devlog 022)
+### 진행 중인 것
+- **Phase 3 (desktop)**: `python -m desktop` 스캐폴드 + 3-pane + Library/Sources 이중 네비 + 상세 패널 + Apply Biblio 버튼 백엔드 연결. **GUI 실제 실행 + 버튼 클릭 실증은 아직 안 함**
+- **Phase 4 (hookup)**: Apply Biblio 단일 경로만 연결. batch Reflect UI / background worker / StatusBadge delegate / OCR 미리보기 카드 미완
+
+### 대기 중
+- **Phase D (대량 운영)**: OCR 완료 ~2,000편에 Haiku biblio 추출 → `reflect_biblio.py`로 일괄 반영. 현재 writeback 모듈은 end-to-end 1편만 검증된 상태라 Phase D가 진짜 batch 시험대가 됨
+- **1960s standalone OCR**: 226편 RunPod 처리 중 (세션 6부터 진행, 현재 상태 미확인)
 
 ---
 
 ## 다음 할 일
 
-### P07 Phase 2 마무리 ✅
-- [x] `papermeister/biblio_reflect.py` — P08 정책 러너 구현 (019 세션)
-- [x] `scripts/reflect_biblio.py` — batch 진입점 (019 세션) + `--force` 플래그 (022 세션)
-- [x] DB migration: `PaperBiblio.status`, `PaperFile.failure_reason` 컬럼 추가 (019 세션)
-- [x] DB migration: `Paper.date` 컬럼 추가 (022 세션)
-- [x] **end-to-end 검증** — single(paper 4) + batch(5,12,13,16,21) + manual(paper 9) (021 세션)
-- [x] **P08 §4.2.1 추가** — `curated_author_shortfall` 규칙 (021 세션)
-- [x] **P08 §3.5 추가** — Zotero write-back 경로 정책 (022 세션)
-- [x] **`papermeister/zotero_writeback.py`** — 실제 write-back 구현, paper 9 end-to-end 검증 (022 세션)
-- [x] **Paper.year 파서 버그 수정** + 1,671편 bulk backfill (022 세션)
-- [x] **`needs_review_paper_ids()` 공유 헬퍼** — count와 list가 구조적으로 일치 보장 (세션 10)
-- [x] **P07 매트릭스 + Phase 2 완료 기준 갱신** (세션 10)
-
-### P07 Phase 4 (desktop hookup)
-- [x] desktop: 상세 패널 Apply Biblio 버튼 wire (019 세션, 021에서 백엔드 검증)
-- [ ] desktop: 실제 GUI 실행 + 버튼 클릭 end-to-end 확인
-- [ ] desktop: source/folder 단위 batch Reflect 트리거 + 결과 다이얼로그
-- [ ] desktop: background worker (biblio 추출 / OCR 트리거)
+### 즉시 착수 가능 (Phase 4 hookup)
+- [ ] **desktop GUI 실제 실행 + Apply Biblio 버튼 클릭 실증** — 백엔드는 검증됨. WSL + Qt display forwarding 환경 이슈 대비 필요
 - [ ] desktop: PaperList 상태 셀에 StatusBadge delegate 렌더링
-- [ ] desktop: OCR 미리보기 카드 — ocr_json 캐시에서 로드
+- [ ] desktop: OCR 미리보기 카드 — `~/.papermeister/ocr_json/{hash}.json` 캐시에서 로드
+- [ ] desktop: source/folder 단위 batch Reflect 트리거 + 결과 다이얼로그
+- [ ] desktop: background worker (biblio 추출 / OCR 트리거) — QThread 기반, 기존 `papermeister/ui/` 패턴 참고
 
-### P07 매트릭스 갱신 ✅ (세션 10에서 반영 완료)
-- line 58 `high-confidence auto-commit 러너` ❌ → ✅
-- line 57 `PaperBiblio → Paper 반영 정책` ❌ → ✅ (P08 + §3.5 + §4.2.1)
-- Phase 2 모든 완료 기준 → ✅
-- 새 항목 추가: Zotero write-back, `Paper.date` 컬럼, 날짜 파서 수정, Review 쿼리 헬퍼
+### 큰 덩어리 (Phase D 대량 운영)
+- [ ] OCR 완료된 ~2,000편에 Haiku biblio 추출 (`scripts/extract_biblio.py`)
+- [ ] 추출 직후 **반드시 non-dry `reflect_biblio.py` 한 번 돌리기** → biblio status stamp (아니면 Library "Needs Review" 폴더가 비어 보임)
+- [ ] `reflect_biblio.py` 대량 실행 — Zotero API rate limit, 412 version conflict 자동 재시도, 진행률 표시 필요 (현재는 pyzotero backoff에만 의존)
+- [ ] 1960s 컬렉션 standalone PDF 226편 OCR 완료 확인 → Haiku biblio → promote → 결과 검토
 
-### 기존 백로그
-- [ ] 1960s 컬렉션 standalone PDF 226편 OCR 진행 중 (RunPod)
-- [ ] OCR 완료 후 → Haiku biblio 추출 → promote
-- [ ] Phase D 본격 추출: OCR 완료된 전체 ~2,000편에 Haiku biblio 추출
+### 저순위 백로그
 - [ ] 병렬 OCR 실 테스트 (max worker 올린 상태에서 처리 속도 확인)
 - [ ] 검색 결과 매칭 패시지 하이라이트 표시
-- [ ] 에러 핸들링 보강 (암호화된 PDF 등)
+- [ ] 에러 핸들링 보강 (암호화된 PDF, 파손된 파일 등)
 - [ ] 테스트 코드 작성
+- [ ] DB 삭제 후 복구 경로 실증 테스트 (Phase 1 잔여)
 
 ---
 
@@ -101,9 +90,31 @@
 ## 미결 사항
 
 - 컬렉션-수준 메타데이터 (issue 모음 마킹 등)
-- PaperBiblio → Paper 반영 검토 UI
-- Zotero → DB pull sync (현재 push only)
+- PaperBiblio → Paper 반영 **검토 UI** (현재는 CLI `--paper`만)
+- **systematic** Zotero → DB pull sync (현재는 on-demand: resync_zotero.py는 destructive, 타겟 in-place refresh는 수동 one-off)
 - 검색 결과 매칭 패시지 하이라이트 표시 방식
+
+---
+
+## 운영 규칙 (세션 8~10에서 발견된 것)
+
+### biblio 추출 후 반드시 non-dry reflect 한 번
+`extract_biblio.py`가 새 PaperBiblio row를 만들어도, `reflect_biblio.py --dry-run`은 `status` 필드를 persist하지 않는다. **Library 트리의 "Needs Review" 폴더가 비어 보이면** 이 스텝이 빠진 것. Phase D 워크플로우는 `extract → real reflect → UI 확인` 순서로 구성.
+
+### Zotero-sourced Paper는 local 직접 쓰기 금지
+P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹시 별도 스크립트에서 Zotero-sourced Paper를 로컬에서 직접 건드리면 드리프트가 생긴다. `resync_zotero.py`가 destructive라 PaperBiblio 손실 위험도 있음. 타겟 in-place refresh가 필요하면 `client._zot.item(key)` → `_parse_item_metadata` 조합 사용.
+
+### `resync_zotero.py`는 위험
+`Paper`를 drop하면 `PaperBiblio`가 cascade 삭제됨. 오늘 날까지 추출한 모든 PaperBiblio가 사라진다. 전면 재동기화가 필요하면 먼저 PaperBiblio 테이블 백업, 또는 Zotero에서만 일부 item을 refresh하는 타겟 스크립트 작성.
+
+### preferences.json을 세션에 노출하지 않기
+평문 API 키가 들어있다. `cat preferences.json` 직접 실행 금지. 존재 확인은 `get_pref('key', '')` 의 boolean만 활용.
+
+### 세션 마무리 checklist
+- HANDOFF.md "다음 할 일" / "현재 단계" 갱신
+- P07 매트릭스에 오늘 바뀐 항목 반영 (세션 10에서 이걸 놓쳐서 stale했음)
+- devlog NNN 작성 (결정 과정과 근거 위주, 단순 diff는 git이 기록)
+- git commit + push (commit 분리는 논리 단위로)
 
 ---
 
