@@ -1,183 +1,309 @@
 # P06: 데스크탑 애플리케이션 MVP 기능 정의
 
+## 문서 역할
+
+이 문서는 데스크탑 앱의 **기능 정의 문서**다.
+
+즉, 다음을 다룬다.
+
+- 무엇을 만들 것인가
+- 무엇을 MVP에 포함할 것인가
+- 각 기능은 어떤 사용자 가치를 제공하는가
+- 어떤 정책과 제약을 유지해야 하는가
+
+구현 순서, 단계별 착수 계획, 완료 기준은 `P07`에서 다룬다.
+
 ## 배경
 
-세션 1~6을 거치며 PDF → OCR → 서지 추출 → Zotero 연동 파이프라인이 검증되었다. 이 경험을 바탕으로 데스크탑 앱의 MVP 기능 범위를 확정한다.
+세션 1~6을 거치며 다음 파이프라인이 실제로 검증되었다.
+
+- PDF 수집
+- OCR 실행 및 JSON 캐시 저장
+- LLM 기반 서지정보 추출
+- Zotero read/write 연동
+- standalone PDF promote
+- vision pass 기반 예외 처리
+
+이 경험을 바탕으로 데스크탑 앱 MVP의 기능 범위를 확정한다.
+
+## 제품 정의
+
+PaperMeister 데스크탑 앱은:
+
+**기존 Zotero나 로컬 PDF 폴더를 버리지 않고, OCR과 서지정보 정리를 통해 연구용 corpus를 구축하고 다시 활용하게 만드는 로컬 소프트웨어**
+
+로 정의한다.
+
+여기서 핵심은 다음 두 가지다.
+
+- OCR만으로 corpus를 만드는 데서 끝나지 않는다.
+- 서지정보를 정리해 corpus를 실제로 해석하고 검색하고 검토할 수 있게 만든다.
 
 ## 핵심 원칙
 
-- **"Store first, understand later"**: OCR 결과(JSON)가 source of truth. 서지정보는 파생 레이어.
-- **DB는 재구성 가능**: Zotero든 파일시스템이든, 처리가 잘 되어 있으면 DB 없어도 다시 만들 수 있어야 함.
-- **비파괴**: 원본 PDF를 변경하지 않음. 서지 추출은 별도 보관 후 사용자 검토를 거쳐 반영.
+- **OCR JSON이 source of truth**: `~/.papermeister/ocr_json/{sha256}.json`이 기준 데이터다.
+- **DB는 재구성 가능**: source와 OCR JSON이 있으면 DB를 다시 만들 수 있어야 한다.
+- **비파괴**: 원본 PDF는 수정하지 않는다.
+- **서지정보는 핵심 기능**: searchable corpus의 usability를 결정하는 기본 레이어로 본다.
+- **보수적 자동화**: 불확실한 결과는 review 대상으로 남기고, 외부 시스템 반영은 신중하게 한다.
+- **source-first browsing**: provenance를 숨기지 않고 source 구조를 유지한다.
 
----
+## MVP 핵심 사용자 가치
 
-## MVP 기능
+MVP는 최소한 다음 가치를 제공해야 한다.
 
-### 1. Data Source 관리
+- 기존 PDF 아카이브를 다시 검색 가능한 corpus로 만든다.
+- 서지정보가 정리되어 검색 결과를 사람이 해석할 수 있게 한다.
+- Zotero나 폴더 구조를 버리지 않고 그대로 활용하게 한다.
+- OCR, 추출, 반영 과정을 비파괴적으로 운영하게 한다.
 
-두 종류의 data source를 지원:
+## MVP 기능 범위
 
-**Zotero**
-- pyzotero로 연동 (user_id + api_key, read+write)
-- 컬렉션 트리 동기화 (시작 시 자동, 수동 새로고침)
-- 컬렉션 클릭 → 아이템 fetch (parent + 모든 attachment 매칭)
-- PDF는 로컬 저장 안 함 (임시 다운로드 → 처리 → 삭제)
-- NAS/로컬 storage 경로 지정 시 Zotero 다운로드 대신 로컬 PDF 사용 가능 (옵션)
+## 1. Data Source 관리
 
-**Local directory**
-- 폴더 구조 스캔 → Source/Folder/Paper/PaperFile 생성
-- hash 기반 dedup (SHA256)
-- PDF 파일은 원래 위치에 유지, 경로만 DB에 저장
+두 종류의 source를 지원한다.
 
-### 2. OCR 처리 (PDF → JSON)
+### Zotero
 
-- **엔진**: RunPod serverless (Chandra2-vllm). endpoint URL + API key 설정.
-- **입력**: PDF 파일
-- **출력**: `~/.papermeister/ocr_json/{sha256_hash}.json`
-  - hash 기반 파일명 → data source 무관 공통
-  - 같은 PDF는 같은 hash → 중복 OCR 방지
-- **병렬 처리**: RunPod idle worker 수 확인 → ThreadPoolExecutor로 동시 제출
-- **상태 관리**: PaperFile.status = pending → processed / failed
-- **캐시**: JSON 파일이 존재하면 OCR 스킵, DB만 갱신
-- **Zotero 추가 동작**: parent item이 있는 PDF → JSON을 sibling attachment로 업로드 (opt-in)
+- pyzotero 기반 read/write 연동
+- 컬렉션 트리 동기화
+- parent item과 attachment 매칭
+- PDF는 임시 다운로드 후 처리
+- 필요 시 로컬 Zotero storage 경로 사용
 
-### 3. 서지정보 추출 (JSON → 메타데이터)
+### Local directory
 
-OCR JSON의 첫 1~3페이지에서 LLM(claude -p 또는 Anthropic SDK)으로 추출.
+- 폴더 구조 스캔
+- `Source/Folder/Paper/PaperFile` 생성
+- SHA256 hash 기반 dedup
+- 원본 파일은 제자리 유지
 
-**추출 스키마**:
-```
+### 기능 목적
+
+- 사용자가 기존 문헌 관리 방식을 버리지 않게 한다.
+- source provenance를 유지한 채 corpus를 구성하게 한다.
+
+## 2. OCR 처리
+
+PDF를 OCR JSON으로 변환한다.
+
+### 기본 정책
+
+- 출력은 `~/.papermeister/ocr_json/{sha256}.json`
+- 같은 PDF는 같은 hash를 사용
+- 캐시가 있으면 OCR를 재실행하지 않음
+- 처리 상태는 `pending / processed / failed`를 기본으로 관리
+
+### 지원 backend
+
+- RunPod serverless
+- Reserved GPU Pod
+
+### 추가 정책
+
+- parent item이 있는 Zotero PDF는 JSON sibling upload를 옵션으로 허용
+- OCR 결과는 장기 재활용 가능한 자산으로 취급
+
+### 기능 목적
+
+- 스캔본과 오래된 PDF를 corpus로 편입한다.
+- source와 무관한 공통 텍스트 레이어를 확보한다.
+
+## 3. 서지정보 추출
+
+OCR JSON을 기반으로 제목, 저자, 연도, 저널 등 메타데이터를 추출한다.
+
+이 기능은 MVP의 핵심 범위에 포함한다.
+
+### 추출 스키마
+
+```text
 title, authors[], year, journal, doi, abstract,
 doc_type (article|book|chapter|thesis|report|journal_issue|unknown),
 language, confidence (high|medium|low), needs_visual_review, notes
 ```
 
-**텍스트 추출** (1차, 기본):
-- 모델: Haiku (비용 최적, 평가에서 Sonnet/Opus와 동률)
-- OCR JSON의 markdown → prompt → JSON 응답
-- PaperBiblio 테이블에 저장 (source='llm-haiku')
+### 기본 추출
 
-**Vision pass** (2차, 필요 시):
-- 트리거: needs_visual_review=true, confidence!=high, 또는 수동 요청
-- PyMuPDF로 첫/마지막 페이지 PNG 렌더 → Claude vision
-- 모델: Sonnet (CJK vision은 Haiku 부정확)
-- 같은 PaperBiblio에 source='llm-sonnet-vision'으로 별도 행
+- OCR JSON 첫 1~3페이지 기반 텍스트 추출
+- `PaperBiblio`에 비파괴적으로 저장
+- source 필드로 모델/버전 구분
 
-**적용 정책 (Zotero)**:
-| 상태 | 동작 |
-|------|------|
-| parent item 있음 + 메타데이터 충분 | **보수적 업데이트**: 빈 필드만 보강 (DOI, abstract 등) |
-| parent item 있음 + 메타데이터 부족 | LLM 결과로 보강, 사용자 검토 후 |
-| parent item 없음 (standalone PDF) | **새 parent 생성** + PDF/JSON을 children으로 이동 (nothing to lose) |
-| journal issue 표지 | doc_type='journal_issue' → document 타입으로 생성/수정 |
+### 정확도 보강
 
-**적용 정책 (Local directory)**:
-- 서지정보 + JSON 매칭 모두 로컬 DB로 처리
-- Paper 테이블에 반영 (confidence=high 자동, 나머지 수동 검토)
+- low confidence 또는 visual ambiguity가 있는 경우 별도 review 대상으로 분리
+- vision pass는 지원하되, MVP 핵심보다는 보강 기능으로 본다
 
-### 4. 로컬 DB
+### 기능 목적
 
-`~/.papermeister/papermeister.db` (SQLite + FTS5)
+- corpus를 단순 텍스트 저장소가 아니라 연구용 자료 집합으로 만든다.
+- 검색 결과를 사람이 해석하고 필터링할 수 있게 한다.
 
-**테이블 구조**:
+## 4. 검색과 탐색
+
+MVP에는 검색을 포함한다.
+
+### 검색 범위
+
+- full-text search
+- title/authors/year/journal 기반 검색
+- 상태, source, doc_type 기반 필터
+
+### 탐색 범위
+
+- source별 browse
+- corpus-wide operational views
+- 상태별 목록 확인
+
+### 기능 목적
+
+- corpus를 실제로 다시 찾고 활용하게 만든다.
+- OCR와 서지정보 레이어를 UI에서 연결한다.
+
+## 5. 로컬 DB
+
+`~/.papermeister/papermeister.db`를 사용한다.
+
+### 기본 구조
+
+```text
+Source -> Folder -> Paper -> PaperFile
+                       -> Author
+                       -> Passage -> passage_fts
+                       -> PaperBiblio
 ```
-Source → Folder → Paper → PaperFile (PDF/JSON, hash, status, zotero_key)
-                       → Author
-                       → Passage → passage_fts (FTS5)
-                       → PaperBiblio (LLM 추출, source 필드로 버전 관리)
-```
 
-**재구성 가능 원칙**:
-- Zotero source: API에서 컬렉션/아이템 재fetch + OCR JSON 캐시로 Passage 재생성 → DB 완전 복구
-- Directory source: 폴더 재스캔 + hash 매칭으로 OCR JSON 캐시 재연결 → DB 완전 복구
-- 자동 마이그레이션: `database.py._migrate()`가 새 컬럼/인덱스 변경 적용
+### 정책
 
-### 5. 설정 (Preferences)
+- 조회와 운영을 위한 로컬 상태 저장소
+- source와 OCR JSON으로 재구성 가능해야 함
+- 자동 마이그레이션 지원
+
+## 6. 설정
 
 `~/.papermeister/preferences.json`
 
-| 설정 | 용도 |
-|------|------|
-| `runpod_endpoint` | RunPod OCR serverless endpoint URL |
-| `runpod_api_key` | RunPod API 키 |
-| `zotero_user_id` | Zotero user ID |
-| `zotero_api_key` | Zotero API key (read+write) |
-| `llm_api_key` | LLM API 키 (Anthropic) — claude -p 대신 SDK 사용 시 |
-| `llm_model_text` | 텍스트 추출 모델 (기본: claude-haiku-4-5) |
-| `llm_model_vision` | Vision 추출 모델 (기본: claude-sonnet-4-6) |
-| `zotero_upload_ocr_json` | OCR 후 JSON Zotero 업로드 여부 (기본: false) |
-| `zotero_storage_path` | 로컬 Zotero storage 경로 (옵션, 설정 시 API 다운로드 대신 사용) |
+### 주요 설정
 
-GUI에서 Preferences 다이얼로그로 관리. `.env` 사용하지 않음.
+- OCR backend
+- RunPod endpoint / API key
+- Pod URL
+- Zotero user ID / API key
+- Zotero storage path
+- text model
+- vision model
+- JSON upload 여부
 
----
+### 정책
 
-## MVP 이후 (Phase 2+)
+- GUI에서 관리
+- `.env` 대신 사용자 설정 파일 사용
 
-MVP에는 포함하지 않지만 기록:
+## 7. 데스크탑 UI
 
-- **검색 UI**: FTS5 BM25 full-text search + 결과 목록 + 매칭 passage 하이라이트
-- **PDF 뷰어**: 검색 결과에서 해당 페이지로 이동, passage 위치 하이라이트
-- **서지 검토 UI**: PaperBiblio 결과를 사용자에게 보여주고 승인/수정/거부
-- **Hybrid search**: BM25 + embedding vector search
-- **LLM query interpretation**: 자연어 질의 → 검색 쿼리 변환
-- **Entity extraction**: taxon, locality, stratigraphic unit 등 도메인 특화 추출
-- **Relation extraction**: 논문 간 인용 관계, 동의어 관계
+MVP UI는 3-pane 구조를 기본으로 한다.
 
----
+### 좌측
 
-## 기술 스택
+- `Library`
+- `Sources`
 
-| 구성 | 기술 | 비고 |
-|------|------|------|
-| GUI | PyQt6 | 3-pane: source tree / paper list / detail |
-| DB | SQLite + FTS5 | Peewee ORM |
-| PDF 처리 | PyMuPDF (fitz) | 메타데이터 + 페이지 렌더 |
-| OCR | RunPod (Chandra2-vllm) | serverless, 병렬 |
-| LLM | claude -p 또는 Anthropic SDK | Haiku(텍스트) + Sonnet(vision) |
-| Zotero | pyzotero | read+write API |
-| CLI | cli.py (argparse) | PyQt6 없이 독립 실행 가능 |
+`Library` 예시:
 
----
+- All Files
+- Pending OCR
+- Processed
+- Failed
+- Needs Review
+- Recently Added
 
-## 화면 구성 (MVP)
+`Sources` 예시:
 
-```
-┌─────────────────────────────────────────────────────────┐
-│ Menu: File | Settings | Help                            │
-├──────────┬──────────────────┬───────────────────────────┤
-│ Sources  │ Papers           │ Detail                    │
-│          │                  │                           │
-│ ▸ Zotero │ [status] Title   │ Title                     │
-│   ├ Col1 │ [status] Title   │ Authors, Year             │
-│   ├ Col2 │ [status] Title   │ Journal, DOI              │
-│   └ Col3 │ ...              │                           │
-│ ▸ ~/docs │                  │ [OCR text / passages]     │
-│   ├ sub1 │                  │                           │
-│   └ sub2 │                  │                           │
-├──────────┴──────────────────┴───────────────────────────┤
-│ Status: 1,234 processed | 456 pending | 3 failed        │
-└─────────────────────────────────────────────────────────┘
-```
+- Zotero collection tree
+- Local directory folder tree
 
-- 왼쪽: Source/Folder 트리
-- 가운데: 선택 폴더의 Paper 목록 (status 아이콘: pending/processed/failed/no PDF)
-- 오른쪽: 선택 Paper 상세 (메타데이터 + OCR 텍스트)
-- 하단: 전체 상태바
+### 가운데
 
----
+- 현재 선택 기준에 맞는 paper/file 목록
+- status, title, authors, year, source 표시
 
-## 처리 워크플로 (사용자 관점)
+### 우측
 
-1. **Source 추가**: Zotero 자격증명 입력 또는 로컬 디렉토리 선택
-2. **스캔**: 컬렉션/폴더 구조 + PaperFile 생성 (빠름)
-3. **OCR 처리**: pending 파일 선택 → Process 시작 (독립 윈도우, 비모달)
-   - 진행률 바 + 로그
-   - 캐시 있으면 자동 스킵
-   - Zotero: JSON sibling 자동 업로드 (opt-in)
-4. **서지 추출**: processed 파일 → LLM 추출 (백그라운드)
-   - 텍스트 1차 → vision 2차 (필요 시)
-   - standalone → 자동 promote (high confidence)
-5. **검토** (Phase 2): 추출 결과 사용자 확인 → Paper 반영
-6. **검색** (Phase 2): full-text search
+- 메타데이터
+- OCR 텍스트 preview
+- provenance
+- 최신 `PaperBiblio` 결과
+
+### 별도 처리 창
+
+- OCR 진행률
+- 로그
+- 실패/재시도 현황
+
+## 8. 자동화 및 외부 반영 정책
+
+자동화는 허용하되, 정책상 구분한다.
+
+### MVP에 포함되는 자동화
+
+- high confidence 서지정보 추출 저장
+- 기본 review 대상 분리
+
+### MVP 보강 기능
+
+- standalone PDF promote
+- Zotero write-back
+
+### 정확도 보강 기능
+
+- vision pass
+- journal issue 특수 처리
+
+## MVP 범위 정리
+
+### MVP 핵심
+
+- source 관리
+- OCR 처리
+- OCR 캐시
+- 서지정보 추출
+- 검색
+- source-first browse
+- provenance 표시
+
+### MVP 보강
+
+- review queue 기본 버전
+- standalone promote
+- Zotero write-back
+
+### MVP 이후
+
+- PDF viewer + passage highlight
+- hybrid search
+- 자연어 질의 해석
+- entity extraction
+- relation extraction
+
+## 사용자 워크플로
+
+1. source 추가
+2. source 스캔 또는 동기화
+3. pending PDF 처리
+4. OCR JSON 저장 및 재사용
+5. 서지정보 추출
+6. 검색 및 탐색
+7. 필요 시 review 후 promote 또는 write-back
+
+## 결론
+
+P06의 결론은 단순하다.
+
+PaperMeister 데스크탑 MVP는 OCR 도구만이 아니라,
+**서지정보까지 정리된 연구용 corpus를 구축하고 탐색하게 만드는 데스크탑 소프트웨어**여야 한다.
+
+즉, MVP의 핵심은 다음 세 가지를 함께 제공하는 것이다.
+
+- corpus 생성
+- corpus 이해 가능성 확보
+- corpus 재활용 가능성 확보
