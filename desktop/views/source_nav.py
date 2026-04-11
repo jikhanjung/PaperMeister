@@ -1,7 +1,23 @@
-"""Left navigation panel: Library operational view + Sources provenance tree."""
+"""Left navigation panel.
+
+Structure (v2):
+- Top: QTabWidget with one tab per Source. Currently only Zotero exists,
+  so there is a single "Zotero" tab.
+- Inside each tab: a single QTreeWidget that combines
+    1) flat library filters (All / Pending / Processed / Failed /
+       Needs Review / Recent) at the top, and
+    2) hierarchical folders (Zotero collections) below, under a
+       "Collections" separator node.
+
+Selection emits `selection_changed(kind, id_or_key)` with kind one of:
+    'library' — library filter key (str)
+    'source'  — source id (int)
+    'folder'  — folder id (int)
+"""
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QLabel,
+    QTabWidget,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -10,20 +26,10 @@ from PyQt6.QtWidgets import (
 
 from desktop.services import library as library_svc
 from desktop.services import source_service
-
-
-# Qt UserRole payloads so selection emits a structured event.
-#   ('library', key)       — Library folder
-#   ('source', source_id)  — whole source root
-#   ('folder', folder_id)  — source folder
+from desktop.theme.tokens import COLORS_DARK
 
 
 class SourceNav(QWidget):
-    """Two stacked trees: Library then Sources.
-
-    Emits `selection_changed(kind, id_or_key)` on click.
-    """
-
     selection_changed = pyqtSignal(str, object)
 
     def __init__(self, parent=None):
@@ -33,34 +39,17 @@ class SourceNav(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        layout.addWidget(self._header('LIBRARY'))
-        self.library_tree = self._new_tree()
-        layout.addWidget(self.library_tree)
+        self.tabs = QTabWidget()
+        self.tabs.setObjectName('SourceTabs')
+        self.tabs.setDocumentMode(True)
+        layout.addWidget(self.tabs, 1)
 
-        layout.addWidget(self._header('SOURCES'))
-        self.sources_tree = self._new_tree()
-        layout.addWidget(self.sources_tree, 1)
-
-        self.library_tree.itemClicked.connect(self._on_library_clicked)
-        self.sources_tree.itemClicked.connect(self._on_source_clicked)
+        # Map (tab index -> QTreeWidget) so we can rebuild individual tabs.
+        self._trees: dict[int, QTreeWidget] = {}
 
         self.refresh()
 
-    # ── Building ─────────────────────────────────────────────
-
-    def _header(self, text: str) -> QLabel:
-        lbl = QLabel(text)
-        lbl.setProperty('class', 'SectionHeader')
-        # QSS uses object name or dynamic class property; fall back to class
-        lbl.setObjectName('SectionHeaderLabel')
-        lbl.setStyleSheet('')  # let global QSS handle via property selector
-        from desktop.theme.tokens import FONT, SPACING
-        lbl.setContentsMargins(SPACING['md'], SPACING['md'], SPACING['md'], SPACING['xs'])
-        f = lbl.font()
-        f.setPointSize(FONT['size.xs'])
-        f.setWeight(500)
-        lbl.setFont(f)
-        return lbl
+    # ── Build ────────────────────────────────────────────────
 
     def _new_tree(self) -> QTreeWidget:
         t = QTreeWidget()
@@ -69,16 +58,44 @@ class SourceNav(QWidget):
         t.setIndentation(14)
         t.setAnimated(False)
         t.setFrameShape(QTreeWidget.Shape.NoFrame)
+        t.itemClicked.connect(self._on_item_clicked)
         return t
 
     # ── Refresh ──────────────────────────────────────────────
 
     def refresh(self):
-        self._rebuild_library()
-        self._rebuild_sources()
+        """Rebuild all tabs from scratch. Cheap — runs on startup and on
+        `apply_completed` (counts may have shifted)."""
+        self.tabs.blockSignals(True)
+        self.tabs.clear()
+        self._trees.clear()
 
-    def _rebuild_library(self):
-        self.library_tree.clear()
+        sources = []
+        try:
+            sources = source_service.load_source_tree()
+        except Exception:
+            sources = []
+
+        if not sources:
+            # Fall back to a single empty tab so the panel isn't blank.
+            tree = self._new_tree()
+            self._populate_library_section(tree)
+            idx = self.tabs.addTab(tree, 'Library')
+            self._trees[idx] = tree
+            self.tabs.blockSignals(False)
+            return
+
+        for src in sources:
+            tree = self._new_tree()
+            self._populate_library_section(tree)
+            self._populate_collections_section(tree, src)
+            idx = self.tabs.addTab(tree, src.name)
+            self._trees[idx] = tree
+
+        self.tabs.blockSignals(False)
+
+    def _populate_library_section(self, tree: QTreeWidget):
+        """Flat library filters at the top of the tree."""
         try:
             folders = library_svc.load_library_folders()
         except Exception:
@@ -86,46 +103,28 @@ class SourceNav(QWidget):
         for folder in folders:
             item = QTreeWidgetItem([f'{folder.title}    {folder.count:,}'])
             item.setData(0, Qt.ItemDataRole.UserRole, ('library', folder.key))
-            self.library_tree.addTopLevelItem(item)
+            tree.addTopLevelItem(item)
 
-    def _rebuild_sources(self):
-        self.sources_tree.clear()
-        try:
-            tree = source_service.load_source_tree()
-        except Exception:
-            tree = []
-        if not tree:
-            empty = QTreeWidgetItem(['No sources yet'])
-            empty.setFlags(Qt.ItemFlag.NoItemFlags)
-            self.sources_tree.addTopLevelItem(empty)
-            return
+    def _populate_collections_section(self, tree: QTreeWidget, src):
+        """Hierarchical folder (collection) tree below the library filters."""
+        # Separator / section header — non-clickable.
+        header = QTreeWidgetItem(['COLLECTIONS'])
+        header.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        f = QFont(header.font(0))
+        f.setPointSize(max(f.pointSize() - 1, 8))
+        f.setWeight(QFont.Weight.Medium)
+        header.setFont(0, f)
+        header.setForeground(0, Qt.GlobalColor.gray)
+        tree.addTopLevelItem(header)
 
-        # Group: Zotero first, then Local.
-        zotero_root = QTreeWidgetItem(['Zotero'])
-        zotero_root.setFlags(Qt.ItemFlag.ItemIsEnabled)
-        local_root = QTreeWidgetItem(['Local'])
-        local_root.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        # Source root — clicking loads the whole source.
+        src_item = QTreeWidgetItem([src.name])
+        src_item.setData(0, Qt.ItemDataRole.UserRole, ('source', src.id))
+        tree.addTopLevelItem(src_item)
 
-        has_z = False
-        has_l = False
-        for src in tree:
-            src_item = QTreeWidgetItem([src.name])
-            src_item.setData(0, Qt.ItemDataRole.UserRole, ('source', src.id))
-            for folder in src.roots:
-                self._attach_folder(src_item, folder)
-            if src.source_type == 'zotero':
-                zotero_root.addChild(src_item)
-                has_z = True
-            else:
-                local_root.addChild(src_item)
-                has_l = True
-
-        if has_z:
-            self.sources_tree.addTopLevelItem(zotero_root)
-            zotero_root.setExpanded(True)
-        if has_l:
-            self.sources_tree.addTopLevelItem(local_root)
-            local_root.setExpanded(True)
+        for folder in src.roots:
+            self._attach_folder(src_item, folder)
+        src_item.setExpanded(True)
 
     def _attach_folder(self, parent: QTreeWidgetItem, folder):
         item = QTreeWidgetItem([folder.name])
@@ -136,18 +135,9 @@ class SourceNav(QWidget):
 
     # ── Events ───────────────────────────────────────────────
 
-    def _on_library_clicked(self, item: QTreeWidgetItem, _col: int):
+    def _on_item_clicked(self, item: QTreeWidgetItem, _col: int):
         data = item.data(0, Qt.ItemDataRole.UserRole)
         if not data:
             return
-        self.sources_tree.clearSelection()
-        kind, value = data
-        self.selection_changed.emit(kind, value)
-
-    def _on_source_clicked(self, item: QTreeWidgetItem, _col: int):
-        data = item.data(0, Qt.ItemDataRole.UserRole)
-        if not data:
-            return
-        self.library_tree.clearSelection()
         kind, value = data
         self.selection_changed.emit(kind, value)

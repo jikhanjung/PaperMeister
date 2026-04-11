@@ -1,5 +1,17 @@
 """Generate Qt StyleSheet from design tokens."""
+from pathlib import Path
+
 from .tokens import FONT, LAYOUT, RADIUS
+
+_ICONS_DIR = Path(__file__).parent / 'icons'
+
+
+def _icon_url(name: str) -> str:
+    """Return a QSS-compatible url() path for an SVG icon.
+
+    Uses forward slashes on all platforms (Qt accepts them on Windows too).
+    """
+    return (_ICONS_DIR / name).as_posix()
 
 
 def build_stylesheet(c: dict) -> str:
@@ -8,6 +20,8 @@ def build_stylesheet(c: dict) -> str:
     Keeping this in Python (rather than a .qss file) so tokens drive the
     output: dark/light swap is a dict change, not an edit.
     """
+    chevron_right = _icon_url('chevron-right.svg')
+    chevron_down = _icon_url('chevron-down.svg')
     return f"""
 /* ── Base ─────────────────────────────────────────────────── */
 QWidget {{
@@ -119,6 +133,32 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
     border-left: 1px solid {c['border.subtle']};
 }}
 
+/* ── Source tabs ──────────────────────────────────────────── */
+#SourceTabs::pane {{
+    background-color: {c['bg.panel']};
+    border: none;
+    border-top: 1px solid {c['border.subtle']};
+}}
+#SourceTabs QTabBar {{
+    background-color: {c['bg.panel']};
+}}
+#SourceTabs QTabBar::tab {{
+    background-color: {c['bg.panel']};
+    color: {c['text.muted']};
+    padding: 8px 14px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: {FONT['size.sm']}px;
+    font-weight: {FONT['weight.medium']};
+}}
+#SourceTabs QTabBar::tab:hover {{
+    color: {c['text.primary']};
+}}
+#SourceTabs QTabBar::tab:selected {{
+    color: {c['text.primary']};
+    border-bottom: 2px solid {c['accent.primary']};
+}}
+
 QLabel.SectionHeader {{
     color: {c['text.muted']};
     font-size: {FONT['size.xs']}px;
@@ -155,10 +195,12 @@ QTreeView::branch, QTreeWidget::branch {{
 QTreeView::branch:has-children:!has-siblings:closed,
 QTreeView::branch:closed:has-children:has-siblings {{
     border-image: none;
+    image: url({chevron_right});
 }}
 QTreeView::branch:open:has-children:!has-siblings,
 QTreeView::branch:open:has-children:has-siblings  {{
     border-image: none;
+    image: url({chevron_down});
 }}
 
 /* ── Paper list (center) ──────────────────────────────────── */
