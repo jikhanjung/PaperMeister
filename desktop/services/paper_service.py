@@ -103,8 +103,7 @@ def list_by_library(key: str, limit: int = 500) -> list[PaperRow]:
                 PaperBiblio
                 .select(PaperBiblio.paper)
                 .distinct()
-                .order_by(PaperBiblio.id.desc())
-                .limit(limit * 3)  # cushion so the year-null filter still fills
+                .where(PaperBiblio.status == 'needs_review')
             )
         ]
         if not biblio_paper_ids:
@@ -114,7 +113,7 @@ def list_by_library(key: str, limit: int = 500) -> list[PaperRow]:
             .select(Paper, Folder, Source)
             .join(Folder, JOIN.LEFT_OUTER, on=(Paper.folder == Folder.id))
             .join(Source, JOIN.LEFT_OUTER, on=(Folder.source == Source.id))
-            .where((Paper.id.in_(biblio_paper_ids)) & (Paper.year.is_null(True)))
+            .where(Paper.id.in_(biblio_paper_ids))
             .order_by(Paper.id.desc())
             .limit(limit)
         )

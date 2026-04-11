@@ -5,7 +5,7 @@ This is the minimum useful detail surface for Phase 3. Phase 4 wires in
 """
 import json
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -17,8 +17,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from desktop.services import paper_service
+from desktop.services import biblio_service, paper_service
 from desktop.theme.tokens import SPACING
+from desktop.workers.background import BackgroundTask
 
 
 def _field_label(text: str) -> QLabel:
@@ -49,6 +50,8 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
 
 
 class DetailPanel(QScrollArea):
+    apply_completed = pyqtSignal(int, bool, str)  # paper_id, changed, action
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName('DetailPanel')
@@ -60,6 +63,10 @@ class DetailPanel(QScrollArea):
         self._layout = QVBoxLayout(self._container)
         self._layout.setContentsMargins(SPACING['lg'], SPACING['lg'], SPACING['lg'], SPACING['lg'])
         self._layout.setSpacing(SPACING['md'])
+
+        self._current_paper_id: int | None = None
+        self._apply_task: BackgroundTask | None = None
+        self._apply_btn: QPushButton | None = None
 
         self._empty_state()
 
@@ -87,6 +94,8 @@ class DetailPanel(QScrollArea):
             self._empty_state()
             return
         self.clear()
+        self._apply_btn = None
+        self._current_paper_id = paper_id
 
         if detail.is_stub:
             banner = QLabel('Stub metadata. Run biblio extraction to fill.')
@@ -96,7 +105,8 @@ class DetailPanel(QScrollArea):
 
         self._layout.addWidget(self._build_metadata_card(detail))
         if detail.latest_biblio:
-            self._layout.addWidget(self._build_biblio_card(detail))
+            preview = biblio_service.preview_apply(paper_id)
+            self._layout.addWidget(self._build_biblio_card(detail, preview))
         self._layout.addWidget(self._build_file_card(detail))
         self._layout.addStretch(1)
 
@@ -124,12 +134,12 @@ class DetailPanel(QScrollArea):
         layout.addLayout(grid)
         return frame
 
-    def _build_biblio_card(self, d) -> QFrame:
+    def _build_biblio_card(self, d, preview) -> QFrame:
         frame, layout = _card('EXTRACTED BIBLIO')
         b = d.latest_biblio
         meta = QLabel(
             f"{b.get('source', '')}  ·  confidence: {b.get('confidence', '—')}  ·  "
-            f"doc_type: {b.get('doc_type', '—')}"
+            f"doc_type: {b.get('doc_type', '—')}  ·  status: {preview.biblio_status}"
         )
         meta.setProperty('class', 'FieldLabel')
         layout.addWidget(meta)
@@ -157,15 +167,66 @@ class DetailPanel(QScrollArea):
         add_row(4, 'DOI',     b.get('doi') or '')
         layout.addLayout(grid)
 
+        # Decision line
+        decision_label = QLabel(self._decision_line(preview))
+        decision_label.setProperty('class', 'FieldLabel')
+        decision_label.setWordWrap(True)
+        layout.addWidget(decision_label)
+
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
-        apply_btn = QPushButton('Apply Biblio')
+        apply_btn = QPushButton(preview.button_label)
         apply_btn.setProperty('class', 'Primary')
-        apply_btn.setEnabled(False)  # Phase 4 enables this
-        apply_btn.setToolTip('Enabled in Phase 4 after P08 policy wiring')
+        # Re-polish so the Primary class styling kicks in.
+        style = apply_btn.style()
+        if style is not None:
+            style.unpolish(apply_btn)
+            style.polish(apply_btn)
+        apply_btn.setEnabled(preview.button_enabled)
+        apply_btn.setToolTip(preview.tooltip)
+        apply_btn.clicked.connect(self._on_apply_clicked)
+        self._apply_btn = apply_btn
         btn_row.addWidget(apply_btn)
         layout.addLayout(btn_row)
         return frame
+
+    def _decision_line(self, preview) -> str:
+        if preview.decision_action == 'auto_commit':
+            return 'Decision: auto-commit (all P08 gates passed)'
+        if preview.decision_action == 'needs_review':
+            return f'Decision: needs review — {preview.decision_reason}'
+        return f'Decision: skip — {preview.decision_reason}'
+
+    def _on_apply_clicked(self):
+        if self._current_paper_id is None or self._apply_btn is None:
+            return
+        self._apply_btn.setEnabled(False)
+        self._apply_btn.setText('Applying…')
+        task = BackgroundTask(biblio_service.apply_paper, self._current_paper_id)
+        task.done.connect(self._on_apply_done)
+        task.failed.connect(self._on_apply_failed)
+        self._apply_task = task
+        task.start()
+
+    def _on_apply_done(self, result):
+        action, changed, reason = result
+        pid = self._current_paper_id
+        if self._apply_btn is not None:
+            if changed:
+                self._apply_btn.setText('Applied')
+            else:
+                self._apply_btn.setText('No change')
+            self._apply_btn.setEnabled(False)
+        if pid is not None:
+            self.apply_completed.emit(pid, changed, action)
+            # Refresh the panel to show updated Paper values.
+            self.show_paper(pid)
+
+    def _on_apply_failed(self, message: str):
+        if self._apply_btn is not None:
+            self._apply_btn.setText('Failed')
+            self._apply_btn.setToolTip(message)
+            self._apply_btn.setEnabled(True)
 
     def _build_file_card(self, d) -> QFrame:
         frame, layout = _card('FILE')

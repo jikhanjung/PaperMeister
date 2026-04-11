@@ -34,15 +34,12 @@ def _count_status(status: str) -> int:
 
 
 def _count_needs_review() -> int:
-    # Phase 2 adds PaperBiblio.status; until then, approximate with
-    # "Paper is a stub AND has a PaperBiblio extraction".
-    # Stub Paper ≈ year is null and no author rows (derived judgment, cheap query).
+    """Papers whose best biblio is flagged needs_review (P08 §5)."""
     query = (
         PaperBiblio
         .select(PaperBiblio.paper)
         .distinct()
-        .join(Paper, on=(PaperBiblio.paper == Paper.id))
-        .where(Paper.year.is_null(True))
+        .where(PaperBiblio.status == 'needs_review')
     )
     return query.count()
 

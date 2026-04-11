@@ -1,15 +1,87 @@
 """Center paper list — flat table with status badges."""
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QRectF, QSize, Qt, pyqtSignal
+from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PyQt6.QtWidgets import (
     QHeaderView,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTreeWidget,
     QTreeWidgetItem,
 )
 
 from desktop.services import paper_service
+from desktop.theme.tokens import COLORS_DARK, FONT, RADIUS
 
 
 COLUMNS = ['Status', 'Title', 'Authors', 'Year', 'Source']
+
+
+_STATUS_STYLES: dict[str, tuple[QColor, QColor, str]] = {
+    # key: (background, foreground, label)
+    'processed': (QColor(74, 222, 128, 40),  QColor(74, 222, 128),  'processed'),
+    'pending':   (QColor(107, 112, 128, 46), QColor(160, 165, 180), 'pending'),
+    'failed':    (QColor(248, 113, 113, 38), QColor(248, 113, 113), 'failed'),
+    'review':    (QColor(251, 191, 36, 38),  QColor(251, 191, 36),  'review'),
+    'none':      (QColor(43, 47, 61, 0),     QColor(107, 112, 128), '—'),
+}
+
+
+class StatusPillDelegate(QStyledItemDelegate):
+    """Renders the Status column as a small colored pill."""
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index):
+        # Let the default paint handle the selection background first.
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        opt.text = ''  # we'll draw it ourselves
+        widget = opt.widget
+        style = widget.style() if widget is not None else opt.widget
+        from PyQt6.QtWidgets import QApplication, QStyle
+        style = widget.style() if widget is not None else QApplication.style()
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, widget)
+
+        status_value = index.data(Qt.ItemDataRole.DisplayRole) or 'none'
+        bg, fg, label = _STATUS_STYLES.get(status_value, _STATUS_STYLES['none'])
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Compute pill geometry — vertical center, padded horizontally.
+        rect = option.rect
+        pad_x = 10
+        pad_y = 5
+        font = QFont(painter.font())
+        font.setPointSize(FONT['size.xs'])
+        font.setWeight(QFont.Weight.Medium)
+        painter.setFont(font)
+        metrics = painter.fontMetrics()
+        text_w = metrics.horizontalAdvance(label)
+        text_h = metrics.height()
+        pill_w = text_w + pad_x * 2
+        pill_h = text_h + pad_y
+        pill_x = rect.x() + 10
+        pill_y = rect.y() + (rect.height() - pill_h) // 2
+        pill_rect = QRectF(pill_x, pill_y, pill_w, pill_h)
+
+        if label == '—':
+            # Muted dash, no pill.
+            painter.setPen(QPen(fg))
+            painter.drawText(rect.adjusted(12, 0, 0, 0),
+                             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                             '—')
+        else:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(bg))
+            painter.drawRoundedRect(pill_rect, RADIUS['sm'], RADIUS['sm'])
+            painter.setPen(QPen(fg))
+            painter.drawText(pill_rect,
+                             int(Qt.AlignmentFlag.AlignCenter),
+                             label)
+        painter.restore()
+
+    def sizeHint(self, option, index):
+        hint = super().sizeHint(option, index)
+        return QSize(max(hint.width(), 100), max(hint.height(), 28))
 
 
 class PaperListView(QTreeWidget):
@@ -38,6 +110,9 @@ class PaperListView(QTreeWidget):
         self.setColumnWidth(2, 260)
         self.setColumnWidth(4, 160)
 
+        self._pill_delegate = StatusPillDelegate(self)
+        self.setItemDelegateForColumn(0, self._pill_delegate)
+
         self.currentItemChanged.connect(self._on_selection_changed)
 
     # ── Loading ──────────────────────────────────────────────
@@ -48,7 +123,11 @@ class PaperListView(QTreeWidget):
         except Exception as exc:
             rows = []
             self._show_error(f'Query failed: {exc}')
-        self._populate(rows)
+        # In the 'needs_review' view, render the status column as 'review'
+        # rather than the underlying PaperFile status so the badge reflects
+        # the reason the row is here.
+        override = 'review' if key == 'needs_review' else None
+        self._populate(rows, status_override=override)
 
     def load_folder(self, folder_id: int):
         rows = paper_service.list_by_folder(folder_id)
@@ -61,13 +140,14 @@ class PaperListView(QTreeWidget):
     def clear_rows(self):
         self.clear()
 
-    def _populate(self, rows):
+    def _populate(self, rows, *, status_override: str | None = None):
         self.clear()
         for row in rows:
             year = str(row.year) if row.year is not None else '—'
             title = row.title if not row.is_stub else f'— {row.title}'
+            status_cell = status_override or (row.status if row.status != 'none' else 'none')
             item = QTreeWidgetItem([
-                row.status if row.status != 'none' else '—',
+                status_cell,
                 title,
                 row.authors or '—',
                 year,

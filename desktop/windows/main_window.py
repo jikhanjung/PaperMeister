@@ -37,6 +37,7 @@ class MainWindow(QMainWindow):
         root_layout.addWidget(self.status_bar)
 
         self.setCentralWidget(root)
+        self._current_selection: tuple[str, object] | None = None
         self._wire_events()
         self._load_initial()
 
@@ -100,14 +101,28 @@ class MainWindow(QMainWindow):
     def _wire_events(self):
         self.source_nav.selection_changed.connect(self._on_nav_selection)
         self.paper_list.paper_selected.connect(self.detail_panel.show_paper)
+        self.detail_panel.apply_completed.connect(self._on_apply_completed)
 
     def _on_nav_selection(self, kind: str, value):
+        self._current_selection = (kind, value)
         if kind == 'library':
             self.paper_list.load_library(str(value))
         elif kind == 'source':
             self.paper_list.load_source(int(value))
         elif kind == 'folder':
             self.paper_list.load_folder(int(value))
+
+    def _on_apply_completed(self, paper_id: int, changed: bool, action: str):
+        # Refresh counts and the library tree (needs_review bucket may change).
+        try:
+            total, pending, review = library_svc.corpus_counts()
+            self.status_bar.set_counts(total, pending, review)
+        except Exception:
+            pass
+        self.source_nav.refresh()
+        self.status_bar.set_task(
+            f'Applied paper #{paper_id} ({action})' if changed else f'No changes for paper #{paper_id}'
+        )
 
     def _load_initial(self):
         try:
