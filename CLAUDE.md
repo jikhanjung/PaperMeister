@@ -31,12 +31,17 @@ PaperMeister transforms a user's academic paper (PDF) collection into a searchab
 
 ```bash
 pip install -r requirements.txt
-python main.py
+
+python -m desktop   # 신규 desktop 앱 (P07~P09, 현재 개발 중)
+python main.py      # 기존 PyQt6 GUI (동결, 안정)
+python cli.py       # CLI — GUI 없이 import/process/search/list/show/config/zotero
 ```
 
 ## Tech Stack
 
 - **GUI:** PyQt6
+  - 기존 `papermeister/ui/` — **동결**. 신규 개발 없음. `main.py` 엔트리. Process/Preferences 다이얼로그는 새 desktop 앱에서 재사용 중
+  - 신규 `desktop/` — 4-layer (views/services/components/workers), 다크 테마 design tokens, `python -m desktop` 엔트리
 - **DB:** SQLite with FTS5 — `~/.papermeister/papermeister.db`
 - **ORM:** Peewee 4.x (`peewee.DatabaseProxy` + `peewee.SqliteDatabase`)
 - **PDF:** PyMuPDF (fitz) — 메타데이터 추출 + 페이지 렌더링
@@ -61,7 +66,8 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 - Import 2단계: ScanWorker(폴더 구조 + PaperFile 생성, 빠름) → ProcessWorker(OCR, 느림)
 - Hash-based deduplication (SHA256) at ingestion. Zotero는 zotero_key 기반 dedup.
 - `PaperFile.status`: `pending` → `processed` / `failed`. PaperFile 없으면 `no PDF`.
-- FTS5 `passage_fts`: title(×10), authors(×5), text(×1) BM25 가중치
+- FTS5 `passage_fts`: title(×10), authors(×5), text(×1) BM25 가중치. 단 passage 단위 인덱스라 title 가중치는 passage 내부에서만 작용 — document-level title boost는 미구현 (Phase 5 과제)
+- `papermeister/search.py::search()`: `limit` 파라미터는 **distinct paper 수** (2026-04-12 이전엔 passage row 수였음). FTS5 `bm25()`가 aggregate 컨텍스트에서 호출 불가한 제약 때문에 SQL `GROUP BY` 대신 Python dict dedupe로 처리. `max_passages=200_000` 안전 상한
 - UI는 QThread로 비동기 처리, DB는 peewee thread-local 연결
 - OCR health 체크: `ensure_workers_ready()`로 세션당 한 번만 수행
 - OCR 병렬 처리: `get_worker_status()`로 idle worker 수 확인 → `ThreadPoolExecutor`로 병렬 제출
@@ -76,6 +82,24 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
   - Standalone promote: `scripts/promote_standalone.py` (confidence=high만 자동)
   - In-place update: `scripts/update_promoted_items.py` (itemType 변경 시 template 재생성)
 - CJK 저자 이름 분리: 4글자→2/2(일본), 3글자→1/2(한국)
+
+## Desktop 앱 구조 (`desktop/`)
+
+- **Entry point**: `python -m desktop` → `desktop/__main__.py` → `desktop.app.main()`
+- **4-layer**:
+  - `desktop/views/` — top-level screens (source_nav, paper_list, detail_panel)
+  - `desktop/services/` — DB/business adapter (paper_service, library, source_service, biblio_service, **search_service**)
+  - `desktop/components/` — reusable atoms (sidebar/Rail, search_bar, status_bar, status_badge)
+  - `desktop/workers/` — background tasks (QThread)
+  - `desktop/windows/main_window.py` — Rail + SourceNav + PaperList + DetailPanel 조립
+  - `desktop/theme/` — design tokens (`tokens.py`), QSS generator (`qss.py`), SVG icons + runtime tinting loader (`icons.py`)
+- **Rail** (좌측 아이콘 바): Library/Search는 **checkable 모드** → `section_changed` 시그널, Process/Settings는 **one-shot 액션** → `action_triggered` 시그널. Process/Settings는 **동결된 `papermeister/ui/process_window.ProcessWindow` / `preferences_dialog.PreferencesDialog`를 재사용**
+- **SourceNav**: `QTabWidget` — 각 Source마다 탭 하나 (현재 Zotero 하나). 각 탭 내부는 단일 트리에 상단=Library 필터, 하단=hierarchical 컬렉션
+- **DetailPanel**: `QWidget` (not QScrollArea) + 내부 `QTabWidget#DetailTabs`. 탭 3개 — **Metadata / Biblio / OCR**. 각 탭 독립 스크롤, 논문 전환 시 직전 탭 복원. Stub 배너는 탭바 위에 고정
+- **OCR 탭**: `papermeister.biblio.load_ocr_pages()`로 `~/.papermeister/ocr_json/{hash}.json` 페치 → `_sanitize_ocr_markdown()` 적용 → `QTextBrowser.setMarkdown()` 렌더
+  - **Sanitizer 필수**: Chandra2 원본을 그대로 `setMarkdown()`에 넘기면 `-qt-list-indent` 누적으로 "텍스트가 계속 오른쪽으로 밀리는" 버그. 원인은 (a) 4+ leading space → indented code block, (b) 줄 시작 `숫자.` → ordered list, (c) 레퍼런스의 바 볼륨 번호(`88.`, `158.`) → 빈 OL이 인접하면 Qt가 nested로 해석해서 indent가 누적. Sanitizer가 모든 줄 `lstrip()` + `^(\d+)\.` regex를 backslash escape로 차단
+- **SVG 아이콘**: `desktop/theme/icons/*.svg`는 `stroke="currentColor"`로 작성하고 `icons.rail_icon()` 헬퍼가 런타임에 색을 치환해서 3-state QIcon(idle/checked/hover) 생성. 다크/라이트 테마 스왑도 같은 메커니즘으로 확장 가능
+- **QSS**: `desktop/theme/qss.py::build_stylesheet(colors)`가 `desktop/theme/tokens.py::COLORS_DARK`를 받아 풀 스타일시트 생성. QTree branch chevron SVG 경로는 `_icon_url()`이 `Path.as_posix()`로 Windows forward-slash 경로 주입
 
 ## Scripts (scripts/ 디렉토리)
 
