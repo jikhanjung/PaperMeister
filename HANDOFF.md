@@ -8,30 +8,49 @@
 
 ## 현재 단계
 
-**Phase: 새 데스크탑 앱 스캐폴드 완료, P07 Phase 3 착수 중**
+**Phase: P07 Phase 2 종료 (Zotero write-back 포함) / Phase 3 스캐폴드 완료 / Phase 4 진행 중**
 
 기존 GUI/CLI 동작. RunPod OCR + Zotero 연동 + Haiku/Sonnet 서지 추출 파이프라인 완성.
 
 **2026-04-11 새 단계**: 기존 `papermeister/ui/`는 동결하고, 새 모던 UI를 `desktop/` 패키지로 분리.
 - P07 개정 (현재 구현 상태 매트릭스 + entity×state machine + Phase 재순서)
-- P08 작성: PaperBiblio → Paper 반영 정책
+- P08 작성: PaperBiblio → Paper 반영 정책 (+ §3.5 Zotero write-back, §4.2.1 `curated_author_shortfall`)
 - P09 작성: 새 데스크탑 UI 설계 (custom QSS + design tokens)
 - `desktop/` 스캐폴드: `python -m desktop` 실행, 3-pane + Library/Sources 이중 네비 + 상세 패널 동작
+- **P08 러너 end-to-end 검증 완료** — single / batch / manual override 세 경로 모두 실DB에서 확인 (devlog 021)
+- **Zotero write-back 경로 구현 + 검증 완료** — `papermeister/zotero_writeback.py`, `--force` 플래그, end-to-end (paper 9) 실제 API write 성공 (devlog 022)
+- **Paper.date 컬럼 + 날짜 파서 버그 수정** — 1,671편 year 복구 (기존 파서가 `08/2017` 같은 M/YYYY 형식을 못 먹고 pre-1900도 필터링하던 버그) (devlog 022)
 
 ---
 
 ## 다음 할 일
 
-### 새 desktop 앱 (P07 Phase 2~4)
-- [ ] `papermeister/biblio_reflect.py` — P08 정책 러너 구현 (auto_commit / needs_review / skip)
-- [ ] `scripts/reflect_biblio.py` — batch 진입점 (dry-run / apply / single paper)
-- [ ] DB migration: `PaperBiblio.status`, `PaperFile.failure_reason` 컬럼 추가
-- [ ] desktop: 상세 패널 Apply Biblio 버튼 활성화 (single paper 반영)
+### P07 Phase 2 마무리
+- [x] `papermeister/biblio_reflect.py` — P08 정책 러너 구현 (019 세션)
+- [x] `scripts/reflect_biblio.py` — batch 진입점 (019 세션) + `--force` 플래그 (022 세션)
+- [x] DB migration: `PaperBiblio.status`, `PaperFile.failure_reason` 컬럼 추가 (019 세션)
+- [x] DB migration: `Paper.date` 컬럼 추가 (022 세션)
+- [x] **end-to-end 검증** — single(paper 4) + batch(5,12,13,16,21) + manual(paper 9) (021 세션)
+- [x] **P08 §4.2.1 추가** — `curated_author_shortfall` 규칙 (021 세션)
+- [x] **P08 §3.5 추가** — Zotero write-back 경로 정책 (022 세션)
+- [x] **`papermeister/zotero_writeback.py`** — 실제 write-back 구현, paper 9 end-to-end 검증 (022 세션)
+- [x] **Paper.year 파서 버그 수정** + 1,671편 bulk backfill (022 세션)
+- [ ] desktop `list_by_library('needs_review')` 쿼리 수정 (현재 count와 list 불일치) — Phase 2 잔여
+
+### P07 Phase 4 (desktop hookup)
+- [x] desktop: 상세 패널 Apply Biblio 버튼 wire (019 세션, 021에서 백엔드 검증)
+- [ ] desktop: 실제 GUI 실행 + 버튼 클릭 end-to-end 확인
 - [ ] desktop: source/folder 단위 batch Reflect 트리거 + 결과 다이얼로그
 - [ ] desktop: background worker (biblio 추출 / OCR 트리거)
 - [ ] desktop: PaperList 상태 셀에 StatusBadge delegate 렌더링
 - [ ] desktop: OCR 미리보기 카드 — ocr_json 캐시에서 로드
-- [ ] desktop: list_by_library('needs_review') 쿼리 수정 (현재 count와 list 불일치)
+
+### P07 매트릭스 갱신 (다음 세션)
+- line 58 `high-confidence auto-commit 러너` ❌ → ✅
+- line 57 `PaperBiblio → Paper 반영 정책` ❌ → ✅ (P08 + §3.5 + §4.2.1)
+- Phase 2 완료 기준 중 "high-confidence 값 Paper 일괄 반영" → ✅
+- 새 항목: Zotero write-back → ✅ (`papermeister/zotero_writeback.py`)
+- 새 항목: `Paper.date` 컬럼 (Zotero round-trip 무손실 mirror)
 
 ### 기존 백로그
 - [ ] 1960s 컬렉션 standalone PDF 226편 OCR 진행 중 (RunPod)
@@ -89,6 +108,32 @@
 ---
 
 ## 최근 세션 요약
+
+**2026-04-11 (세션 9)** — [devlog 022](./devlog/20260411_022_Zotero_Writeback_And_Date_Parser.md)
+- 021의 "7편 local-only drift" 문제 해결: Zotero를 source of truth로 두는 단방향 sync 경로 구축
+- **Drift pull-back**: 021에서 수정한 7편을 Zotero 상태로 in-place 복원 (PaperBiblio 보존, `resync_zotero.py`는 destructive라 사용 금지)
+- **파서 버그 발견**: `_parse_item_metadata`가 `"08/2017"`같은 M/YYYY 형식을 못 먹고(`int('08/2')` fail), pre-1900 논문도 range filter로 탈락시키고 있었음. 9,783편 중 4,615편(47%)이 year=NULL이던 원인의 절반 이상
+- **Option B 채택**: `Paper.date TEXT` 컬럼 추가 (Zotero 원본 문자열, round-trip 무손실) + `Paper.year int`는 derived index로 유지
+- **파서 수정**: Zotero 서버가 제공하는 `meta.parsedDate` (YYYY 또는 YYYY-MM-DD로 이미 정규화된 값) 우선 사용, fallback regex는 safety net
+- **Bulk backfill**: `zot.top(limit=100) + everything()` 로 9,871 items을 99 API calls(~7분)에 받아옴. 6,841편 date 채움, **1,671편 year 복구**
+- **`papermeister/zotero_writeback.py` 신설**: fresh fetch → empty-slot patch against Zotero state (not local) → update_item → re-fetch → refresh local. network-atomic
+- **`force_override` 플래그**: `curated_author_shortfall` 탈출구. batch는 절대 force 안 함, single-paper `--force`만 허용
+- **End-to-end 검증**:
+  - Case A no-op (paper 5): Zotero version 26116 → 26116 (API write 없음), biblio status=applied, reason=`zotero_already_complete`
+  - Case B write (paper 9 --force): Zotero version 25612 → 31052, creators 1→5명, journal 채워짐
+- 7편 모두 `applied` 상태 정리. 실제 Zotero API write는 paper 9 한 건만.
+- **P08 §3.5 추가** (Zotero-sourced vs filesystem-sourced write path), §8 "write-back은 별도 문서로" 미결 해결
+
+**2026-04-11 (세션 8)** — [devlog 021](./devlog/20260411_021_P08_Reflection_Runner_Verification.md)
+- P08 러너 end-to-end 검증 — 019에서 작성했던 `biblio_reflect.py`를 실DB에 처음 적용
+- **단일 paper**: paper 4 (year: None → 2017), `scripts/reflect_biblio.py --paper 4` 경유, `biblio.status: extracted → applied`
+- **Batch**: paper 5/12/13/16/21 (모두 year fill), `--paper-ids` 경유, `biblio.status: extracted → auto_committed`
+- **반례 발견**: paper 9 — curated이지만 authors=1명, biblio=5명 → "journal만 채우고 authors 반쪽으로 두는" 부분 성공 실패 모드
+- **P08 §4.2.1 추가** — `curated_author_shortfall` 규칙. `len(P.authors) > 0 AND len(B.authors) > len(P.authors)` → `needs_review`로 short-circuit
+- **Paper 9 수동 해결** — direct DB write: authors 5명으로 replace + journal 채움 + biblio 9.status='applied'
+- 최종 dry-run: `auto_committed=0, needs_review=31` (override_conflict×21 + 추출 노이즈 10)
+- 현 corpus는 Zotero-only라 stub Paper 0건 → P08의 stub 경로는 dead code (1960s standalone이 OCR 완료되기 전까지)
+- `applied` vs `auto_committed` 구분이 실제로 유용함 확인 — tie-break에서 applied가 최상위로 와서 사람 결정 보존
 
 **2026-04-11 (세션 7, 후반)** — [devlog 020](./devlog/20260411_020_Docs_Source_Cleanup_And_Portability.md)
 - `docs` directory source 및 관련 Paper/PaperFile 3건 DB에서 제거 (Zotero source만 남음)

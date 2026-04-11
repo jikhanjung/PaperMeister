@@ -180,6 +180,14 @@ def evaluate(biblio: PaperBiblio, paper: Paper) -> Decision:
     if _is_stub_paper(paper):
         return Decision('auto_commit', '', biblio.id)
 
+    # P08 §4.2.1: curated Paper whose author list is strictly shorter than
+    # the biblio's is a strong signal that the curated data is incomplete.
+    # Kick the whole decision to needs_review instead of half-filling other
+    # slots while leaving authors untouched.
+    existing_author_count = Author.select().where(Author.paper == paper).count()
+    if existing_author_count > 0 and len(authors) > existing_author_count:
+        return Decision('needs_review', 'curated_author_shortfall', biblio.id)
+
     # curated Paper: only fill empty slots (P08 §4.2)
     any_fill = False
     if not (paper.title or '').strip() and title_ok:
@@ -198,21 +206,67 @@ def evaluate(biblio: PaperBiblio, paper: Paper) -> Decision:
     return Decision('needs_review', 'override_conflict', biblio.id)
 
 
-# ── Application (P08 §3, §6) ──────────────────────────────────
+# ── Application (P08 §3, §3.5, §6) ────────────────────────────
 
-def apply(biblio: PaperBiblio, paper: Paper, *, dry_run: bool = False) -> bool:
+def apply(
+    biblio: PaperBiblio,
+    paper: Paper,
+    *,
+    dry_run: bool = False,
+    force_override: bool = False,
+) -> bool:
     """Apply `biblio` to `paper` per policy. Returns True if any change happened.
 
-    Side effects:
-      - Paper title/year/journal/doi updated (empty-slot-only if curated,
-        full update if stub)
-      - Author rows replaced when biblio supplies a non-empty author list
-        (only when caller has determined it's safe; for stub this is the
-        full replacement, for curated only if Paper had no authors)
-      - PaperBiblio.status flipped to 'auto_committed' (batch) or 'applied'
-        (single-paper manual). This function sets 'auto_committed'; the GUI
-        "Apply Biblio" button is expected to pass through apply() and then
-        bump status to 'applied' in its own transaction if needed.
+    Branches on `paper.zotero_key` (P08 §3.5):
+
+    - Zotero-sourced  → `zotero_writeback.writeback_biblio()` (PATCH Zotero,
+      then refresh local from the authoritative response).
+    - filesystem stub → `_local_apply()` (direct local write, current behaviour).
+
+    `force_override` is the escape hatch for `curated_author_shortfall` etc:
+    when True, writeback may replace non-empty Zotero fields where the biblio
+    has strictly more information (currently only creators).
+
+    PaperBiblio.status is flipped to 'auto_committed' on success in either path.
+    The single-paper entry point `apply_single()` later overrides to 'applied'
+    when called from manual confirmation contexts (GUI / CLI --paper).
+    """
+    if paper.zotero_key:
+        # Zotero-sourced — write upstream first, then refresh local mirror.
+        from . import zotero_writeback
+        from .zotero_client import ZoteroClient
+        from .preferences import get_pref
+
+        client = ZoteroClient(
+            get_pref('zotero_user_id', ''),
+            get_pref('zotero_api_key', ''),
+        )
+        result = zotero_writeback.writeback_biblio(
+            biblio, paper, client=client,
+            dry_run=dry_run, force_override=force_override,
+        )
+
+        if not dry_run:
+            # Status transition happens here (not inside writeback) so the
+            # two branches share the same policy surface.
+            biblio.status = 'auto_committed'
+            biblio.review_reason = result.reason
+            biblio.save()
+
+        # Even a no-op (action='noop') counts as "successfully reflected" for
+        # the caller: Zotero is authoritative and already complete. Only a
+        # real API write changes data, so `changed` mirrors that.
+        return result.changed
+
+    # filesystem stub (currently 0 rows; future standalone flow)
+    return _local_apply(biblio, paper, dry_run=dry_run)
+
+
+def _local_apply(biblio: PaperBiblio, paper: Paper, *, dry_run: bool = False) -> bool:
+    """Local-only apply path (filesystem-sourced Paper with no zotero_key).
+
+    Empty-slot fill for curated Paper, full replacement for stub. This was
+    the entire pre-§3.5 `apply()` body; kept intact for the non-Zotero case.
     """
     authors = _parse_authors(biblio.authors_json or '')
     stub = _is_stub_paper(paper)
@@ -223,12 +277,10 @@ def apply(biblio: PaperBiblio, paper: Paper, *, dry_run: bool = False) -> bool:
         nonlocal changes
         current = getattr(paper, field_name, None)
         if stub:
-            # stub: overwrite if new has content
             if new_value and new_value != current:
                 setattr(paper, field_name, new_value)
                 changes = True
         else:
-            # curated: only fill empty slot
             empty = (current is None) or (isinstance(current, str) and not current.strip())
             if empty and new_value:
                 setattr(paper, field_name, new_value)
@@ -248,7 +300,6 @@ def apply(biblio: PaperBiblio, paper: Paper, *, dry_run: bool = False) -> bool:
                 changes = True
 
     if dry_run:
-        # Simulate without touching DB
         snapshot = {
             'title': paper.title,
             'year': paper.year,
@@ -259,10 +310,8 @@ def apply(biblio: PaperBiblio, paper: Paper, *, dry_run: bool = False) -> bool:
         maybe('journal', (biblio.journal or '').strip())
         maybe('doi', (biblio.doi or '').strip())
         maybe_year()
-        # Revert (dry run — nothing is persisted)
         for k, v in snapshot.items():
             setattr(paper, k, v)
-        # Author changes don't touch DB in dry_run either
         return changes or (stub and authors and
                            Author.select().where(Author.paper == paper).count() == 0)
 
@@ -272,10 +321,8 @@ def apply(biblio: PaperBiblio, paper: Paper, *, dry_run: bool = False) -> bool:
         maybe('doi', (biblio.doi or '').strip())
         maybe_year()
 
-        # Author handling: replace-all for stub, fill-if-empty for curated
         existing_authors = list(Author.select().where(Author.paper == paper))
         if stub and authors:
-            # full replacement
             Author.delete().where(Author.paper == paper).execute()
             for i, name in enumerate(authors):
                 Author.create(paper=paper, name=name, order=i)
@@ -288,7 +335,6 @@ def apply(biblio: PaperBiblio, paper: Paper, *, dry_run: bool = False) -> bool:
         if changes:
             paper.save()
 
-        # Flip biblio status
         biblio.status = 'auto_committed'
         biblio.review_reason = ''
         biblio.save()
@@ -296,11 +342,18 @@ def apply(biblio: PaperBiblio, paper: Paper, *, dry_run: bool = False) -> bool:
     return changes
 
 
-def apply_single(paper_id: int, *, mark_applied: bool = True) -> tuple[Decision, bool]:
-    """GUI 'Apply Biblio' entry point.
+def apply_single(
+    paper_id: int,
+    *,
+    mark_applied: bool = True,
+    force_override: bool = False,
+) -> tuple[Decision, bool]:
+    """GUI / CLI 'Apply Biblio' entry point.
 
-    Unlike `apply()` (batch flow), this marks the biblio as 'applied' on
-    success so future runs treat it as user-confirmed.
+    - Marks biblio as 'applied' on success (manual confirmation beats auto).
+    - needs_review decisions still proceed (manual override); use
+      force_override=True to additionally replace non-empty Zotero fields
+      (e.g. for curated_author_shortfall).
     """
     paper = Paper.get_or_none(Paper.id == paper_id)
     if paper is None:
@@ -313,9 +366,14 @@ def apply_single(paper_id: int, *, mark_applied: bool = True) -> tuple[Decision,
     if decision.action == 'skip':
         return decision, False
 
-    changed = apply(biblio, paper, dry_run=False)
-    if mark_applied and changed:
-        # Re-fetch and stamp as 'applied' — manual confirmation beats auto.
+    changed = apply(
+        biblio, paper, dry_run=False, force_override=force_override,
+    )
+
+    if mark_applied:
+        # Flip to 'applied' whether or not the call caused a real write.
+        # A no-op (Zotero already complete) after a user click is still
+        # "the user confirmed this biblio", which is what 'applied' means.
         fresh = PaperBiblio.get(PaperBiblio.id == biblio.id)
         fresh.status = 'applied'
         fresh.save()

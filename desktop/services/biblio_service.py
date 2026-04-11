@@ -26,6 +26,7 @@ _REASON_BLURB = {
     'low_confidence':     'Confidence is not "high". Review manually.',
     'visual_review_flag': 'Extractor flagged this for visual review.',
     'override_conflict':  'Paper is already curated and biblio adds nothing new.',
+    'curated_author_shortfall': 'Curated Paper has fewer authors than the biblio extraction — review manually.',
     'journal_issue':      'Journal issues go through the promote flow, not reflect.',
     'already_committed':  'Already auto-committed in a previous run.',
     'already_applied':    'Already applied by user.',

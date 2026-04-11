@@ -2,9 +2,28 @@
 
 import json
 import os
+import re
 import tempfile
 
 from pyzotero import zotero
+
+
+# Fallback year extractor for the rare item where meta.parsedDate is missing.
+# Zotero's `data.date` is free-form: observed '2017', '2017-08-15', '08/2017',
+# '8/2006', '1865', 'September 2018'. Zotero's server-side parser normally
+# normalises all of these into meta.parsedDate, but we keep this as a safety
+# net and for offline contexts.
+# Range 1500–2099 covers everything from Linnaeus (1758) forward, sufficient
+# for paleontology literature.
+_YEAR_RE = re.compile(r'\b(1[5-9]\d{2}|20\d{2})\b')
+
+
+def extract_year_from_date(date_str: str) -> int | None:
+    """Best-effort extraction of a year from a free-form date string."""
+    if not date_str:
+        return None
+    m = _YEAR_RE.search(date_str)
+    return int(m.group(0)) if m else None
 
 COLLECTIONS_CACHE = os.path.join(
     os.path.expanduser('~'), '.papermeister', 'zotero_collections.json'
@@ -86,8 +105,14 @@ class ZoteroClient:
 
         return results
 
-    def _parse_item_metadata(self, data):
-        """Extract metadata from a Zotero item data dict."""
+    def _parse_item_metadata(self, data, meta=None):
+        """Extract metadata from a Zotero item.
+
+        Accepts either the flat `data` dict (legacy) or `data` + `meta` (preferred).
+        When `meta.parsedDate` is available (Zotero server normalises free-form
+        `data.date` into YYYY or YYYY-MM-DD), it's used as the source for `year`.
+        The raw `data.date` is always returned as `date` for lossless round-trip.
+        """
         creators = data.get('creators', [])
         authors = []
         for c in creators:
@@ -96,20 +121,18 @@ class ZoteroClient:
                 if name:
                     authors.append(name)
 
+        raw_date = data.get('date', '') or ''
         year = None
-        date_str = data.get('date', '')
-        if date_str:
-            try:
-                year = int(date_str[:4])
-                if not (1900 <= year <= 2100):
-                    year = None
-            except (ValueError, IndexError):
-                pass
+        if meta and meta.get('parsedDate'):
+            year = extract_year_from_date(meta['parsedDate'])
+        if year is None:
+            year = extract_year_from_date(raw_date)
 
         return {
             'key': data['key'],
             'title': data.get('title', ''),
             'authors': authors,
+            'date': raw_date,
             'year': year,
             'doi': data.get('DOI', ''),
             'journal': data.get('publicationTitle', ''),
@@ -123,7 +146,7 @@ class ZoteroClient:
         every PaperFile relationship, including derived files like OCR JSONs.
 
         Returns list of dicts:
-            {key, title, authors, year, doi, journal,
+            {key, title, authors, date, year, doi, journal,
              attachments: [{key, filename, content_type}]}
         Items without attachments have attachments=[].
         """
@@ -131,8 +154,8 @@ class ZoteroClient:
             self._zot.collection_items(collection_key)
         )
 
-        parent_items = {}
-        attachments_by_parent = {}     # parent_key -> list of attachment dicts
+        parent_items = {}             # parent_key -> full item (data + meta)
+        attachments_by_parent = {}    # parent_key -> list of attachment dicts
         standalone_pdfs = []
 
         for it in all_items:
@@ -153,11 +176,13 @@ class ZoteroClient:
                     if content_type == 'application/pdf':
                         standalone_pdfs.append(data)
             elif item_type != 'note':
-                parent_items[data['key']] = data
+                parent_items[data['key']] = it
 
         results = []
-        for item_key, data in parent_items.items():
-            item = self._parse_item_metadata(data)
+        for item_key, full_item in parent_items.items():
+            item = self._parse_item_metadata(
+                full_item['data'], meta=full_item.get('meta', {}),
+            )
             item['attachments'] = attachments_by_parent.get(item_key, [])
             results.append(item)
 
@@ -169,6 +194,7 @@ class ZoteroClient:
                 'key': data['key'],
                 'title': title,
                 'authors': [],
+                'date': '',
                 'year': None,
                 'doi': '',
                 'journal': '',

@@ -24,6 +24,10 @@ def _migrate(database):
     columns = {row[1] for row in cursor}
     if 'zotero_key' not in columns:
         database.execute_sql("ALTER TABLE paper ADD COLUMN zotero_key TEXT DEFAULT ''")
+    # Raw Zotero `data.date` string (round-trip source of truth for writeback).
+    # Paper.year remains as the derived int index.
+    if 'date' not in columns:
+        database.execute_sql("ALTER TABLE paper ADD COLUMN date TEXT DEFAULT ''")
 
     cursor = database.execute_sql("PRAGMA table_info('paperfile')").fetchall()
     columns = {row[1] for row in cursor}

@@ -27,6 +27,11 @@ class Folder(BaseModel):
 
 class Paper(BaseModel):
     title = peewee.TextField(default='')
+    # date is the raw Zotero `data.date` string (e.g. '08/2017', '2022-12-16',
+    # '1865'). Round-trip source of truth for writeback to Zotero.
+    date = peewee.TextField(default='')
+    # year is derived from `date` (int, indexed for fast filter/sort).
+    # Prefer Zotero's `meta.parsedDate` when syncing; fall back to regex.
     year = peewee.IntegerField(null=True)
     journal = peewee.TextField(default='')
     doi = peewee.TextField(default='')

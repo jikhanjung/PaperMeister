@@ -220,6 +220,7 @@ def fetch_zotero_collection_items(zotero_client, source, folder, progress_callba
             with db.atomic():
                 paper = Paper.create(
                     title=item['title'],
+                    date=item.get('date', ''),
                     year=item['year'],
                     journal=item.get('journal', ''),
                     doi=item.get('doi', ''),

@@ -34,6 +34,11 @@ def _parse_args():
     scope.add_argument('--paper', type=int, help='Single paper (GUI-style apply)')
     scope.add_argument('--paper-ids', type=str, help='Comma-separated paper ids')
     p.add_argument('--dry-run', action='store_true', help='Do not write any changes')
+    p.add_argument(
+        '--force', action='store_true',
+        help='(Single-paper only) Replace non-empty Zotero fields where biblio '
+             'has more data. Escape hatch for curated_author_shortfall etc.',
+    )
     return p.parse_args()
 
 
@@ -55,8 +60,14 @@ def main():
     init_db()
 
     if args.paper:
-        decision, changed = biblio_reflect.apply_single(args.paper)
-        print(f'paper={args.paper} decision={decision.action} reason={decision.reason!r} changed={changed}')
+        decision, changed = biblio_reflect.apply_single(
+            args.paper, force_override=args.force,
+        )
+        print(
+            f'paper={args.paper} decision={decision.action} '
+            f'reason={decision.reason!r} changed={changed} '
+            f'force={args.force}'
+        )
         return 0
 
     paper_ids = None
