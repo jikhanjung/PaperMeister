@@ -59,7 +59,7 @@ FONT = {
 
 # Layout constants
 LAYOUT = {
-    'rail.width':         44,
+    'rail.width':         52,
     'sourcenav.min':      220,
     'sourcenav.default':  260,
     'detail.min':         340,
