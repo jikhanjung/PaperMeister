@@ -78,6 +78,17 @@ class PaperBiblio(BaseModel):
     review_reason = peewee.TextField(default='')  # missing_title|low_confidence|... (see P08)
 
 
+class PaperFolder(BaseModel):
+    """Many-to-many: a Paper can belong to multiple Folders (Zotero collections)."""
+    paper = peewee.ForeignKeyField(Paper, backref='paper_folders', on_delete='CASCADE')
+    folder = peewee.ForeignKeyField(Folder, backref='paper_folders', on_delete='CASCADE')
+
+    class Meta:
+        indexes = (
+            (('paper', 'folder'), True),  # unique together
+        )
+
+
 class Passage(BaseModel):
     paper = peewee.ForeignKeyField(Paper, backref='passages', on_delete='CASCADE')
     page = peewee.IntegerField()

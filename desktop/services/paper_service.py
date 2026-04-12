@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from peewee import JOIN, fn
 
 from papermeister.models import (
-    Author, Folder, Paper, PaperBiblio, PaperFile, Source,
+    Author, Folder, Paper, PaperBiblio, PaperFile, PaperFolder, Source,
 )
 
 
@@ -18,6 +18,7 @@ class PaperRow:
     year: int | None
     journal: str
     source_name: str
+    folder_id: int | None  # used by Ctrl+click → reveal in SourceNav
     status: str  # PaperFile.status — pending/processed/failed, or 'none'
     is_stub: bool
 
@@ -59,6 +60,7 @@ def _row_from_paper(paper: Paper, source_name: str) -> PaperRow:
         year=paper.year,
         journal=paper.journal or '',
         source_name=source_name,
+        folder_id=paper.folder_id,
         status=(pfile.status if pfile else 'none'),
         is_stub=_is_stub(paper),
     )
@@ -176,6 +178,8 @@ class PaperDetail:
     doi: str
     source_name: str
     folder_name: str
+    folder_id: int | None  # primary folder (Paper.folder)
+    collections: list[tuple[int, str]]  # [(folder_id, "Parent › Child › Leaf"), ...]
     file_path: str
     file_status: str
     file_hash: str
@@ -192,6 +196,31 @@ def load_detail(paper_id: int) -> PaperDetail | None:
     folder = paper.folder
     source_name = folder.source.name if folder and folder.source else ''
     folder_name = folder.name if folder else ''
+    folder_id = folder.id if folder else None
+    # Build all collection paths from PaperFolder junction table.
+    collections: list[tuple[int, str]] = []
+    pf_rows = (
+        PaperFolder.select(PaperFolder.folder)
+        .where(PaperFolder.paper == paper)
+    )
+    for pf in pf_rows:
+        f = pf.folder
+        path_parts: list[str] = []
+        cursor = f
+        while cursor is not None:
+            path_parts.append(cursor.name)
+            cursor = cursor.parent
+        path_parts.reverse()
+        collections.append((f.id, ' \u203a '.join(path_parts)))
+    # If PaperFolder is empty (not yet populated), fall back to Paper.folder.
+    if not collections and folder:
+        path_parts = []
+        cursor = folder
+        while cursor is not None:
+            path_parts.append(cursor.name)
+            cursor = cursor.parent
+        path_parts.reverse()
+        collections.append((folder.id, ' \u203a '.join(path_parts)))
     pfile = (
         PaperFile.select()
         .where(PaperFile.paper == paper)
@@ -232,6 +261,8 @@ def load_detail(paper_id: int) -> PaperDetail | None:
         doi=paper.doi or '',
         source_name=source_name,
         folder_name=folder_name,
+        folder_id=folder_id,
+        collections=collections,
         file_path=file_path,
         file_status=file_status,
         file_hash=file_hash,

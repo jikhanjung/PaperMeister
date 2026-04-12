@@ -136,6 +136,7 @@ class ZoteroClient:
             'year': year,
             'doi': data.get('DOI', ''),
             'journal': data.get('publicationTitle', ''),
+            'collections': data.get('collections', []),
         }
 
     def get_collection_items(self, collection_key):
@@ -146,19 +147,29 @@ class ZoteroClient:
         every PaperFile relationship, including derived files like OCR JSONs.
 
         Returns list of dicts:
-            {key, title, authors, date, year, doi, journal,
+            {key, title, authors, date, year, doi, journal, collections,
              attachments: [{key, filename, content_type}]}
         Items without attachments have attachments=[].
         """
-        all_items = self._zot.everything(
+        raw = self._zot.everything(
             self._zot.collection_items(collection_key)
         )
+        parent_items, atts_by_parent, standalone, _ = \
+            self._classify_raw_items(raw)
+        return self._build_results(parent_items, atts_by_parent, standalone)
 
-        parent_items = {}             # parent_key -> full item (data + meta)
-        attachments_by_parent = {}    # parent_key -> list of attachment dicts
+    def _classify_raw_items(self, raw_items):
+        """Separate raw Zotero API items into parent items, attachments, and standalone PDFs.
+
+        Shared by get_collection_items() and get_all_items().
+        Returns (parent_items_dict, attachments_by_parent, standalone_pdfs, orphan_parent_keys).
+        orphan_parent_keys: attachment parent keys not present in this batch (incremental).
+        """
+        parent_items = {}
+        attachments_by_parent = {}
         standalone_pdfs = []
 
-        for it in all_items:
+        for it in raw_items:
             data = it['data']
             item_type = data.get('itemType', '')
 
@@ -168,16 +179,20 @@ class ZoteroClient:
                 if parent_key:
                     attachments_by_parent.setdefault(parent_key, []).append({
                         'key': data['key'],
-                        'filename': data.get('filename', f'{data["key"]}'),
+                        'filename': data.get('filename', data['key']),
                         'content_type': content_type,
                     })
                 else:
-                    # Standalone — only PDFs are first-class items in our model
                     if content_type == 'application/pdf':
                         standalone_pdfs.append(data)
             elif item_type != 'note':
                 parent_items[data['key']] = it
 
+        orphan_parent_keys = set(attachments_by_parent) - set(parent_items)
+        return parent_items, attachments_by_parent, standalone_pdfs, orphan_parent_keys
+
+    def _build_results(self, parent_items, attachments_by_parent, standalone_pdfs):
+        """Build result dicts from classified items."""
         results = []
         for item_key, full_item in parent_items.items():
             item = self._parse_item_metadata(
@@ -186,7 +201,6 @@ class ZoteroClient:
             item['attachments'] = attachments_by_parent.get(item_key, [])
             results.append(item)
 
-        # Standalone PDFs (no parent item) — create as their own item
         for data in standalone_pdfs:
             filename = data.get('filename', f'{data["key"]}.pdf')
             title = data.get('title', '') or os.path.splitext(filename)[0]
@@ -198,14 +212,41 @@ class ZoteroClient:
                 'year': None,
                 'doi': '',
                 'journal': '',
+                'collections': data.get('collections', []),
                 'attachments': [{
                     'key': data['key'],
                     'filename': filename,
                     'content_type': 'application/pdf',
                 }],
             })
-
         return results
+
+    def get_all_items(self, since=None):
+        """Library-wide incremental item fetch.
+
+        Args:
+            since: library version (int). Pass None for full fetch.
+
+        Returns:
+            (items, orphan_attachments)
+            - items: list of dicts, same format as get_collection_items()
+            - orphan_attachments: dict {parent_zotero_key: [att_dicts]}
+              for attachments whose parent item wasn't in this batch
+              (common in incremental syncs)
+
+        After calling this, use get_library_version() to store the new version.
+        """
+        kwargs = {}
+        if since is not None:
+            kwargs['since'] = since
+        raw = self._zot.everything(self._zot.items(**kwargs))
+
+        parent_items, atts_by_parent, standalone, orphan_keys = \
+            self._classify_raw_items(raw)
+        results = self._build_results(parent_items, atts_by_parent, standalone)
+
+        orphan_atts = {k: atts_by_parent[k] for k in orphan_keys}
+        return results, orphan_atts
 
     def download_attachment(self, attachment_key):
         """Download a PDF attachment to a temp file. Returns file path.

@@ -85,9 +85,14 @@ class StatusPillDelegate(QStyledItemDelegate):
 
 
 class PaperListView(QTreeWidget):
-    """Shows PaperRow list. `paper_selected` fires on selection changes."""
+    """Shows PaperRow list. `paper_selected` fires on selection changes.
+
+    Ctrl+click on a row emits `folder_reveal_requested(folder_id)` so the
+    left SourceNav can highlight the paper's collection (Zotero-style).
+    """
 
     paper_selected = pyqtSignal(int)
+    folder_reveal_requested = pyqtSignal(int)  # folder_id
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -116,6 +121,7 @@ class PaperListView(QTreeWidget):
         self.setItemDelegateForColumn(0, self._pill_delegate)
 
         self.currentItemChanged.connect(self._on_selection_changed)
+        self.itemPressed.connect(self._on_item_pressed)
 
     # ── Loading ──────────────────────────────────────────────
 
@@ -173,6 +179,8 @@ class PaperListView(QTreeWidget):
                 year,
             ])
             item.setData(0, Qt.ItemDataRole.UserRole, row.paper_id)
+            if row.folder_id is not None:
+                item.setData(0, Qt.ItemDataRole.UserRole + 1, row.folder_id)
             if row.is_stub:
                 font = item.font(2)
                 font.setItalic(True)
@@ -186,6 +194,14 @@ class PaperListView(QTreeWidget):
         self.addTopLevelItem(item)
 
     # ── Events ───────────────────────────────────────────────
+
+    def _on_item_pressed(self, item, _col):
+        from PyQt6.QtWidgets import QApplication
+        mods = QApplication.keyboardModifiers()
+        if mods & Qt.KeyboardModifier.ControlModifier:
+            folder_id = item.data(0, Qt.ItemDataRole.UserRole + 1)
+            if isinstance(folder_id, int):
+                self.folder_reveal_requested.emit(folder_id)
 
     def _on_selection_changed(self, current, _prev):
         if current is None:

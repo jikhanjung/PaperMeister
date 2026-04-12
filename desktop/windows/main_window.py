@@ -40,8 +40,10 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         self._current_selection: tuple[str, object] | None = None
         self._process_window = None  # lazy-init; reuses frozen papermeister/ui ProcessWindow
+        self._sync_worker = None  # ZoteroSyncWorker
         self._wire_events()
         self._load_initial()
+        self._sync_zotero()  # auto-sync on startup, like the old GUI
 
     # ── Top bar ──────────────────────────────────────────────
 
@@ -103,8 +105,10 @@ class MainWindow(QMainWindow):
     def _wire_events(self):
         self.rail.section_changed.connect(self._on_rail_section)
         self.rail.action_triggered.connect(self._on_rail_action)
+        self.rail.full_sync_triggered.connect(self._full_sync_zotero)
         self.source_nav.selection_changed.connect(self._on_nav_selection)
         self.paper_list.paper_selected.connect(self.detail_panel.show_paper)
+        self.paper_list.folder_reveal_requested.connect(self.source_nav.reveal_folder)
         self.detail_panel.apply_completed.connect(self._on_apply_completed)
         self.search_bar.returnPressed.connect(self._on_search_submitted)
         self.search_bar.textChanged.connect(self._on_search_text_changed)
@@ -122,11 +126,70 @@ class MainWindow(QMainWindow):
             self.status_bar.set_task('Search')
 
     def _on_rail_action(self, action: str):
-        """One-shot action (process | settings). Does not change persistent mode."""
-        if action == 'process':
+        """One-shot action (sync | process | settings). Does not change persistent mode."""
+        if action == 'sync':
+            self._sync_zotero()
+        elif action == 'process':
             self._open_process()
         elif action == 'settings':
             self._open_preferences()
+
+    # ── Zotero sync ──────────────────────────────────────────
+
+    def _sync_zotero(self):
+        """Sync Zotero collections + items in background with progress."""
+        from papermeister.preferences import get_pref
+        user_id = get_pref('zotero_user_id', '')
+        api_key = get_pref('zotero_api_key', '')
+        if not user_id or not api_key:
+            self.status_bar.set_task('Zotero credentials not configured')
+            return
+        if self._sync_worker and self._sync_worker.isRunning():
+            return  # button pulse already shows it's running
+
+        from desktop.workers.zotero_sync import ZoteroSyncWorker
+        self._sync_worker = ZoteroSyncWorker(user_id, api_key)
+        self._sync_worker.progress.connect(self.status_bar.set_task)
+        self._sync_worker.done.connect(self._on_sync_done)
+        self._sync_worker.failed.connect(self._on_sync_failed)
+        # Safety net: always stop animation when thread exits, even if
+        # done/failed signals were missed (e.g. unhandled C++ exception).
+        self._sync_worker.finished.connect(self._on_sync_finished)
+        self.rail.set_sync_running(True)
+        self._sync_worker.start()
+
+    def _on_sync_finished(self):
+        """QThread.finished — always fires when the thread exits."""
+        self.rail.set_sync_running(False)
+        self._sync_worker = None
+
+    def _on_sync_done(self, result):
+        self.source_nav.refresh()
+        self._apply_current_selection()
+        try:
+            total, pending, review = library_svc.corpus_counts()
+            self.status_bar.set_counts(total, pending, review)
+        except Exception:
+            pass
+        parts = [f'{result["collections"]} col']
+        if result['new']:
+            parts.append(f'{result["new"]} new')
+        if result['updated']:
+            parts.append(f'{result["updated"]} updated')
+        self.status_bar.set_task(f'Synced: {", ".join(parts)} (v{result["version"]})')
+
+    def _on_sync_failed(self, message: str):
+        self.status_bar.set_task(f'Sync failed: {message}')
+
+    def _full_sync_zotero(self):
+        """Force a full item re-fetch (right-click → Full Sync)."""
+        if self._sync_worker and self._sync_worker.isRunning():
+            return
+        from papermeister.preferences import set_pref
+        set_pref('paperfolder_needs_full_sync', True)
+        self._sync_zotero()
+
+    # ── Process / Settings ──────────────────────────────────
 
     def _open_process(self):
         """Trigger OCR processing of all pending PaperFiles via the frozen ProcessWindow."""
@@ -168,7 +231,8 @@ class MainWindow(QMainWindow):
         from papermeister.ui.preferences_dialog import PreferencesDialog
 
         dlg = PreferencesDialog(self)
-        dlg.exec()
+        if dlg.exec() == dlg.DialogCode.Accepted:
+            self._sync_zotero()  # re-sync after credential changes
 
     def _on_nav_selection(self, kind: str, value):
         self._current_selection = (kind, value)

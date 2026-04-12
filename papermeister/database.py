@@ -1,10 +1,10 @@
 import os
 import peewee
-from .models import db, Source, Folder, Paper, Author, PaperFile, Passage, PaperBiblio
+from .models import db, Source, Folder, Paper, Author, PaperFile, PaperFolder, Passage, PaperBiblio
 
 DB_PATH = os.path.join(os.path.expanduser('~'), '.papermeister', 'papermeister.db')
 
-ALL_TABLES = [Source, Folder, Paper, Author, PaperFile, Passage, PaperBiblio]
+ALL_TABLES = [Source, Folder, Paper, Author, PaperFile, PaperFolder, Passage, PaperBiblio]
 
 
 def _migrate(database):
@@ -51,6 +51,22 @@ def _migrate(database):
     pf_columns = {row[1] for row in cursor}
     if 'failure_reason' not in pf_columns:
         database.execute_sql("ALTER TABLE paperfile ADD COLUMN failure_reason TEXT DEFAULT ''")
+
+    # PaperFolder backfill: seed from Paper.folder for existing data.
+    # After backfill, flag for full item sync to populate multi-collection membership.
+    tables = [t[0] for t in database.execute_sql(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()]
+    if 'paperfolder' in tables:
+        existing = database.execute_sql('SELECT COUNT(*) FROM paperfolder').fetchone()[0]
+        if existing == 0:
+            count = database.execute_sql(
+                'INSERT OR IGNORE INTO paperfolder (paper_id, folder_id) '
+                'SELECT id, folder_id FROM paper WHERE folder_id IS NOT NULL'
+            ).rowcount
+            if count > 0:
+                from .preferences import set_pref
+                set_pref('paperfolder_needs_full_sync', True)
 
     # Drop unique index on paperfile.hash (Zotero files start with empty hash)
     indexes = database.execute_sql("PRAGMA index_list('paperfile')").fetchall()

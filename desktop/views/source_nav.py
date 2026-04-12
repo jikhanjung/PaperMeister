@@ -1,13 +1,12 @@
 """Left navigation panel.
 
-Structure (v2):
-- Top: QTabWidget with one tab per Source. Currently only Zotero exists,
-  so there is a single "Zotero" tab.
-- Inside each tab: a single QTreeWidget that combines
-    1) flat library filters (All / Pending / Processed / Failed /
-       Needs Review / Recent) at the top, and
-    2) hierarchical folders (Zotero collections) below, under a
-       "Collections" separator node.
+Structure (v4):
+- Top: QTabWidget with one tab per Source ("My Library" for Zotero).
+- Inside each tab: two vertically stacked sections:
+    1) Collections tree (scrollable, takes remaining space)
+    2) STATUS panel — collapsible header + flat list of library filters
+       (All / Pending / Processed / etc.).  Always visible at the bottom;
+       clicking the header toggles the list.
 
 Selection emits `selection_changed(kind, id_or_key)` with kind one of:
     'library' — library filter key (str)
@@ -17,6 +16,7 @@ Selection emits `selection_changed(kind, id_or_key)` with kind one of:
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
+    QLabel,
     QTabWidget,
     QTreeWidget,
     QTreeWidgetItem,
@@ -27,6 +27,71 @@ from PyQt6.QtWidgets import (
 from desktop.services import library as library_svc
 from desktop.services import source_service
 from desktop.theme.tokens import COLORS_DARK
+
+
+class _StatusPanel(QWidget):
+    """Collapsible STATUS section pinned to the bottom of the nav.
+
+    Click the header to toggle the list.  Collapsed state shows only the
+    one-line header; expanded shows header + tree of filter items.
+    """
+
+    item_clicked = pyqtSignal(str, object)  # kind, value — forwarded to SourceNav
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        self._header = QLabel('  \u25bc  STATUS')
+        self._header.setFixedHeight(24)
+        self._header.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._header.setStyleSheet(
+            f'QLabel {{'
+            f'  color: {COLORS_DARK["text.muted"]};'
+            f'  font-size: 11px;'
+            f'  font-weight: 500;'
+            f'  background: {COLORS_DARK["bg.panel"]};'
+            f'  border-top: 1px solid {COLORS_DARK["border.subtle"]};'
+            f'  padding-left: 4px;'
+            f'}}'
+        )
+        self._header.mousePressEvent = self._toggle
+        layout.addWidget(self._header)
+
+        self._tree = QTreeWidget()
+        self._tree.setHeaderHidden(True)
+        self._tree.setRootIsDecorated(False)
+        self._tree.setIndentation(0)
+        self._tree.setFrameShape(QTreeWidget.Shape.NoFrame)
+        self._tree.setAnimated(False)
+        self._tree.itemClicked.connect(self._on_item_clicked)
+        layout.addWidget(self._tree, 1)
+
+        self._expanded = True
+
+    def populate(self):
+        self._tree.clear()
+        try:
+            folders = library_svc.load_library_folders()
+        except Exception:
+            folders = []
+        for folder in folders:
+            item = QTreeWidgetItem([f'  {folder.title}    {folder.count:,}'])
+            item.setData(0, Qt.ItemDataRole.UserRole, ('library', folder.key))
+            self._tree.addTopLevelItem(item)
+
+    def _toggle(self, _event=None):
+        self._expanded = not self._expanded
+        self._tree.setVisible(self._expanded)
+        arrow = '\u25bc' if self._expanded else '\u25b6'
+        self._header.setText(f'  {arrow}  STATUS')
+
+    def _on_item_clicked(self, item, _col):
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if data:
+            self.item_clicked.emit(*data)
 
 
 class SourceNav(QWidget):
@@ -44,7 +109,14 @@ class SourceNav(QWidget):
         self.tabs.setDocumentMode(True)
         layout.addWidget(self.tabs, 1)
 
-        # Map (tab index -> QTreeWidget) so we can rebuild individual tabs.
+        # STATUS panel — always visible, pinned below the tab content.
+        self._status_panel = _StatusPanel()
+        self._status_panel.item_clicked.connect(
+            lambda kind, val: self.selection_changed.emit(kind, val)
+        )
+        layout.addWidget(self._status_panel, 0)
+
+        # Map (tab index -> QTreeWidget) for reveal_folder lookups.
         self._trees: dict[int, QTreeWidget] = {}
 
         self.refresh()
@@ -77,48 +149,27 @@ class SourceNav(QWidget):
             sources = []
 
         if not sources:
-            # Fall back to a single empty tab so the panel isn't blank.
             tree = self._new_tree()
-            self._populate_library_section(tree)
             idx = self.tabs.addTab(tree, 'Library')
             self._trees[idx] = tree
             self.tabs.blockSignals(False)
+            self._status_panel.populate()
             return
 
         for src in sources:
             tree = self._new_tree()
-            self._populate_library_section(tree)
-            self._populate_collections_section(tree, src)
-            idx = self.tabs.addTab(tree, src.name)
+            self._populate_collections(tree, src)
+            tab_label = 'My Library' if src.source_type == 'zotero' else src.name
+            idx = self.tabs.addTab(tree, tab_label)
             self._trees[idx] = tree
 
         self.tabs.blockSignals(False)
+        self._status_panel.populate()
 
-    def _populate_library_section(self, tree: QTreeWidget):
-        """Flat library filters at the top of the tree."""
-        try:
-            folders = library_svc.load_library_folders()
-        except Exception:
-            folders = []
-        for folder in folders:
-            item = QTreeWidgetItem([f'{folder.title}    {folder.count:,}'])
-            item.setData(0, Qt.ItemDataRole.UserRole, ('library', folder.key))
-            tree.addTopLevelItem(item)
-
-    def _populate_collections_section(self, tree: QTreeWidget, src):
-        """Hierarchical folder (collection) tree below the library filters."""
-        # Separator / section header — non-clickable.
-        header = QTreeWidgetItem(['COLLECTIONS'])
-        header.setFlags(Qt.ItemFlag.ItemIsEnabled)
-        f = QFont(header.font(0))
-        f.setPointSize(max(f.pointSize() - 1, 8))
-        f.setWeight(QFont.Weight.Medium)
-        header.setFont(0, f)
-        header.setForeground(0, Qt.GlobalColor.gray)
-        tree.addTopLevelItem(header)
-
-        # Source root — clicking loads the whole source.
-        src_item = QTreeWidgetItem([src.name])
+    def _populate_collections(self, tree: QTreeWidget, src):
+        """Source root + hierarchical collections."""
+        root_label = 'My Library' if src.source_type == 'zotero' else src.name
+        src_item = QTreeWidgetItem([root_label])
         src_item.setData(0, Qt.ItemDataRole.UserRole, ('source', src.id))
         tree.addTopLevelItem(src_item)
 
@@ -132,6 +183,41 @@ class SourceNav(QWidget):
         parent.addChild(item)
         for child in folder.children:
             self._attach_folder(item, child)
+
+    # ── Reveal ───────────────────────────────────────────────
+
+    def reveal_folder(self, folder_id: int):
+        """Highlight a folder in the tree without emitting selection_changed.
+
+        Switches to the correct tab, expands ancestor nodes, scrolls to the
+        item and selects it visually — like Zotero's "Show in Library".
+        The paper list stays untouched because we don't fire selection_changed.
+        """
+        for tab_idx, tree in self._trees.items():
+            item = self._find_folder_item(tree.invisibleRootItem(), folder_id)
+            if item is not None:
+                self.tabs.setCurrentIndex(tab_idx)
+                parent = item.parent()
+                while parent is not None:
+                    parent.setExpanded(True)
+                    parent = parent.parent()
+                tree.scrollToItem(item)
+                tree.blockSignals(True)
+                tree.setCurrentItem(item)
+                tree.blockSignals(False)
+                return
+
+    def _find_folder_item(self, root: QTreeWidgetItem, folder_id: int):
+        """Recursive DFS to find the tree item for a given folder_id."""
+        for i in range(root.childCount()):
+            child = root.child(i)
+            data = child.data(0, Qt.ItemDataRole.UserRole)
+            if data and data == ('folder', folder_id):
+                return child
+            found = self._find_folder_item(child, folder_id)
+            if found is not None:
+                return found
+        return None
 
     # ── Events ───────────────────────────────────────────────
 

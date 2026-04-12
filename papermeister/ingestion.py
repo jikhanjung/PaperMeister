@@ -3,7 +3,7 @@ import os
 import shutil
 from pathlib import Path
 
-from .models import db, Source, Folder, Paper, Author, PaperFile
+from .models import db, Source, Folder, Paper, Author, PaperFile, PaperFolder
 
 
 def hash_file(filepath):
@@ -181,6 +181,120 @@ def _get_or_create_zotero_folder(source, collection):
     return folder
 
 
+def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=None):
+    """Process items from library-wide incremental fetch.
+
+    Creates/updates Papers, PaperFiles, and PaperFolders from items returned
+    by ZoteroClient.get_all_items(since=...).  Unlike the per-collection
+    fetch_zotero_collection_items(), this operates across all collections
+    at once and uses each item's `collections` array to build PaperFolder
+    membership.
+
+    Returns (new_count, updated_count).
+    """
+    new_count = 0
+    updated_count = 0
+
+    for i, item in enumerate(items):
+        if progress_callback:
+            progress_callback(f'[{i + 1}/{len(items)}] {item["title"][:60]}')
+
+        paper = Paper.select().where(Paper.zotero_key == item['key']).first()
+
+        if paper:
+            # Update metadata for existing paper.
+            changed = False
+            for field, val in [
+                ('title', item['title']),
+                ('date', item.get('date', '')),
+                ('year', item['year']),
+                ('journal', item.get('journal', '')),
+                ('doi', item.get('doi', '')),
+            ]:
+                if getattr(paper, field) != val:
+                    setattr(paper, field, val)
+                    changed = True
+            if changed:
+                paper.save()
+                updated_count += 1
+        else:
+            # Determine primary folder from first collection key.
+            primary_folder = None
+            for col_key in item.get('collections', []):
+                primary_folder = Folder.select().where(
+                    Folder.source == source, Folder.zotero_key == col_key,
+                ).first()
+                if primary_folder:
+                    break
+
+            with db.atomic():
+                paper = Paper.create(
+                    title=item['title'],
+                    date=item.get('date', ''),
+                    year=item['year'],
+                    journal=item.get('journal', ''),
+                    doi=item.get('doi', ''),
+                    folder=primary_folder,
+                    zotero_key=item['key'],
+                )
+                for order, author_name in enumerate(item['authors']):
+                    Author.create(paper=paper, name=author_name, order=order)
+            new_count += 1
+
+        # PaperFolder membership from collections array.
+        for col_key in item.get('collections', []):
+            folder = Folder.select().where(
+                Folder.source == source, Folder.zotero_key == col_key,
+            ).first()
+            if folder:
+                PaperFolder.get_or_create(paper=paper, folder=folder)
+
+        # PaperFiles for attachments.
+        for att in item.get('attachments', []):
+            existing_pf = PaperFile.select().where(
+                PaperFile.zotero_key == att['key'],
+            ).first()
+            if not existing_pf:
+                ct = att.get('content_type', '')
+                fname = att['filename']
+                is_derived = (
+                    ct == 'application/json' or fname.lower().endswith('.json')
+                )
+                PaperFile.create(
+                    paper=paper,
+                    path=fname,
+                    hash='',
+                    status='processed' if is_derived else 'pending',
+                    zotero_key=att['key'],
+                )
+
+    # Handle orphan attachments (parent not in this incremental batch).
+    if orphan_attachments:
+        for parent_key, atts in orphan_attachments.items():
+            paper = Paper.select().where(Paper.zotero_key == parent_key).first()
+            if not paper:
+                continue
+            for att in atts:
+                existing_pf = PaperFile.select().where(
+                    PaperFile.zotero_key == att['key'],
+                ).first()
+                if not existing_pf:
+                    ct = att.get('content_type', '')
+                    fname = att['filename']
+                    is_derived = (
+                        ct == 'application/json' or fname.lower().endswith('.json')
+                    )
+                    PaperFile.create(
+                        paper=paper,
+                        path=fname,
+                        hash='',
+                        status='processed' if is_derived else 'pending',
+                        zotero_key=att['key'],
+                    )
+
+    return new_count, updated_count
+
+
 def fetch_zotero_collection_items(zotero_client, source, folder, progress_callback=None):
     """Fetch items from a Zotero collection. Single API call.
 
@@ -230,6 +344,17 @@ def fetch_zotero_collection_items(zotero_client, source, folder, progress_callba
                 for order, author_name in enumerate(item['authors']):
                     Author.create(paper=paper, name=author_name, order=order)
             new_count += 1
+
+        # Record multi-collection membership via PaperFolder.
+        # Always register the current folder being synced.
+        PaperFolder.get_or_create(paper=paper, folder=folder)
+        # Also register any other collections the Zotero API reports.
+        for col_key in item.get('collections', []):
+            other_folder = Folder.select().where(
+                Folder.source == source, Folder.zotero_key == col_key,
+            ).first()
+            if other_folder and other_folder.id != folder.id:
+                PaperFolder.get_or_create(paper=paper, folder=other_folder)
 
         # Create PaperFile for each attachment (PDF, JSON, etc.)
         for att in item.get('attachments', []):

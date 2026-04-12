@@ -180,7 +180,10 @@ class DetailPanel(QWidget):
         add_row(2, 'Year',    str(d.year) if d.year is not None else '—', stub=d.year is None)
         add_row(3, 'Journal', d.journal, stub=not d.journal)
         add_row(4, 'DOI',     d.doi, stub=not d.doi)
-        add_row(5, 'Source',  f'{d.source_name} / {d.folder_name}' if d.folder_name else d.source_name)
+        add_row(5, 'Source',  d.source_name or '—')
+        if d.collections:
+            paths = '\n'.join(path for _, path in d.collections)
+            add_row(6, 'Collection', paths)
         layout.addLayout(grid)
         return frame
 
