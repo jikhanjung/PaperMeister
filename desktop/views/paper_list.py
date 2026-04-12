@@ -13,7 +13,7 @@ from desktop.services import paper_service
 from desktop.theme.tokens import COLORS_DARK, FONT, RADIUS
 
 
-COLUMNS = ['Status', 'Authors', 'Title', 'Year']
+COLUMNS = ['Status', 'Authors', 'Year', 'Title']
 
 
 _STATUS_STYLES: dict[str, tuple[QColor, QColor, str]] = {
@@ -110,12 +110,12 @@ class PaperListView(QTreeWidget):
         header = self.header()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)  # Status
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)  # Authors
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)      # Title (fills)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)  # Year
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)  # Year
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)      # Title (fills)
         header.setStretchLastSection(False)
         self.setColumnWidth(0, 60)   # Status (small)
-        self.setColumnWidth(1, 160)  # Authors (narrow)
-        self.setColumnWidth(3, 64)   # Year
+        self.setColumnWidth(1, 140)  # Authors (citation style, compact)
+        self.setColumnWidth(2, 52)   # Year
 
         self._pill_delegate = StatusPillDelegate(self)
         self.setItemDelegateForColumn(0, self._pill_delegate)
@@ -155,7 +155,7 @@ class PaperListView(QTreeWidget):
             return
         if not rows:
             self.clear()
-            item = QTreeWidgetItem(['', '', f'No results for "{query}"', ''])
+            item = QTreeWidgetItem(['', '', '', f'No results for "{query}"'])
             item.setFlags(Qt.ItemFlag.NoItemFlags)
             self.addTopLevelItem(item)
             return
@@ -175,20 +175,20 @@ class PaperListView(QTreeWidget):
             item = QTreeWidgetItem([
                 status_cell,
                 row.authors or '—',
-                title,
                 year,
+                title,
             ])
             item.setData(0, Qt.ItemDataRole.UserRole, row.paper_id)
             if row.folder_id is not None:
                 item.setData(0, Qt.ItemDataRole.UserRole + 1, row.folder_id)
             if row.is_stub:
-                font = item.font(2)
+                font = item.font(3)
                 font.setItalic(True)
-                item.setFont(2, font)
+                item.setFont(3, font)
             self.addTopLevelItem(item)
 
     def _show_error(self, msg: str):
-        item = QTreeWidgetItem(['', '', msg, ''])
+        item = QTreeWidgetItem(['', '', '', msg])
         item.setFlags(Qt.ItemFlag.NoItemFlags)
         self.clear()
         self.addTopLevelItem(item)

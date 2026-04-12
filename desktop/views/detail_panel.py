@@ -9,16 +9,19 @@ Tabs
 
 Stub banner sits above the tab bar so it is visible regardless of tab.
 """
-import json
-
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QButtonGroup,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
+    QPlainTextEdit,
     QPushButton,
+    QRadioButton,
     QScrollArea,
+    QSizePolicy,
     QTabWidget,
     QTextBrowser,
     QVBoxLayout,
@@ -108,6 +111,9 @@ class DetailPanel(QWidget):
         self._current_paper_id: int | None = None
         self._apply_task: BackgroundTask | None = None
         self._apply_btn: QPushButton | None = None
+        self._biblio_id: int | None = None
+        # field_key → (QButtonGroup, 'paper'|'biblio' default)
+        self._field_groups: dict[str, QButtonGroup] = {}
 
         self._empty_state()
 
@@ -221,42 +227,24 @@ class DetailPanel(QWidget):
             return _scroll_wrap(host)
 
         preview = biblio_service.preview_apply(d.paper_id)
-        layout.addWidget(self._build_biblio_card(d, preview))
+        self._biblio_id = preview.biblio_id
+        self._field_groups = {}
+        self._field_edits: dict[str, QLineEdit | QPlainTextEdit] = {}
+
+        layout.addWidget(self._build_comparison_card(preview))
         layout.addStretch(1)
         return _scroll_wrap(host)
 
-    def _build_biblio_card(self, d, preview) -> QFrame:
-        frame, layout = _card('EXTRACTED BIBLIO')
-        b = d.latest_biblio
-        meta = QLabel(
-            f"{b.get('source', '')}  ·  confidence: {b.get('confidence', '—')}  ·  "
-            f"doc_type: {b.get('doc_type', '—')}  ·  status: {preview.biblio_status}"
-        )
-        meta.setProperty('class', 'FieldLabel')
-        layout.addWidget(meta)
+    # ── Comparison card internals ────────────────────────────
 
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(SPACING['lg'])
-        grid.setVerticalSpacing(SPACING['sm'])
-        grid.setColumnStretch(1, 1)
+    def _build_comparison_card(self, preview) -> QFrame:
+        frame, layout = _card('BIBLIO COMPARISON')
 
-        try:
-            authors_list = json.loads(b.get('authors_json') or '[]')
-        except Exception:
-            authors_list = []
-        authors_str = ', '.join(a.get('name', '') if isinstance(a, dict) else str(a)
-                                 for a in authors_list)
-
-        def add_row(r, label, value):
-            grid.addWidget(_field_label(label), r, 0, Qt.AlignmentFlag.AlignTop)
-            grid.addWidget(_field_value(value or '—'), r, 1)
-
-        add_row(0, 'Title',   b.get('title') or '')
-        add_row(1, 'Authors', authors_str)
-        add_row(2, 'Year',    str(b.get('year')) if b.get('year') else '')
-        add_row(3, 'Journal', b.get('journal') or '')
-        add_row(4, 'DOI',     b.get('doi') or '')
-        layout.addLayout(grid)
+        # Source metadata line
+        if preview.source_line:
+            meta = QLabel(preview.source_line)
+            meta.setProperty('class', 'FieldLabel')
+            layout.addWidget(meta)
 
         # Decision line
         decision_label = QLabel(self._decision_line(preview))
@@ -264,6 +252,77 @@ class DetailPanel(QWidget):
         decision_label.setWordWrap(True)
         layout.addWidget(decision_label)
 
+        has_selectable = any(
+            diff.kind in ('conflict', 'fill') for diff in preview.diffs
+        )
+        interactive = has_selectable and preview.button_enabled
+
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(SPACING['lg'])
+        grid.setVerticalSpacing(SPACING['md'])
+        grid.setColumnStretch(1, 1)
+        grid.setColumnStretch(2, 1)
+
+        # Header
+        hdr_paper = QLabel('Current (Zotero)')
+        hdr_paper.setProperty('class', 'FieldLabel')
+        grid.addWidget(hdr_paper, 0, 1)
+        hdr_biblio = QLabel('Extracted (Biblio)')
+        hdr_biblio.setProperty('class', 'FieldLabel')
+        grid.addWidget(hdr_biblio, 0, 2)
+
+        for row, diff in enumerate(preview.diffs, start=1):
+            grid.addWidget(
+                _field_label(diff.label), row, 0, Qt.AlignmentFlag.AlignTop,
+            )
+
+            if diff.kind == 'match':
+                val = QLabel(diff.paper_value or '—')
+                val.setWordWrap(True)
+                val.setProperty('class', 'FieldValue')
+                grid.addWidget(val, row, 1, 1, 2)
+            elif interactive:
+                group = QButtonGroup(frame)
+                self._field_groups[diff.field_key] = group
+
+                paper_cell = self._build_radio_cell(
+                    diff.field_key, diff.paper_value, group,
+                    radio_id=0, editable=False,
+                    css_class='FieldValueStub' if diff.kind == 'fill' else 'FieldValue',
+                )
+                biblio_cell = self._build_radio_cell(
+                    diff.field_key, diff.biblio_value, group,
+                    radio_id=1, editable=True,
+                    css_class='ConflictValue' if diff.kind == 'conflict' else 'FillValue',
+                )
+                # Default: keep paper for conflicts, take biblio for fills
+                if diff.kind == 'fill':
+                    group.button(1).setChecked(True)
+                else:
+                    group.button(0).setChecked(True)
+
+                grid.addWidget(paper_cell, row, 1)
+                grid.addWidget(biblio_cell, row, 2)
+            else:
+                # Read-only diff (already applied / skip)
+                paper_lbl = QLabel(diff.paper_value or '(empty)')
+                paper_lbl.setWordWrap(True)
+                paper_lbl.setProperty(
+                    'class',
+                    'FieldValueStub' if diff.kind == 'fill' else 'FieldValue',
+                )
+                biblio_lbl = QLabel(diff.biblio_value or '(empty)')
+                biblio_lbl.setWordWrap(True)
+                biblio_lbl.setProperty(
+                    'class',
+                    'ConflictValue' if diff.kind == 'conflict' else 'FillValue',
+                )
+                grid.addWidget(paper_lbl, row, 1)
+                grid.addWidget(biblio_lbl, row, 2)
+
+        layout.addLayout(grid)
+
+        # Apply button
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
         apply_btn = QPushButton(preview.button_label)
@@ -278,7 +337,98 @@ class DetailPanel(QWidget):
         self._apply_btn = apply_btn
         btn_row.addWidget(apply_btn)
         layout.addLayout(btn_row)
+
         return frame
+
+    def _build_radio_cell(
+        self,
+        field_key: str,
+        value: str,
+        group: QButtonGroup,
+        *,
+        radio_id: int,
+        editable: bool,
+        css_class: str,
+    ) -> QWidget:
+        """Build one cell: [RadioButton] [value widget] [× clear button].
+
+        Paper side (radio_id=0): read-only QLabel.
+        Biblio side (radio_id=1): editable QLineEdit / QPlainTextEdit + × button.
+        """
+        cell = QWidget()
+        _TEXTAREA_FIELDS = {'title', 'authors', 'journal'}
+        use_textarea = field_key in _TEXTAREA_FIELDS
+
+        if use_textarea:
+            # Vertical: radio + × on top, text area below
+            outer = QVBoxLayout(cell)
+            outer.setContentsMargins(0, 0, 0, 0)
+            outer.setSpacing(SPACING['xs'])
+
+            radio_row = QHBoxLayout()
+            radio_row.setContentsMargins(0, 0, 0, 0)
+            radio = QRadioButton()
+            group.addButton(radio, radio_id)
+            radio_row.addWidget(radio)
+            radio_row.addStretch(1)
+
+            if editable:
+                clear_btn = self._make_clear_button()
+                radio_row.addWidget(clear_btn)
+
+            outer.addLayout(radio_row)
+
+            if editable:
+                edit = QPlainTextEdit()
+                edit.setPlainText(value)
+                line_count = max(value.count('\n') + 1, 2)
+                edit.setFixedHeight(line_count * 20 + 12)
+                edit.setProperty('class', css_class)
+                self._field_edits[field_key] = edit
+                clear_btn.clicked.connect(lambda: edit.setPlainText(''))
+                outer.addWidget(edit)
+            else:
+                lbl = QLabel(value or '(empty)')
+                lbl.setWordWrap(True)
+                lbl.setProperty('class', css_class)
+                outer.addWidget(lbl)
+        else:
+            # Single row: [radio] [value] [×]
+            row_lay = QHBoxLayout(cell)
+            row_lay.setContentsMargins(0, 0, 0, 0)
+            row_lay.setSpacing(SPACING['xs'])
+
+            radio = QRadioButton()
+            group.addButton(radio, radio_id)
+            row_lay.addWidget(radio)
+
+            if editable:
+                edit = QLineEdit(value)
+                edit.setProperty('class', css_class)
+                self._field_edits[field_key] = edit
+                row_lay.addWidget(edit, 1)
+                clear_btn = self._make_clear_button()
+                clear_btn.clicked.connect(lambda: edit.clear())
+                row_lay.addWidget(clear_btn)
+            else:
+                lbl = QLabel(value or '(empty)')
+                lbl.setWordWrap(True)
+                lbl.setProperty('class', css_class)
+                lbl.setSizePolicy(
+                    QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred,
+                )
+                row_lay.addWidget(lbl, 1)
+
+        return cell
+
+    @staticmethod
+    def _make_clear_button() -> QPushButton:
+        btn = QPushButton('×')
+        btn.setFixedSize(20, 20)
+        btn.setProperty('class', 'ClearBtn')
+        btn.setToolTip('Clear')
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        return btn
 
     def _decision_line(self, preview) -> str:
         if preview.decision_action == 'auto_commit':
@@ -287,29 +437,62 @@ class DetailPanel(QWidget):
             return f'Decision: needs review — {preview.decision_reason}'
         return f'Decision: skip — {preview.decision_reason}'
 
+    def _collect_values(self) -> dict[str, str | None]:
+        """Collect per-field values from radio + edit widgets.
+
+        Returns {field_key: new_value} for biblio-selected fields,
+        or {field_key: None} for paper-selected fields (keep current).
+        """
+        result: dict[str, str | None] = {}
+        for field_key, group in self._field_groups.items():
+            if group.checkedId() == 1:  # biblio selected
+                edit = self._field_edits.get(field_key)
+                if edit is None:
+                    result[field_key] = None
+                elif isinstance(edit, QPlainTextEdit):
+                    result[field_key] = edit.toPlainText()
+                else:
+                    result[field_key] = edit.text()
+            else:
+                result[field_key] = None  # keep paper value
+        return result
+
     def _on_apply_clicked(self):
         if self._current_paper_id is None or self._apply_btn is None:
             return
         self._apply_btn.setEnabled(False)
         self._apply_btn.setText('Applying…')
-        task = BackgroundTask(biblio_service.apply_paper, self._current_paper_id)
+
+        if self._field_groups and self._biblio_id is not None:
+            values = self._collect_values()
+            task = BackgroundTask(
+                biblio_service.apply_merged,
+                self._current_paper_id,
+                self._biblio_id,
+                values,
+            )
+        else:
+            task = BackgroundTask(
+                biblio_service.apply_paper, self._current_paper_id,
+            )
         task.done.connect(self._on_apply_done)
         task.failed.connect(self._on_apply_failed)
         self._apply_task = task
         task.start()
 
     def _on_apply_done(self, result):
-        action, changed, reason = result
         pid = self._current_paper_id
+        if isinstance(result, tuple) and len(result) == 3:
+            _, changed, _ = result
+        else:
+            changed = result[0] if isinstance(result, tuple) else False
+
         if self._apply_btn is not None:
-            if changed:
-                self._apply_btn.setText('Applied')
-            else:
-                self._apply_btn.setText('No change')
+            self._apply_btn.setText('Applied' if changed else 'No change')
             self._apply_btn.setEnabled(False)
         if pid is not None:
+            action = 'applied' if changed else 'noop'
             self.apply_completed.emit(pid, changed, action)
-            # Refresh the panel to show updated Paper values.
             self.show_paper(pid)
 
     def _on_apply_failed(self, message: str):

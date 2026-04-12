@@ -20,15 +20,17 @@
 - **새 desktop 앱** (`python -m desktop`, Windows + Anaconda):
   - 좌측 Rail (Library/Search 모드 + **Sync**/Process/Settings 액션)
   - **SourceNav 2-section**: 상단 Collections tree + 하단 STATUS 패널 (접기/펴기, 항상 하단 고정)
-  - 중앙 PaperList (Status/Authors/Title/Year 컬럼) — **Ctrl+click → SourceNav에서 컬렉션 reveal**
-  - 우측 DetailPanel — **탭 3개**: Metadata (Collection 경로 표시) / Biblio(Apply 버튼 포함) / **OCR (markdown 렌더링, sanitized)**
+  - 중앙 PaperList (Status/Authors/Year/Title 컬럼, **인용 스타일 저자**: `Smith et al.` / `정직한 외`) — **Ctrl+click → SourceNav에서 컬렉션 reveal**
+  - 우측 DetailPanel — **탭 3개**: Metadata / **Biblio (대조 비교 UI — 라디오 선택 + 편집 + Apply)** / **OCR (markdown 렌더링, sanitized)**
   - **상단 검색창 동작** (Enter로 FTS5 검색, Clear로 이전 뷰 복원, Nav 클릭으로 검색 취소)
   - **Zotero incremental sync** (시작 시 자동 + Sync 버튼 + 우클릭 Full Sync, progress 표시 + 아이콘 pulse 애니메이션)
   - **PaperFolder** M2M junction table — Zotero multi-collection membership 지원
 
 ### 진행 중인 것
 - **Phase 4 (hookup)**:
-  - Apply Biblio 백엔드 연결됨. 실제 클릭 end-to-end 실증은 아직 (쉘은 떠 있음)
+  - **Apply Biblio 대조 비교 UI 완성** (세션 14): 필드별 라디오 선택 + 편집 가능 + apply_merged() 연결. NameError 버그 수정됨
+  - **Zotero 저자 이름 형식 수정** (세션 14): `"Last First"` → `"Last, First"` 쉼표 구분. DB 마이그레이션 완료 (20k+건). biblio-applied 저자 복원 완료
+  - **P08 evaluate `already_complete`** (세션 14): 모든 필드 동일한 curated paper는 `skip` 처리 → needs_review에서 제외
   - Process 액션: Rail → ProcessWindow 연결 완료. 실제 pending 논문 OCR 트리거 검증 미완
   - Settings 액션: Rail → PreferencesDialog 연결 완료. **저장 후 Zotero 재동기화 연결됨 (세션 13)**
   - batch Reflect 트리거 UI / background worker / StatusBadge delegate — 미완
@@ -43,7 +45,7 @@
 ## 다음 할 일
 
 ### 즉시 착수 가능 (Phase 4 hookup)
-- [ ] **Apply Biblio 버튼 클릭 실증** — 백엔드는 검증됨. Needs Review 필터에서 논문 선택 → Biblio 탭 → Apply 눌러서 Zotero write-back까지 가는지 실제로 클릭
+- [ ] **Apply Biblio Zotero write-back 실증** — 로컬 apply_merged는 동작 확인됨. Zotero-sourced paper에서 Apply 후 Zotero 쪽까지 반영되는지 확인 필요
 - [ ] **Process 액션 end-to-end 검증** — pending 논문이 있는 상태에서 Rail의 Process 버튼 → 확인 다이얼로그 → `ProcessWindow`가 실제 OCR 돌리는지 + status bar 카운트가 갱신되는지
 - [ ] **Settings 액션 실증** — Rail의 Settings 버튼 → PreferencesDialog → 값 저장 후 Zotero 재동기화 실증 (코드 연결됨, 미검증)
 - [ ] desktop: source/folder 단위 batch Reflect 트리거 + 결과 다이얼로그

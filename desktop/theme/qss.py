@@ -257,6 +257,65 @@ QLabel.FieldValueStub {{
     font-size: {FONT['size.md']}px;
     font-style: italic;
 }}
+QLabel.ConflictValue {{
+    color: {c['status.warn']};
+    font-size: {FONT['size.md']}px;
+}}
+QLabel.FillValue {{
+    color: {c['status.ok']};
+    font-size: {FONT['size.md']}px;
+}}
+
+/* ── Biblio comparison radio buttons ─────────────────────── */
+QRadioButton {{
+    color: {c['text.muted']};
+    spacing: 4px;
+}}
+QRadioButton::indicator {{
+    width: 14px;
+    height: 14px;
+    border: 2px solid {c['border.strong']};
+    border-radius: 9px;
+    background: transparent;
+}}
+QRadioButton::indicator:checked {{
+    border-color: {c['status.ok']};
+    background: {c['status.ok']};
+}}
+
+/* ── Biblio comparison editable cells ────────────────────── */
+QLineEdit.ConflictValue, QPlainTextEdit.ConflictValue {{
+    background-color: {c['bg.elevated']};
+    color: {c['status.warn']};
+    border: 1px solid {c['border.default']};
+    border-radius: {RADIUS['sm']}px;
+    padding: 3px 6px;
+    font-size: {FONT['size.md']}px;
+}}
+QLineEdit.FillValue, QPlainTextEdit.FillValue {{
+    background-color: {c['bg.elevated']};
+    color: {c['status.ok']};
+    border: 1px solid {c['border.default']};
+    border-radius: {RADIUS['sm']}px;
+    padding: 3px 6px;
+    font-size: {FONT['size.md']}px;
+}}
+QLineEdit.ConflictValue:focus, QPlainTextEdit.ConflictValue:focus,
+QLineEdit.FillValue:focus, QPlainTextEdit.FillValue:focus {{
+    border-color: {c['accent.primary']};
+}}
+QPushButton.ClearBtn {{
+    background: transparent;
+    border: none;
+    color: {c['text.muted']};
+    font-size: {FONT['size.lg']}px;
+    font-weight: {FONT['weight.bold']};
+    padding: 0;
+}}
+QPushButton.ClearBtn:hover {{
+    color: {c['status.error']};
+}}
+
 QLabel.StubBanner {{
     background-color: {c['accent.muted']};
     color: {c['accent.hover']};

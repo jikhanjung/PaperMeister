@@ -52,8 +52,8 @@ python cli.py --help     # CLI 도움말
 ### 레이아웃
 ```
 ┌─[Rail]─┬──[Zotero 탭]──────┬──[논문 목록]──┬──[Metadata|Biblio|OCR]─┐
-│ 📚     │ All Files   9,783 │ Status Auth … │ 탭별 독립 스크롤        │
-│ 🔍     │ Pending     7,481 │ done  Smith … │                        │
+│ 📚     │ All Files   9,783 │ Status Auth Yr … │ 탭별 독립 스크롤     │
+│ 🔍     │ Pending     7,481 │ done  Smith… │                        │
 │  ⋮     │ Processed   4,494 │ ...           │                        │
 │ ⚙      │ Needs Rev      31 │               │                        │
 │ ⋯      │ ── COLLECTIONS ── │               │                        │
@@ -72,7 +72,7 @@ python cli.py --help     # CLI 도움말
 1. 좌측 Zotero 탭에서 Library 필터 또는 컬렉션 클릭 → 중앙 목록 로드
 2. 목록에서 논문 클릭 → 우측 상세 패널에 **Metadata / Biblio / OCR** 탭 표시
 3. OCR 탭은 processed 논문에서 sanitized markdown으로 본문 렌더
-4. Biblio 탭은 `PaperBiblio`가 있을 때만 카드 + Apply 버튼 표시 (없으면 empty state)
+4. Biblio 탭은 Paper(Zotero) vs PaperBiblio(추출) 대조 비교 + 필드별 라디오 선택/편집 + Apply
 
 ### 검색
 - 상단 검색창에 쿼리 + Enter → BM25 랭킹으로 최대 200편 논문

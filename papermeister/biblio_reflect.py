@@ -203,6 +203,23 @@ def evaluate(biblio: PaperBiblio, paper: Paper) -> Decision:
 
     if any_fill:
         return Decision('auto_commit', '', biblio.id)
+
+    # No empty slots — check if biblio actually differs from Paper.
+    # If all values match, there's nothing to review.
+    existing_names = [
+        a.name for a in
+        Author.select(Author.name).where(Author.paper == paper).order_by(Author.order)
+    ]
+    all_match = (
+        (biblio.title or '').strip() == (paper.title or '').strip()
+        and biblio.year == paper.year
+        and (biblio.journal or '').strip() == (paper.journal or '').strip()
+        and (biblio.doi or '').strip() == (paper.doi or '').strip()
+        and authors == existing_names
+    )
+    if all_match:
+        return Decision('skip', 'already_complete', biblio.id)
+
     return Decision('needs_review', 'override_conflict', biblio.id)
 
 

@@ -82,6 +82,8 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
   - Standalone promote: `scripts/promote_standalone.py` (confidence=high만 자동)
   - In-place update: `scripts/update_promoted_items.py` (itemType 변경 시 template 재생성)
 - CJK 저자 이름 분리: 4글자→2/2(일본), 3글자→1/2(한국)
+- **저자 이름 저장 형식**: Zotero에서 `firstName`/`lastName` 분리 제공 시 `"Last, First"` (쉼표 구분)로 저장. biblio apply로 들어온 이름은 `"First Last"` (공백). 양쪽 모두 `split_author_name()`이 정확히 파싱. 레거시 `"Last First"` (쉼표 없음) 데이터는 `database.py` 마이그레이션으로 일괄 변환 완료
+- **P08 evaluate `already_complete`**: curated paper에서 빈 슬롯이 없고, 모든 필드가 biblio와 동일하면 `skip/already_complete` → needs_review에서 제외
 
 ## Desktop 앱 구조 (`desktop/`)
 
@@ -96,6 +98,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 - **Rail** (좌측 아이콘 바): Library/Search는 **checkable 모드** → `section_changed` 시그널, Process/Settings는 **one-shot 액션** → `action_triggered` 시그널. Process/Settings는 **동결된 `papermeister/ui/process_window.ProcessWindow` / `preferences_dialog.PreferencesDialog`를 재사용**
 - **SourceNav**: `QTabWidget` — 각 Source마다 탭 하나 (현재 Zotero 하나). 각 탭 내부는 단일 트리에 상단=Library 필터, 하단=hierarchical 컬렉션
 - **DetailPanel**: `QWidget` (not QScrollArea) + 내부 `QTabWidget#DetailTabs`. 탭 3개 — **Metadata / Biblio / OCR**. 각 탭 독립 스크롤, 논문 전환 시 직전 탭 복원. Stub 배너는 탭바 위에 고정
+- **Biblio 탭 대조 비교 UI**: Paper(Zotero) vs PaperBiblio(추출) 필드별 비교 테이블. diff가 있는 행에 라디오 버튼(Paper/Biblio 선택) + 편집 가능한 입력 필드(QPlainTextEdit: Title/Authors/Journal, QLineEdit: Year/DOI) + × 클리어 버튼. Apply 시 `apply_merged()`로 선택/편집된 값 반영. 저자는 한 줄 한 명, "Lastname, Firstname" 형식
 - **OCR 탭**: `papermeister.biblio.load_ocr_pages()`로 `~/.papermeister/ocr_json/{hash}.json` 페치 → `_sanitize_ocr_markdown()` 적용 → `QTextBrowser.setMarkdown()` 렌더
   - **Sanitizer 필수**: Chandra2 원본을 그대로 `setMarkdown()`에 넘기면 `-qt-list-indent` 누적으로 "텍스트가 계속 오른쪽으로 밀리는" 버그. 원인은 (a) 4+ leading space → indented code block, (b) 줄 시작 `숫자.` → ordered list, (c) 레퍼런스의 바 볼륨 번호(`88.`, `158.`) → 빈 OL이 인접하면 Qt가 nested로 해석해서 indent가 누적. Sanitizer가 모든 줄 `lstrip()` + `^(\d+)\.` regex를 backslash escape로 차단
 - **SVG 아이콘**: `desktop/theme/icons/*.svg`는 `stroke="currentColor"`로 작성하고 `icons.rail_icon()` 헬퍼가 런타임에 색을 치환해서 3-state QIcon(idle/checked/hover) 생성. 다크/라이트 테마 스왑도 같은 메커니즘으로 확장 가능

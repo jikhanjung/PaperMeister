@@ -217,6 +217,19 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
             if changed:
                 paper.save()
                 updated_count += 1
+            # Refresh authors (fixes legacy "Last First" → "Last, First").
+            new_authors = item.get('authors', [])
+            existing_names = [
+                a.name for a in
+                Author.select(Author.name)
+                .where(Author.paper == paper)
+                .order_by(Author.order)
+            ]
+            if new_authors != existing_names:
+                with db.atomic():
+                    Author.delete().where(Author.paper == paper).execute()
+                    for order, author_name in enumerate(new_authors):
+                        Author.create(paper=paper, name=author_name, order=order)
         else:
             # Determine primary folder from first collection key.
             primary_folder = None
@@ -330,6 +343,19 @@ def fetch_zotero_collection_items(zotero_client, source, folder, progress_callba
 
         if existing_by_key:
             paper = existing_by_key
+            # Refresh authors from Zotero (fixes legacy "Last First" → "Last, First").
+            new_authors = item.get('authors', [])
+            existing_names = [
+                a.name for a in
+                Author.select(Author.name)
+                .where(Author.paper == paper)
+                .order_by(Author.order)
+            ]
+            if new_authors != existing_names:
+                with db.atomic():
+                    Author.delete().where(Author.paper == paper).execute()
+                    for order, author_name in enumerate(new_authors):
+                        Author.create(paper=paper, name=author_name, order=order)
         else:
             with db.atomic():
                 paper = Paper.create(

@@ -37,6 +37,51 @@ def _author_string(paper_id: int) -> str:
     return ', '.join(names)
 
 
+def _is_cjk_name(name: str) -> bool:
+    """True if the name is predominantly CJK characters (Korean/Japanese/Chinese)."""
+    from desktop.services.biblio_service import _is_cjk_char
+    cjk_count = sum(1 for c in name if _is_cjk_char(c))
+    alpha_count = sum(1 for c in name if c.isalpha())
+    return alpha_count > 0 and cjk_count > alpha_count / 2
+
+
+def _cite_name(full_name: str) -> str:
+    """Display name for citation: full name for CJK, lastname for Western."""
+    if _is_cjk_name(full_name):
+        return full_name.strip()
+    from desktop.services.biblio_service import split_author_name
+    _first, last = split_author_name(full_name)
+    return last
+
+
+def _author_cite(paper_id: int) -> str:
+    """Citation-style author string.
+
+    CJK names use full name + Korean conjunctions:
+      1: 정직한,  2: 정직한과 최덕근,  3+: 정직한 외
+    Western names use lastname + English conjunctions:
+      1: Smith,  2: Smith and Kim,  3+: Smith et al.
+    Mixed: follows the first author's locale.
+    """
+    authors = (
+        Author.select(Author.name)
+        .where(Author.paper == paper_id)
+        .order_by(Author.order)
+    )
+    names = [a.name for a in authors]
+    if not names:
+        return ''
+    cites = [_cite_name(n) for n in names]
+    cjk = _is_cjk_name(names[0])
+    if len(cites) == 1:
+        return cites[0]
+    if len(cites) == 2:
+        conj = '과 ' if cjk else ' and '
+        return f'{cites[0]}{conj}{cites[1]}'
+    suffix = ' 외' if cjk else ' et al.'
+    return f'{cites[0]}{suffix}'
+
+
 def _is_stub(paper: Paper) -> bool:
     return (
         (paper.title or '').strip() == '' or
@@ -56,7 +101,7 @@ def _row_from_paper(paper: Paper, source_name: str) -> PaperRow:
         paper_id=paper.id,
         file_id=pfile.id if pfile else None,
         title=display_title,
-        authors=_author_string(paper.id),
+        authors=_author_cite(paper.id),
         year=paper.year,
         journal=paper.journal or '',
         source_name=source_name,

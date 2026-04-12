@@ -117,7 +117,14 @@ class ZoteroClient:
         authors = []
         for c in creators:
             if c.get('creatorType') == 'author':
-                name = c.get('name') or f"{c.get('lastName', '')} {c.get('firstName', '')}".strip()
+                # Single-field 'name' (e.g. institutional authors) is used as-is.
+                # When firstName/lastName are separate, store as "Last, First"
+                # so split_author_name() can parse unambiguously.
+                name = c.get('name', '').strip()
+                if not name:
+                    last = c.get('lastName', '').strip()
+                    first = c.get('firstName', '').strip()
+                    name = f'{last}, {first}' if first and last else (last or first)
                 if name:
                     authors.append(name)
 

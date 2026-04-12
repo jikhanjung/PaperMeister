@@ -68,6 +68,26 @@ def _migrate(database):
                 from .preferences import set_pref
                 set_pref('paperfolder_needs_full_sync', True)
 
+    # One-time fix: Zotero author names were stored as "Last First" (no comma).
+    # Convert to "Last, First" so split_author_name() can parse unambiguously.
+    # Only touches Zotero-sourced papers (zotero_key != '').
+    from .preferences import get_pref, set_pref
+    if not get_pref('author_comma_migrated', False):
+        rows = database.execute_sql(
+            "SELECT a.id, a.name FROM author a "
+            "JOIN paper p ON a.paper_id = p.id "
+            "WHERE p.zotero_key != '' AND a.name NOT LIKE '%,%'"
+        ).fetchall()
+        for author_id, name in rows:
+            parts = name.split(' ', 1)
+            if len(parts) == 2 and parts[1]:
+                new_name = f'{parts[0]}, {parts[1]}'
+                database.execute_sql(
+                    'UPDATE author SET name = ? WHERE id = ?',
+                    (new_name, author_id),
+                )
+        set_pref('author_comma_migrated', True)
+
     # Drop unique index on paperfile.hash (Zotero files start with empty hash)
     indexes = database.execute_sql("PRAGMA index_list('paperfile')").fetchall()
     for idx in indexes:

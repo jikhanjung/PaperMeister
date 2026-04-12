@@ -24,7 +24,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('PaperMeister')
-        self.resize(1300, 820)
+        self.resize(1500, 900)
         self.setMinimumSize(LAYOUT['window.min.width'], LAYOUT['window.min.height'])
 
         root = QWidget()
