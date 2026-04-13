@@ -192,7 +192,7 @@ class ZoteroClient:
                 else:
                     if content_type == 'application/pdf':
                         standalone_pdfs.append(data)
-            elif item_type != 'note':
+            elif item_type not in ('note', 'annotation'):
                 parent_items[data['key']] = it
 
         orphan_parent_keys = set(attachments_by_parent) - set(parent_items)

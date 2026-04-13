@@ -89,13 +89,28 @@ def _is_stub(paper: Paper) -> bool:
     ) and Author.select().where(Author.paper == paper).count() == 0
 
 
+def _primary_file(paper) -> PaperFile | None:
+    """Return the best PaperFile for a paper, preferring PDFs over JSON."""
+    files = list(PaperFile.select().where(PaperFile.paper == paper).order_by(PaperFile.id))
+    if not files:
+        return None
+    for f in files:
+        if not f.path.lower().endswith('.json'):
+            return f
+    return files[0]  # all JSON — return first
+
+
 def _row_from_paper(paper: Paper, source_name: str) -> PaperRow:
-    pfile = (
-        PaperFile.select()
-        .where(PaperFile.paper == paper)
-        .order_by(PaperFile.id)
-        .first()
-    )
+    pfile = _primary_file(paper)
+    file_status = pfile.status if pfile else 'none'
+    if file_status == 'processed':
+        has_applied = (
+            PaperBiblio.select()
+            .where(PaperBiblio.paper == paper, PaperBiblio.status == 'applied')
+            .exists()
+        )
+        if has_applied:
+            file_status = 'done'
     display_title = paper.title or '(untitled)'
     return PaperRow(
         paper_id=paper.id,
@@ -106,7 +121,7 @@ def _row_from_paper(paper: Paper, source_name: str) -> PaperRow:
         journal=paper.journal or '',
         source_name=source_name,
         folder_id=paper.folder_id,
-        status=(pfile.status if pfile else 'none'),
+        status=file_status,
         is_stub=_is_stub(paper),
     )
 
@@ -228,6 +243,7 @@ class PaperDetail:
     file_path: str
     file_status: str
     file_hash: str
+    file_zotero_key: str
     is_stub: bool
     latest_biblio: dict | None  # flattened PaperBiblio or None
     ocr_preview: str | None
@@ -266,15 +282,11 @@ def load_detail(paper_id: int) -> PaperDetail | None:
             cursor = cursor.parent
         path_parts.reverse()
         collections.append((folder.id, ' \u203a '.join(path_parts)))
-    pfile = (
-        PaperFile.select()
-        .where(PaperFile.paper == paper)
-        .order_by(PaperFile.id)
-        .first()
-    )
+    pfile = _primary_file(paper)
     file_path = pfile.path if pfile else ''
     file_status = pfile.status if pfile else 'none'
     file_hash = pfile.hash if pfile else ''
+    file_zotero_key = pfile.zotero_key if pfile else ''
 
     latest = (
         PaperBiblio.select()
@@ -311,6 +323,7 @@ def load_detail(paper_id: int) -> PaperDetail | None:
         file_path=file_path,
         file_status=file_status,
         file_hash=file_hash,
+        file_zotero_key=file_zotero_key,
         is_stub=_is_stub(paper),
         latest_biblio=biblio_dict,
         ocr_preview=None,  # Phase 4: read from ocr_json cache

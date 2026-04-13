@@ -66,7 +66,7 @@ LAYOUT = {
     'detail.default':     540,
     'topbar.height':      48,
     'statusbar.height':   24,
-    'row.height':         32,
+    'row.height':         26,
     'window.min.width':   1280,
     'window.min.height':  760,
 }

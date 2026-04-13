@@ -181,7 +181,8 @@ def _get_or_create_zotero_folder(source, collection):
     return folder
 
 
-def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=None):
+def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=None,
+                      zotero_client=None):
     """Process items from library-wide incremental fetch.
 
     Creates/updates Papers, PaperFiles, and PaperFolders from items returned
@@ -189,6 +190,10 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
     fetch_zotero_collection_items(), this operates across all collections
     at once and uses each item's `collections` array to build PaperFolder
     membership.
+
+    If zotero_client is provided and a paper has no attachments in this batch,
+    children are fetched from the API to pick up attachments not included in
+    incremental syncs.
 
     Returns (new_count, updated_count).
     """
@@ -263,7 +268,28 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
                 PaperFolder.get_or_create(paper=paper, folder=folder)
 
         # PaperFiles for attachments.
-        for att in item.get('attachments', []):
+        attachments = item.get('attachments', [])
+
+        # Incremental sync may omit unchanged attachments. If a paper has
+        # no attachments in this batch AND no PaperFiles in DB, fetch
+        # children from the Zotero API to pick them up.
+        if not attachments and zotero_client is not None:
+            has_files = PaperFile.select().where(PaperFile.paper == paper).exists()
+            if not has_files:
+                try:
+                    children = zotero_client._zot.children(item['key'])
+                    for child in children:
+                        cdata = child.get('data', {})
+                        if cdata.get('itemType') == 'attachment':
+                            attachments.append({
+                                'key': cdata['key'],
+                                'filename': cdata.get('filename', cdata['key']),
+                                'content_type': cdata.get('contentType', ''),
+                            })
+                except Exception:
+                    pass  # network error — skip, next sync will retry
+
+        for att in attachments:
             existing_pf = PaperFile.select().where(
                 PaperFile.zotero_key == att['key'],
             ).first()
@@ -325,6 +351,10 @@ def fetch_zotero_collection_items(zotero_client, source, folder, progress_callba
             progress_callback(f'[{i + 1}/{len(items)}] {item["title"][:60]}')
 
         # Dedup: check by zotero parent item key first, then fall back to title
+        # (title fallback only matches papers without a zotero_key — legacy
+        # records from before Zotero sync was added.  Papers that already
+        # have a different zotero_key are distinct Zotero items even if the
+        # title happens to be the same.)
         existing_by_key = (
             Paper.select()
             .where(Paper.zotero_key == item['key'])
@@ -333,10 +363,14 @@ def fetch_zotero_collection_items(zotero_client, source, folder, progress_callba
         if not existing_by_key:
             existing_by_key = (
                 Paper.select()
-                .where(Paper.folder == folder, Paper.title == item['title'])
+                .where(
+                    Paper.folder == folder,
+                    Paper.title == item['title'],
+                    Paper.zotero_key == '',
+                )
                 .first()
             )
-            if existing_by_key and not existing_by_key.zotero_key:
+            if existing_by_key:
                 # Backfill zotero_key for legacy records
                 existing_by_key.zotero_key = item['key']
                 existing_by_key.save()

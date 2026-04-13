@@ -209,9 +209,10 @@ QTreeView::branch:open:has-children:has-siblings  {{
     border: none;
     outline: 0;
     color: {c['text.primary']};
+    font-size: {FONT['size.lg']}px;
 }}
 #PaperList::item {{
-    padding: 8px 12px;
+    padding: 2px 12px;
     border-bottom: 1px solid {c['border.subtle']};
 }}
 #PaperList::item:hover {{

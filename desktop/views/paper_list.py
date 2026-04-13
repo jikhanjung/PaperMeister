@@ -3,6 +3,7 @@ from PyQt6.QtCore import QRectF, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PyQt6.QtWidgets import (
     QHeaderView,
+    QMenu,
     QStyledItemDelegate,
     QStyleOptionViewItem,
     QTreeWidget,
@@ -18,7 +19,8 @@ COLUMNS = ['Status', 'Authors', 'Year', 'Title']
 
 _STATUS_STYLES: dict[str, tuple[QColor, QColor, str]] = {
     # key: (background, foreground, short_label)
-    'processed': (QColor(74, 222, 128, 40),  QColor(74, 222, 128),  'done'),
+    'processed': (QColor(74, 222, 128, 40),  QColor(74, 222, 128),  'OCR'),
+    'done':      (QColor(59, 130, 246, 40),  QColor(96, 165, 250),  'done'),
     'pending':   (QColor(107, 112, 128, 46), QColor(160, 165, 180), 'wait'),
     'failed':    (QColor(248, 113, 113, 38), QColor(248, 113, 113), 'err'),
     'review':    (QColor(251, 191, 36, 38),  QColor(251, 191, 36),  'rev'),
@@ -93,6 +95,7 @@ class PaperListView(QTreeWidget):
 
     paper_selected = pyqtSignal(int)
     folder_reveal_requested = pyqtSignal(int)  # folder_id
+    context_action = pyqtSignal(str, int, int)  # action, paper_id, file_id
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -115,7 +118,10 @@ class PaperListView(QTreeWidget):
         header.setStretchLastSection(False)
         self.setColumnWidth(0, 60)   # Status (small)
         self.setColumnWidth(1, 140)  # Authors (citation style, compact)
-        self.setColumnWidth(2, 52)   # Year
+        self.setColumnWidth(2, 68)   # Year
+
+        self.setSortingEnabled(True)
+        self.sortByColumn(3, Qt.SortOrder.AscendingOrder)  # default: Title A-Z
 
         self._pill_delegate = StatusPillDelegate(self)
         self.setItemDelegateForColumn(0, self._pill_delegate)
@@ -161,6 +167,14 @@ class PaperListView(QTreeWidget):
             return
         self._populate(rows)
 
+    def update_status(self, paper_id: int, new_status: str):
+        """Update the status pill for a single paper without reloading the list."""
+        for i in range(self.topLevelItemCount()):
+            item = self.topLevelItem(i)
+            if item.data(0, Qt.ItemDataRole.UserRole) == paper_id:
+                item.setText(0, new_status)
+                break
+
     def clear_rows(self):
         self.clear()
 
@@ -181,6 +195,8 @@ class PaperListView(QTreeWidget):
             item.setData(0, Qt.ItemDataRole.UserRole, row.paper_id)
             if row.folder_id is not None:
                 item.setData(0, Qt.ItemDataRole.UserRole + 1, row.folder_id)
+            if row.file_id is not None:
+                item.setData(0, Qt.ItemDataRole.UserRole + 2, row.file_id)
             if row.is_stub:
                 font = item.font(3)
                 font.setItalic(True)
@@ -202,6 +218,31 @@ class PaperListView(QTreeWidget):
             folder_id = item.data(0, Qt.ItemDataRole.UserRole + 1)
             if isinstance(folder_id, int):
                 self.folder_reveal_requested.emit(folder_id)
+
+    def contextMenuEvent(self, event):
+        item = self.itemAt(event.pos())
+        if item is None:
+            return
+        paper_id = item.data(0, Qt.ItemDataRole.UserRole)
+        file_id = item.data(0, Qt.ItemDataRole.UserRole + 2)
+        status = item.text(0)  # column 0 DisplayRole: pending/processed/failed/review/none
+
+        menu = QMenu(self)
+        if status == 'pending':
+            menu.addAction('Process OCR', lambda: self.context_action.emit('process', paper_id, file_id or 0))
+        elif status == 'failed':
+            menu.addAction('Retry OCR', lambda: self.context_action.emit('retry', paper_id, file_id or 0))
+        elif status == 'processed':
+            menu.addAction('Extract Biblio', lambda: self.context_action.emit('extract_biblio', paper_id, file_id or 0))
+            menu.addAction('Open PDF', lambda: self.context_action.emit('open_pdf', paper_id, file_id or 0))
+        elif status == 'review':
+            menu.addAction('Review Biblio', lambda: self.context_action.emit('review_biblio', paper_id, 0))
+            menu.addAction('Open PDF', lambda: self.context_action.emit('open_pdf', paper_id, file_id or 0))
+        else:
+            return  # 'none' — no PDF, nothing to do
+
+        if not menu.isEmpty():
+            menu.exec(event.globalPos())
 
     def _on_selection_changed(self, current, _prev):
         if current is None:

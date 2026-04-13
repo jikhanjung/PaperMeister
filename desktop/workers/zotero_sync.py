@@ -79,6 +79,7 @@ class ZoteroSyncWorker(QThread):
             source, items,
             orphan_attachments=orphans,
             progress_callback=_progress_cb,
+            zotero_client=client,
         )
 
         # Store new version and clear flag.

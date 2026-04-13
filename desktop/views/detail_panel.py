@@ -2,9 +2,9 @@
 
 Tabs
 ----
-- Metadata   — Paper metadata + File card (always populated)
-- Biblio     — Latest PaperBiblio + Apply button (empty state if missing)
-- OCR        — Rendered markdown from ~/.papermeister/ocr_json/{hash}.json
+- Metadata   — Paper metadata + File card + Biblio comparison (if extracted)
+- PDF        — Rendered PDF pages via PyMuPDF
+- Text       — Rendered markdown from ~/.papermeister/ocr_json/{hash}.json
                via QTextBrowser.setMarkdown (empty state if not processed)
 
 Stub banner sits above the tab bar so it is visible regardless of tab.
@@ -147,8 +147,8 @@ class DetailPanel(QWidget):
         self._tabs.clear()
 
         self._tabs.addTab(self._build_metadata_tab(detail), 'Metadata')
-        self._tabs.addTab(self._build_biblio_tab(detail), 'Biblio')
-        self._tabs.addTab(self._build_ocr_tab(detail), 'OCR')
+        self._tabs.addTab(self._build_pdf_tab(detail), 'PDF')
+        self._tabs.addTab(self._build_ocr_tab(detail), 'Text')
 
         # Restore previously-selected tab when switching papers so the user
         # doesn't get snapped back to Metadata every click.
@@ -165,6 +165,18 @@ class DetailPanel(QWidget):
 
         layout.addWidget(self._build_metadata_card(d))
         layout.addWidget(self._build_file_card(d))
+
+        # Biblio comparison section (merged from former Biblio tab)
+        if d.latest_biblio:
+            preview = biblio_service.preview_apply(d.paper_id)
+            self._biblio_id = preview.biblio_id
+            self._field_groups = {}
+            self._field_edits: dict[str, QLineEdit | QPlainTextEdit] = {}
+            layout.addWidget(self._build_comparison_card(preview))
+        else:
+            self._biblio_id = None
+            self._field_groups = {}
+
         layout.addStretch(1)
         return _scroll_wrap(host)
 
@@ -210,30 +222,149 @@ class DetailPanel(QWidget):
         layout.addLayout(grid)
         return frame
 
-    # ── Biblio tab ───────────────────────────────────────────
+    # ── PDF view tab ─────────────────────────────────────────
 
-    def _build_biblio_tab(self, d) -> QWidget:
+    def _build_pdf_tab(self, d) -> QWidget:
+        """Render PDF pages as images using PyMuPDF."""
+        if not d.file_path and not d.file_hash:
+            return self._ocr_empty_panel('No PDF file associated with this paper.')
+        if d.file_status not in ('processed', 'pending', 'failed'):
+            return self._ocr_empty_panel('No PDF file associated with this paper.')
+
+        import os
+
+        pdf_path = d.file_path
+        if not pdf_path or not os.path.isfile(pdf_path):
+            # Check pdf_cache
+            if d.file_zotero_key and d.file_path:
+                cached = os.path.join(
+                    os.path.expanduser('~'), '.papermeister', 'pdf_cache',
+                    d.file_zotero_key, d.file_path,
+                )
+                if os.path.isfile(cached):
+                    pdf_path = cached
+            if not pdf_path or not os.path.isfile(pdf_path):
+                if d.file_zotero_key:
+                    return self._build_pdf_download_panel(d)
+                return self._ocr_empty_panel(
+                    'PDF file not found locally.\n'
+                    f'Path: {d.file_path or "(none)"}'
+                )
+
+        return self._render_pdf(pdf_path)
+
+    def _render_pdf(self, pdf_path: str) -> QWidget:
+        """Render a local PDF file as page images."""
+        import fitz
+
+        try:
+            doc = fitz.open(pdf_path)
+        except Exception as exc:
+            return self._ocr_empty_panel(f'Failed to open PDF: {exc}')
+
+        host = QWidget()
+        layout = QVBoxLayout(host)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(SPACING['sm'])
+
+        for page_idx in range(len(doc)):
+            page = doc[page_idx]
+            mat = fitz.Matrix(1.5, 1.5)
+            pix = page.get_pixmap(matrix=mat)
+            from PyQt6.QtGui import QImage, QPixmap
+            fmt = QImage.Format.Format_RGB888 if pix.n == 3 else QImage.Format.Format_RGBA8888
+            qimg = QImage(pix.samples, pix.width, pix.height, pix.stride, fmt)
+            pixmap = QPixmap.fromImage(qimg)
+
+            page_lbl = QLabel()
+            page_lbl.setPixmap(pixmap)
+            page_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+            layout.addWidget(page_lbl)
+
+        doc.close()
+        layout.addStretch(1)
+        return _scroll_wrap(host)
+
+    def _build_pdf_download_panel(self, d) -> QWidget:
+        """Show a download button for Zotero-hosted PDFs."""
         host = QWidget()
         layout = QVBoxLayout(host)
         layout.setContentsMargins(SPACING['lg'], SPACING['lg'], SPACING['lg'], SPACING['lg'])
-        layout.setSpacing(SPACING['md'])
-
-        if not d.latest_biblio:
-            layout.addWidget(_empty_label(
-                'No biblio extracted yet.\n'
-                'Run scripts/extract_biblio.py for this paper to populate.'
-            ))
-            layout.addStretch(1)
-            return _scroll_wrap(host)
-
-        preview = biblio_service.preview_apply(d.paper_id)
-        self._biblio_id = preview.biblio_id
-        self._field_groups = {}
-        self._field_edits: dict[str, QLineEdit | QPlainTextEdit] = {}
-
-        layout.addWidget(self._build_comparison_card(preview))
         layout.addStretch(1)
-        return _scroll_wrap(host)
+
+        msg = _empty_label(
+            'PDF file not available locally.\n'
+            'Click below to download from Zotero.'
+        )
+        layout.addWidget(msg)
+
+        btn = QPushButton('Download PDF')
+        btn.setProperty('class', 'Primary')
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setFixedWidth(160)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        btn_row.addWidget(btn)
+        btn_row.addStretch(1)
+        layout.addLayout(btn_row)
+
+        self._download_status = _empty_label('')
+        layout.addWidget(self._download_status)
+        layout.addStretch(2)
+
+        zotero_key = d.file_zotero_key
+        filename = d.file_path or f'{zotero_key}.pdf'
+        paper_id = d.paper_id
+
+        def _on_download():
+            btn.setEnabled(False)
+            btn.setText('Downloading…')
+            self._download_status.setText('')
+
+            task = BackgroundTask(self._download_zotero_pdf, zotero_key, filename)
+            task.done.connect(lambda path: _on_downloaded(path))
+            task.failed.connect(lambda msg: _on_download_failed(msg))
+            self._pdf_download_task = task
+            task.start()
+
+        def _on_downloaded(path):
+            btn.setText('Downloaded')
+            self._download_status.setText('')
+            # Replace download panel with rendered PDF
+            idx = self._tabs.currentIndex()
+            self._tabs.removeTab(idx)
+            self._tabs.insertTab(idx, self._render_pdf(path), 'PDF')
+            self._tabs.setCurrentIndex(idx)
+
+        def _on_download_failed(msg):
+            btn.setEnabled(True)
+            btn.setText('Download PDF')
+            self._download_status.setText(f'Failed: {msg}')
+
+        btn.clicked.connect(_on_download)
+        return host
+
+    @staticmethod
+    def _download_zotero_pdf(zotero_key: str, filename: str) -> str:
+        """Download PDF from Zotero to cache. Returns local path."""
+        import os
+        from papermeister.zotero_client import ZoteroClient
+        from papermeister.preferences import get_pref
+
+        cache_dir = os.path.join(
+            os.path.expanduser('~'), '.papermeister', 'pdf_cache', zotero_key,
+        )
+        cached = os.path.join(cache_dir, filename)
+        if os.path.isfile(cached):
+            return cached
+
+        client = ZoteroClient(get_pref('zotero_user_id'), get_pref('zotero_api_key'))
+        content = client._zot.file(zotero_key)
+
+        os.makedirs(cache_dir, exist_ok=True)
+        with open(cached, 'wb') as f:
+            f.write(content)
+        return cached
 
     # ── Comparison card internals ────────────────────────────
 

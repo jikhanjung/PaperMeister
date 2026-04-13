@@ -40,6 +40,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         self._current_selection: tuple[str, object] | None = None
         self._process_window = None  # lazy-init; reuses frozen papermeister/ui ProcessWindow
+        self._biblio_task = None     # single biblio extraction background task
         self._sync_worker = None  # ZoteroSyncWorker
         self._wire_events()
         self._load_initial()
@@ -109,6 +110,7 @@ class MainWindow(QMainWindow):
         self.source_nav.selection_changed.connect(self._on_nav_selection)
         self.paper_list.paper_selected.connect(self.detail_panel.show_paper)
         self.paper_list.folder_reveal_requested.connect(self.source_nav.reveal_folder)
+        self.paper_list.context_action.connect(self._on_context_action)
         self.detail_panel.apply_completed.connect(self._on_apply_completed)
         self.search_bar.returnPressed.connect(self._on_search_submitted)
         self.search_bar.textChanged.connect(self._on_search_text_changed)
@@ -215,6 +217,7 @@ class MainWindow(QMainWindow):
         if self._process_window is None:
             self._process_window = ProcessWindow(self)
             self._process_window.processing_updated.connect(self._on_processing_updated)
+            self._process_window.file_processed.connect(self._on_file_processed)
         self._process_window.start(pending_ids)
         self.status_bar.set_task(f'Processing {len(pending_ids)} file(s)…')
 
@@ -225,6 +228,166 @@ class MainWindow(QMainWindow):
             self.status_bar.set_counts(total, pending, review)
         except Exception:
             pass
+
+    def _on_file_processed(self, paper_file_id: int, status: str):
+        """Update the pill for a single paper after OCR completes."""
+        from papermeister.models import PaperFile
+        pf = PaperFile.get_or_none(PaperFile.id == paper_file_id)
+        if pf:
+            self.paper_list.update_status(pf.paper_id, status)
+
+    def _on_context_action(self, action: str, paper_id: int, file_id: int):
+        from papermeister.models import PaperFile
+        if action in ('process', 'retry'):
+            if not file_id:
+                return
+            if action == 'retry':
+                PaperFile.update(status='pending').where(PaperFile.id == file_id).execute()
+            if self._process_window is None:
+                from papermeister.ui.process_window import ProcessWindow
+                self._process_window = ProcessWindow(self)
+                self._process_window.processing_updated.connect(self._on_processing_updated)
+                self._process_window.file_processed.connect(self._on_file_processed)
+            self._process_window.start([file_id])
+            self.status_bar.set_task('Processing 1 file…')
+        elif action == 'open_pdf':
+            self.detail_panel.show_paper(paper_id)
+            self.detail_panel._tabs.setCurrentIndex(1)  # PDF tab
+        elif action == 'extract_biblio':
+            self._run_biblio_extraction(paper_id, file_id)
+        elif action == 'review_biblio':
+            self.detail_panel.show_paper(paper_id)
+            self.detail_panel._tabs.setCurrentIndex(0)  # Metadata tab (includes biblio)
+
+    def _run_biblio_extraction(self, paper_id: int, file_id: int):
+        """Run LLM biblio extraction for a single paper in background."""
+        from papermeister.models import PaperFile
+        from desktop.workers.background import BackgroundTask
+
+        pf = PaperFile.get_or_none(PaperFile.id == file_id) if file_id else None
+        if not pf or not pf.hash:
+            self.status_bar.set_task('No file hash — cannot extract biblio')
+            return
+
+        resp = QMessageBox.question(
+            self,
+            'Extract Biblio',
+            f'Extract bibliographic info using Claude Sonnet 4.6?\n'
+            f'This uses your Claude Max plan quota.',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if resp != QMessageBox.StandardButton.Yes:
+            return
+
+        file_hash = pf.hash
+        self.status_bar.set_task(f'Extracting biblio for paper {paper_id}…')
+
+        def _do_extract():
+            import json, re, subprocess
+            from papermeister.biblio import load_ocr_pages, extract_first_pages
+            from papermeister.models import PaperBiblio
+
+            pages = load_ocr_pages(file_hash)
+            if not pages:
+                return None, 'No OCR pages found'
+            text = extract_first_pages(pages)
+            if not text:
+                return None, 'No text in first pages'
+
+            # Same prompt template as scripts/extract_biblio.py
+            prompt = (
+                "You are extracting bibliographic metadata from the first pages of an academic document (OCR'd text). "
+                "The text below may contain noise, broken lines, and layout artifacts.\n\n"
+                "Your task: extract the bibliographic information that is EXPLICITLY present in the text. "
+                "Do NOT guess or infer; if a field is not clearly stated, leave it empty/null.\n\n"
+                "Output STRICT JSON only (no prose, no markdown code fence) with this exact schema:\n"
+                '{"title": string, "authors": [string], "year": integer or null, '
+                '"journal": string, "doi": string, "abstract": string, '
+                '"doc_type": "article"|"book"|"chapter"|"thesis"|"report"|"unknown", '
+                '"language": string, "confidence": "high"|"medium"|"low", '
+                '"needs_visual_review": boolean, "notes": string}\n\n'
+                "Rules:\n"
+                "- Authors must be in the order shown in the document.\n"
+                "- Year: the publication year, not received/accepted dates.\n"
+                "- DOI: only if explicitly written.\n"
+                "- Set needs_visual_review=true if the first pages look like a journal-issue cover, "
+                "a table of contents, or any layout where spatial/visual structure is essential.\n"
+                "- Output ONLY the JSON object.\n\n"
+                f"--- DOCUMENT TEXT ---\n{text}"
+            )
+
+            proc = subprocess.run(
+                ['claude', '-p', '--model', 'claude-sonnet-4-6', '--output-format', 'json'],
+                input=prompt, capture_output=True, text=True, timeout=120,
+            )
+            if proc.returncode != 0:
+                return None, f'claude exit {proc.returncode}'
+
+            envelope = json.loads(proc.stdout)
+            if envelope.get('is_error'):
+                return None, f'claude error: {envelope.get("result", "")[:200]}'
+
+            result_text = envelope.get('result', '').strip()
+            m = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', result_text, re.DOTALL)
+            if m:
+                result_text = m.group(1)
+            if not result_text.startswith('{'):
+                m = re.search(r'\{.*\}', result_text, re.DOTALL)
+                if m:
+                    result_text = m.group(0)
+
+            pred = json.loads(result_text)
+            PaperBiblio.create(
+                paper=paper_id,
+                file_hash=file_hash,
+                title=pred.get('title', '') or '',
+                authors_json=json.dumps(pred.get('authors', []) or [], ensure_ascii=False),
+                year=pred.get('year') if isinstance(pred.get('year'), int) else None,
+                journal=pred.get('journal', '') or '',
+                doi=pred.get('doi', '') or '',
+                abstract=pred.get('abstract', '') or '',
+                doc_type=pred.get('doc_type', 'unknown') or 'unknown',
+                language=pred.get('language', '') or '',
+                confidence=pred.get('confidence', '') or '',
+                needs_visual_review=bool(pred.get('needs_visual_review', False)),
+                notes=pred.get('notes', '') or '',
+                source='llm-sonnet',
+                model_version='claude-sonnet-4-6',
+            )
+            return pred, None
+
+        task = BackgroundTask(_do_extract)
+        task.done.connect(lambda result: self._on_biblio_extracted(paper_id, result))
+        task.failed.connect(lambda msg: self.status_bar.set_task(f'Biblio extraction failed: {msg}'))
+        self._biblio_task = task
+        task.start()
+
+    def _on_biblio_extracted(self, paper_id: int, result):
+        pred, err = result
+        if err:
+            self.status_bar.set_task(f'Biblio extraction failed: {err}')
+            return
+
+        # Try auto-apply if biblio matches Zotero data
+        from papermeister import biblio_reflect
+        from papermeister.models import Paper
+        paper = Paper.get_or_none(Paper.id == paper_id)
+        biblio = biblio_reflect.select_best_biblio(paper) if paper else None
+        if biblio:
+            decision = biblio_reflect.evaluate(biblio, paper)
+            if decision.action == 'auto_commit':
+                biblio_reflect.apply_single(paper_id)
+                self.status_bar.set_task(f'Biblio extracted & auto-applied for paper {paper_id}')
+                self.paper_list.update_status(paper_id, 'done')
+            else:
+                self.status_bar.set_task(
+                    f'Biblio extracted for paper {paper_id} (needs review: {decision.reason})')
+        else:
+            self.status_bar.set_task(f'Biblio extracted for paper {paper_id}')
+
+        if self.detail_panel._current_paper_id == paper_id:
+            self.detail_panel.show_paper(paper_id)
 
     def _open_preferences(self):
         """Open the frozen PreferencesDialog for RunPod / Zotero credentials."""
