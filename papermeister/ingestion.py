@@ -331,6 +331,43 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
                         zotero_key=att['key'],
                     )
 
+    # Backfill: find Zotero-sourced papers that have no PaperFile at all
+    # (missed by earlier syncs). Fetch their children from the API.
+    if zotero_client is not None:
+        processed_keys = {item['key'] for item in items}
+        orphan_parent_keys = set(orphan_attachments or {})
+        already_handled = processed_keys | orphan_parent_keys
+
+        missing_file_papers = (
+            Paper.select(Paper.id, Paper.zotero_key)
+            .where(Paper.zotero_key != '')
+            .where(Paper.zotero_key.not_in(already_handled))
+            .where(~(Paper.id << PaperFile.select(PaperFile.paper).distinct()))
+        )
+        for mp in missing_file_papers:
+            try:
+                children = zotero_client._zot.children(mp.zotero_key)
+                for child in children:
+                    cdata = child.get('data', {})
+                    if cdata.get('itemType') != 'attachment':
+                        continue
+                    if PaperFile.select().where(PaperFile.zotero_key == cdata['key']).exists():
+                        continue
+                    ct = cdata.get('contentType', '')
+                    fname = cdata.get('filename', cdata['key'])
+                    is_derived = ct == 'application/json' or fname.lower().endswith('.json')
+                    PaperFile.create(
+                        paper=mp,
+                        path=fname,
+                        hash='',
+                        status='processed' if is_derived else 'pending',
+                        zotero_key=cdata['key'],
+                    )
+                    if progress_callback:
+                        progress_callback(f'Backfilled attachment for "{mp.zotero_key}"')
+            except Exception:
+                pass  # network error — next sync will retry
+
     return new_count, updated_count
 
 

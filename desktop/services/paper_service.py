@@ -140,15 +140,11 @@ def list_by_library(key: str, limit: int = 500) -> list[PaperRow]:
             .limit(limit)
         )
     elif key in ('pending', 'processed', 'failed'):
-        paper_ids = [
-            pf.paper_id for pf in (
-                PaperFile
-                .select(PaperFile.paper)
-                .where(PaperFile.status == key)
-                .order_by(PaperFile.id.desc())
-                .limit(limit)
-            )
-        ]
+        # Distinct paper ids that have at least one PaperFile with this status.
+        paper_ids = list({
+            pf.paper_id for pf in
+            PaperFile.select(PaperFile.paper).where(PaperFile.status == key)
+        })
         if not paper_ids:
             return rows
         query = (
@@ -158,6 +154,7 @@ def list_by_library(key: str, limit: int = 500) -> list[PaperRow]:
             .join(Source, JOIN.LEFT_OUTER, on=(Folder.source == Source.id))
             .where(Paper.id.in_(paper_ids))
             .order_by(Paper.id.desc())
+            .limit(limit)
         )
     elif key == 'needs_review':
         # Same helper the Library tree uses for the count — guaranteed
@@ -200,9 +197,12 @@ def list_by_library(key: str, limit: int = 500) -> list[PaperRow]:
 
 
 def list_by_folder(folder_id: int, limit: int = 500) -> list[PaperRow]:
+    # Use PaperFolder M2M junction table — Paper.folder is legacy 1:1 and
+    # misses papers that belong to multiple collections.
     query = (
         Paper.select()
-        .where(Paper.folder == folder_id)
+        .join(PaperFolder, on=(PaperFolder.paper == Paper.id))
+        .where(PaperFolder.folder == folder_id)
         .order_by(Paper.id.desc())
         .limit(limit)
     )

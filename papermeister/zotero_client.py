@@ -190,8 +190,7 @@ class ZoteroClient:
                         'content_type': content_type,
                     })
                 else:
-                    if content_type == 'application/pdf':
-                        standalone_pdfs.append(data)
+                    standalone_pdfs.append(data)
             elif item_type not in ('note', 'annotation'):
                 parent_items[data['key']] = it
 
@@ -210,6 +209,7 @@ class ZoteroClient:
 
         for data in standalone_pdfs:
             filename = data.get('filename', f'{data["key"]}.pdf')
+            content_type = data.get('contentType', '')
             title = data.get('title', '') or os.path.splitext(filename)[0]
             results.append({
                 'key': data['key'],
@@ -223,7 +223,7 @@ class ZoteroClient:
                 'attachments': [{
                     'key': data['key'],
                     'filename': filename,
-                    'content_type': 'application/pdf',
+                    'content_type': content_type,
                 }],
             })
         return results

@@ -40,7 +40,7 @@ class LibraryFolder:
 
 
 LIBRARY_KEYS = [
-    ('all',          'All Files'),
+    ('all',          'All Papers'),
     ('pending',      'Pending OCR'),
     ('processed',    'Processed'),
     ('failed',       'Failed'),
@@ -50,11 +50,18 @@ LIBRARY_KEYS = [
 
 
 def _count_all() -> int:
-    return PaperFile.select().count()
+    return Paper.select().count()
 
 
 def _count_status(status: str) -> int:
-    return PaperFile.select().where(PaperFile.status == status).count()
+    """Count distinct papers that have at least one PaperFile with the given status."""
+    return (
+        Paper.select()
+        .join(PaperFile, on=(PaperFile.paper == Paper.id))
+        .where(PaperFile.status == status)
+        .distinct()
+        .count()
+    )
 
 
 def _count_needs_review() -> int:
