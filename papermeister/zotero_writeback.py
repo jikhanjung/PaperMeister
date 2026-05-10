@@ -191,3 +191,162 @@ def writeback_biblio(
     return WritebackResult(
         action='wrote', changed=True, patch=patch,
     )
+
+
+# ── Override-driven writeback (desktop comparison UI) ────────────
+
+def _split_name_for_zotero(display_name: str) -> dict:
+    """Convert a single display name into a Zotero creator dict.
+
+    `display_name` may be "Last, First", "First Last", or unsplit CJK.
+    Uses the same heuristics as desktop biblio_service.split_author_name.
+    """
+    name = display_name.strip()
+    if not name:
+        return {}
+
+    if ',' in name:
+        last, _, first = name.partition(',')
+        last, first = last.strip(), first.strip()
+        if last and first:
+            return {'creatorType': 'author', 'firstName': first, 'lastName': last}
+        return {'creatorType': 'author', 'name': name}
+
+    tokens = name.split()
+    if len(tokens) >= 2:
+        first = ' '.join(tokens[:-1])
+        last = tokens[-1]
+        return {'creatorType': 'author', 'firstName': first, 'lastName': last}
+
+    # Single token — fall back to single-field name (covers unsplit CJK,
+    # organisational authors, etc.).
+    return {'creatorType': 'author', 'name': name}
+
+
+def _compute_override_patch(overrides: dict, data: dict) -> dict:
+    """Build a Zotero patch from explicit per-field overrides.
+
+    Unlike `_compute_patch`, this does NOT apply empty-slot logic. Each
+    non-None override is a deliberate user choice and replaces the Zotero
+    field outright — but only when the new value actually differs from
+    Zotero's current value (skip no-op writes).
+    """
+    patch: dict = {}
+
+    if 'title' in overrides and overrides['title'] is not None:
+        new = (overrides['title'] or '').strip()
+        if new != (data.get('title') or '').strip():
+            patch['title'] = new
+
+    if 'year' in overrides and overrides['year'] is not None:
+        new = (overrides['year'] or '').strip()
+        if new != (data.get('date') or '').strip():
+            patch['date'] = new
+
+    if 'journal' in overrides and overrides['journal'] is not None:
+        new = (overrides['journal'] or '').strip()
+        if new != (data.get('publicationTitle') or '').strip():
+            patch['publicationTitle'] = new
+
+    if 'doi' in overrides and overrides['doi'] is not None:
+        new = (overrides['doi'] or '').strip()
+        if new != (data.get('DOI') or '').strip():
+            patch['DOI'] = new
+
+    if 'authors' in overrides and overrides['authors'] is not None:
+        # overrides['authors'] is newline-joined display text from the UI.
+        lines = [
+            line.strip() for line in (overrides['authors'] or '').splitlines()
+            if line.strip()
+        ]
+        new_creators = [c for c in (_split_name_for_zotero(n) for n in lines) if c]
+
+        existing = [
+            c for c in (data.get('creators') or [])
+            if c.get('creatorType') == 'author'
+        ]
+        non_authors = [
+            c for c in (data.get('creators') or [])
+            if c.get('creatorType') != 'author'
+        ]
+        if not _creators_equal(existing, new_creators):
+            patch['creators'] = non_authors + new_creators
+
+    return patch
+
+
+def _creators_equal(a: list[dict], b: list[dict]) -> bool:
+    if len(a) != len(b):
+        return False
+    for x, y in zip(a, b):
+        ax = (
+            (x.get('firstName') or '').strip(),
+            (x.get('lastName') or '').strip(),
+            (x.get('name') or '').strip(),
+        )
+        ay = (
+            (y.get('firstName') or '').strip(),
+            (y.get('lastName') or '').strip(),
+            (y.get('name') or '').strip(),
+        )
+        if ax != ay:
+            return False
+    return True
+
+
+def writeback_overrides(
+    paper: Paper,
+    overrides: dict,
+    *,
+    client: ZoteroClient,
+    dry_run: bool = False,
+) -> WritebackResult:
+    """Apply explicit user-chosen field values to `paper`'s Zotero item.
+
+    Used by the desktop "Apply Biblio" comparison UI, where the user has
+    already reviewed each field and picked a value. Writes are NOT
+    empty-slot-only — overrides replace existing Zotero values where they
+    differ. Caller is responsible for the user's intent.
+
+    `overrides` maps field_key → str | None. None means "do not touch this
+    field". A str is the user's chosen value (already trimmed/edited).
+    Recognised keys: title, year, journal, doi, authors. Authors text is
+    newline-separated with one creator per line ("Last, First" or "First
+    Last").
+    """
+    if not paper.zotero_key:
+        raise ValueError(f'paper {paper.id} has no zotero_key')
+
+    item = client._zot.item(paper.zotero_key)
+    data = item['data']
+    meta = item.get('meta') or {}
+
+    patch = _compute_override_patch(overrides, data)
+
+    if not patch:
+        if dry_run:
+            return WritebackResult(
+                action='would_noop', changed=False,
+                reason='zotero_already_matches',
+            )
+        _refresh_local_paper(paper, data, meta, client)
+        return WritebackResult(
+            action='noop', changed=False,
+            reason='zotero_already_matches',
+        )
+
+    if dry_run:
+        return WritebackResult(
+            action='would_write', changed=True, patch=patch,
+        )
+
+    payload = dict(data)
+    payload.update(patch)
+    client._zot.update_item(payload)
+
+    fresh = client._zot.item(paper.zotero_key)
+    _refresh_local_paper(paper, fresh['data'], fresh.get('meta'), client)
+
+    return WritebackResult(
+        action='wrote', changed=True, patch=patch,
+    )

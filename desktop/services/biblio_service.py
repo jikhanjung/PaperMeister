@@ -269,8 +269,12 @@ def apply_merged(
     overrides maps field_key → new_value (str) or None.
     None means "keep the current Paper value" (paper radio was selected).
     A str value is the (possibly edited) text from the biblio edit widget.
-    For authors, the value is newline-separated "Lastname, Firstname" lines
-    which are reverse-split back to storage names.
+    For authors, the value is newline-separated "Lastname, Firstname" lines.
+
+    For Zotero-sourced papers, the chosen values are PATCHed to Zotero and
+    the local mirror is refreshed from the authoritative response. For
+    filesystem-sourced papers, only the local DB is touched.
+
     Returns (changed, message).
     """
     paper = Paper.get_or_none(Paper.id == paper_id)
@@ -287,6 +291,47 @@ def apply_merged(
         biblio.save()
         return False, 'No changes (kept current values)'
 
+    if paper.zotero_key:
+        return _apply_merged_zotero(paper, biblio, fields_to_apply)
+
+    return _apply_merged_local(paper, biblio, fields_to_apply)
+
+
+def _apply_merged_zotero(
+    paper: Paper,
+    biblio: PaperBiblio,
+    fields_to_apply: dict[str, str],
+) -> tuple[bool, str]:
+    """PATCH chosen field values to Zotero, then refresh local mirror."""
+    from papermeister import zotero_writeback
+    from papermeister.preferences import get_pref
+    from papermeister.zotero_client import ZoteroClient
+
+    client = ZoteroClient(
+        get_pref('zotero_user_id', ''),
+        get_pref('zotero_api_key', ''),
+    )
+
+    result = zotero_writeback.writeback_overrides(
+        paper, fields_to_apply, client=client,
+    )
+
+    biblio.status = 'applied'
+    biblio.review_reason = result.reason
+    biblio.save()
+
+    applied_fields = ', '.join(sorted(fields_to_apply))
+    if not result.changed:
+        return False, f'Zotero already matches ({applied_fields})'
+    return True, f'Wrote to Zotero: {", ".join(sorted(result.patch))}'
+
+
+def _apply_merged_local(
+    paper: Paper,
+    biblio: PaperBiblio,
+    fields_to_apply: dict[str, str],
+) -> tuple[bool, str]:
+    """Local-only apply path (no zotero_key)."""
     changes = False
     with db.atomic():
         if 'title' in fields_to_apply:
