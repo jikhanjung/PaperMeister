@@ -17,6 +17,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QLabel,
+    QMenu,
     QTabWidget,
     QTreeWidget,
     QTreeWidgetItem,
@@ -96,6 +97,7 @@ class _StatusPanel(QWidget):
 
 class SourceNav(QWidget):
     selection_changed = pyqtSignal(str, object)
+    folder_action = pyqtSignal(str, int)  # action, folder_id
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -131,6 +133,10 @@ class SourceNav(QWidget):
         t.setAnimated(False)
         t.setFrameShape(QTreeWidget.Shape.NoFrame)
         t.itemClicked.connect(self._on_item_clicked)
+        t.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        t.customContextMenuRequested.connect(
+            lambda pos, tree=t: self._on_tree_context_menu(tree, pos)
+        )
         return t
 
     # ── Refresh ──────────────────────────────────────────────
@@ -220,6 +226,24 @@ class SourceNav(QWidget):
         return None
 
     # ── Events ───────────────────────────────────────────────
+
+    def _on_tree_context_menu(self, tree: QTreeWidget, pos):
+        item = tree.itemAt(pos)
+        if item is None:
+            return
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if not data:
+            return
+        kind, value = data
+        if kind not in ('folder', 'source'):
+            return
+
+        menu = QMenu(tree)
+        menu.addAction('Process Folder (OCR → Biblio)',
+                        lambda: self.folder_action.emit('process_folder', value))
+        menu.addAction('Upload OCR JSON to Zotero',
+                        lambda: self.folder_action.emit('upload_ocr_json', value))
+        menu.exec(tree.viewport().mapToGlobal(pos))
 
     def _on_item_clicked(self, item: QTreeWidgetItem, _col: int):
         data = item.data(0, Qt.ItemDataRole.UserRole)

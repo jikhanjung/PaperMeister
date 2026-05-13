@@ -11,6 +11,7 @@ Environment variables (or .env in project root):
 
 import base64
 import io
+import logging
 import os
 import time
 from datetime import datetime
@@ -19,10 +20,27 @@ import fitz
 import requests
 from PIL import Image
 
+_LOG_DIR = os.path.join(os.path.expanduser('~'), '.papermeister', 'logs')
+os.makedirs(_LOG_DIR, exist_ok=True)
+
+logger = logging.getLogger('ocr')
+logger.setLevel(logging.DEBUG)
+if not logger.handlers:
+    class _FlushHandler(logging.FileHandler):
+        def emit(self, record):
+            super().emit(record)
+            self.stream.flush()
+    _fh = _FlushHandler(os.path.join(_LOG_DIR, 'ocr.log'), encoding='utf-8')
+    _fh.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
+    ))
+    logger.addHandler(_fh)
+
 _BASE_URL = None
 _HEADERS = None
-_BACKEND = None  # 'serverless' or 'pod'
+_BACKEND = None  # 'serverless', 'pod', or 'wrapper'
 _POD_URL = None
+_WRAPPER_URL = None
 
 
 class PayloadTooLarge(Exception):
@@ -31,27 +49,40 @@ class PayloadTooLarge(Exception):
 
 def reset_config():
     """Clear cached config so next call re-reads from preferences."""
-    global _BASE_URL, _HEADERS, _BACKEND, _POD_URL
+    global _BASE_URL, _HEADERS, _BACKEND, _POD_URL, _WRAPPER_URL
     _BASE_URL = None
     _HEADERS = None
     _BACKEND = None
     _POD_URL = None
+    _WRAPPER_URL = None
 
 
 def _ensure_config():
-    global _BASE_URL, _HEADERS, _BACKEND, _POD_URL
+    global _BASE_URL, _HEADERS, _BACKEND, _POD_URL, _WRAPPER_URL
     if _BACKEND is not None:
         return
     from .preferences import get_pref
     _BACKEND = get_pref('ocr_backend', 'serverless')
+    logger.info('OCR backend: %s', _BACKEND)
 
-    if _BACKEND == 'pod':
+    if _BACKEND == 'wrapper':
+        _WRAPPER_URL = get_pref('ocr_pod_url', '')
+        if not _WRAPPER_URL:
+            logger.error('ocr_pod_url is empty (wrapper mode)')
+            raise RuntimeError(
+                'OCR Wrapper URL not configured. Set URL in Preferences.'
+            )
+        _WRAPPER_URL = _WRAPPER_URL.rstrip('/')
+        logger.info('Wrapper URL configured: %s', _WRAPPER_URL)
+    elif _BACKEND == 'pod':
         _POD_URL = get_pref('ocr_pod_url', '')
         if not _POD_URL:
+            logger.error('ocr_pod_url is empty')
             raise RuntimeError(
                 'OCR Pod URL not configured. Set ocr_pod_url in Preferences.'
             )
         _POD_URL = _POD_URL.rstrip('/')
+        logger.info('Pod URL configured: %s', _POD_URL)
     else:
         endpoint_id = get_pref('runpod_endpoint_id', '')
         api_key = get_pref('runpod_api_key', '')
@@ -64,6 +95,7 @@ def _ensure_config():
             'Authorization': f'Bearer {api_key}',
             'Content-Type': 'application/json',
         }
+        logger.info('RunPod URL: %s', _BASE_URL)
 
 
 # ── Page rendering ───────────────────────────────────────────
@@ -90,8 +122,18 @@ def render_pages(pdf_path: str, page_indices: list[int], dpi: int = 150) -> list
 
 def check_health() -> dict:
     _ensure_config()
+    if _BACKEND == 'wrapper':
+        url = f'{_WRAPPER_URL}/ocr'
+        logger.debug('check_health (wrapper): GET %s', url)
+        resp = requests.get(url, timeout=15)
+        logger.debug('check_health (wrapper): %d', resp.status_code)
+        resp.raise_for_status()
+        return {'workers': {'idle': 1, 'running': 0, 'throttled': 0}}
     if _BACKEND == 'pod':
-        resp = requests.get(f'{_POD_URL}/health', timeout=15)
+        url = f'{_POD_URL}/health'
+        logger.debug('check_health: GET %s', url)
+        resp = requests.get(url, timeout=15)
+        logger.debug('check_health: %d', resp.status_code)
         resp.raise_for_status()
         return {'workers': {'idle': 1, 'running': 0, 'throttled': 0}}
     resp = requests.get(
@@ -106,6 +148,8 @@ def check_health() -> dict:
 def is_ready() -> bool:
     try:
         _ensure_config()
+        if _BACKEND == 'wrapper':
+            return _wrapper_health_check()
         if _BACKEND == 'pod':
             return _pod_health_check()
         h = check_health()
@@ -122,6 +166,9 @@ def get_worker_status() -> dict:
     """
     try:
         _ensure_config()
+        if _BACKEND == 'wrapper':
+            ready = _wrapper_health_check()
+            return {'idle': 1 if ready else 0, 'running': 0, 'throttled': 0, 'ready': ready}
         if _BACKEND == 'pod':
             ready = _pod_health_check()
             return {'idle': 1 if ready else 0, 'running': 0, 'throttled': 0, 'ready': ready}
@@ -254,8 +301,10 @@ def submit_and_wait(
 
 def _pod_ocr_page(image_b64: str, timeout: float = 120) -> str:
     """Send a single page image to vLLM Pod, return markdown text."""
+    url = f'{_POD_URL}/v1/chat/completions'
+    logger.debug('_pod_ocr_page: POST %s (payload %d bytes)', url, len(image_b64))
     resp = requests.post(
-        f'{_POD_URL}/v1/chat/completions',
+        url,
         json={
             'model': 'chandra',
             'messages': [{'role': 'user', 'content': [
@@ -263,10 +312,12 @@ def _pod_ocr_page(image_b64: str, timeout: float = 120) -> str:
                     'url': f'data:image/jpeg;base64,{image_b64}',
                 }},
             ]}],
-            'max_tokens': 12384,
+            'max_tokens': 4096,
         },
         timeout=timeout,
     )
+    if resp.status_code != 200:
+        logger.error('_pod_ocr_page %d: %s', resp.status_code, resp.text[:1000])
     resp.raise_for_status()
     data = resp.json()
     choices = data.get('choices', [])
@@ -286,11 +337,129 @@ def _pod_ocr_batch(images_b64: list[str], timeout: float = 120) -> list[str]:
 
 def _pod_health_check() -> bool:
     """Check if vLLM Pod is responding."""
+    url = f'{_POD_URL}/health'
     try:
-        resp = requests.get(f'{_POD_URL}/health', timeout=10)
+        logger.debug('_pod_health_check: GET %s', url)
+        resp = requests.get(url, timeout=10)
+        logger.debug('_pod_health_check: %d', resp.status_code)
         return resp.status_code == 200
-    except Exception:
+    except Exception as exc:
+        logger.warning('_pod_health_check failed: %s', exc)
         return False
+
+
+# ── Wrapper API ──────────────────────────────────────────────
+
+def is_wrapper_mode() -> bool:
+    """Return True if the current backend is 'wrapper'."""
+    _ensure_config()
+    return _BACKEND == 'wrapper'
+
+
+def _wrapper_health_check() -> bool:
+    """Check if wrapper server is responding."""
+    url = f'{_WRAPPER_URL}/ocr'
+    try:
+        logger.debug('_wrapper_health_check: GET %s', url)
+        resp = requests.get(url, timeout=10)
+        logger.debug('_wrapper_health_check: %d', resp.status_code)
+        return resp.status_code == 200
+    except Exception as exc:
+        logger.warning('_wrapper_health_check failed: %s', exc)
+        return False
+
+
+def wrapper_submit(pdf_path: str) -> tuple[str, int]:
+    """Submit PDF to wrapper. Returns (job_id, total_pages).
+
+    total_pages may be 0 until the server finishes parsing the PDF.
+    """
+    _ensure_config()
+    submit_url = f'{_WRAPPER_URL}/ocr'
+    logger.info('Wrapper submit: POST %s (%s)', submit_url, os.path.basename(pdf_path))
+    with open(pdf_path, 'rb') as f:
+        resp = requests.post(submit_url, files={'file': f}, timeout=60)
+    if resp.status_code != 200:
+        logger.error('Wrapper submit %d: %s', resp.status_code, resp.text[:500])
+    resp.raise_for_status()
+    data = resp.json()
+    job_id = data['job_id']
+    # First poll to get total_pages (server may need a moment to parse PDF)
+    try:
+        poll = requests.get(f'{_WRAPPER_URL}/ocr/{job_id}', timeout=10).json()
+        total_pages = poll.get('total_pages', 0)
+    except Exception:
+        total_pages = 0
+    logger.info('Wrapper job_id: %s, total_pages: %d', job_id, total_pages)
+    return job_id, total_pages
+
+
+def wrapper_poll(job_id: str) -> dict:
+    """Poll a wrapper job. Returns the full job dict."""
+    _ensure_config()
+    resp = requests.get(f'{_WRAPPER_URL}/ocr/{job_id}', timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def wrapper_collect(job: dict) -> tuple[dict, int]:
+    """Parse completed job into (raw_pages, total_pages)."""
+    total_pages = job.get('total_pages', 0)
+    raw_pages = {}
+    for page in job.get('pages', []):
+        if page is None:
+            continue
+        if page.get('status') == 'ok':
+            page_idx = page['page']
+            raw_pages[page_idx] = {
+                'page': page_idx,
+                'markdown': page.get('markdown', ''),
+            }
+        else:
+            logger.warning('Wrapper page %d failed: %s', page.get('page', -1),
+                           page.get('error', 'unknown'))
+    logger.info('Wrapper done: %d/%d pages OK', len(raw_pages), total_pages)
+    return raw_pages, total_pages
+
+
+def _wrapper_ocr_pdf(pdf_path: str, timeout: float = 600, poll_interval: float = 5.0,
+                     progress_callback=None) -> tuple[dict, int]:
+    """Submit PDF to wrapper, poll until done, return (raw_pages, total_pages).
+
+    Single-file convenience wrapper around submit/poll/collect.
+    """
+    job_id, total_pages = wrapper_submit(pdf_path)
+
+    # Poll until server reports a terminal status.
+    poll_errors = 0
+    while True:
+        try:
+            job = wrapper_poll(job_id)
+            poll_errors = 0
+        except Exception as exc:
+            poll_errors += 1
+            logger.warning('Wrapper poll error (%d): %s', poll_errors, exc)
+            if poll_errors >= 10:
+                raise RuntimeError(f'Wrapper poll failed {poll_errors} times: {exc}')
+            time.sleep(poll_interval)
+            continue
+
+        status = job['status']
+        done_pages = job.get('done_pages', 0)
+        total_pages = job.get('total_pages', total_pages)
+        logger.debug('Wrapper poll: %s (%d/%d pages)', status, done_pages, total_pages)
+
+        if progress_callback and total_pages > 0:
+            progress_callback(done_pages, total_pages,
+                              f'OCR {done_pages}/{total_pages} pages ({status})')
+
+        if status in ('done', 'done_with_errors'):
+            break
+        if status == 'failed':
+            raise RuntimeError(f'Wrapper job failed: {job_id}')
+        time.sleep(poll_interval)
+
+    return wrapper_collect(job)
 
 
 # ── High-level OCR ───────────────────────────────────────────
@@ -298,7 +467,7 @@ def _pod_health_check() -> bool:
 def ocr_pdf(
     pdf_path: str,
     dpi: int = 150,
-    batch_size: int = 16,
+    batch_size: int = 6,
     timeout: float = 600,
     max_retries: int = 3,
     progress_callback=None,
@@ -310,6 +479,23 @@ def ocr_pdf(
     progress_callback(current_batch, total_batches, msg) is called per batch.
     """
     _ensure_config()
+
+    if _BACKEND == 'wrapper':
+        raw_pages, total_pages = _wrapper_ocr_pdf(pdf_path, timeout=timeout,
+                                                  progress_callback=progress_callback)
+        results = []
+        for idx in sorted(raw_pages.keys()):
+            text = (raw_pages[idx].get('markdown') or '').strip()
+            if text:
+                results.append({'page': idx + 1, 'text': text})
+        raw_result = {
+            'pdf': os.path.basename(pdf_path),
+            'processed_at': datetime.now().isoformat(),
+            'total_pages': total_pages,
+            'done_pages': len(raw_pages),
+            'pages': sorted(raw_pages.values(), key=lambda p: p['page']),
+        }
+        return results, raw_result
 
     doc = fitz.open(pdf_path)
     total_pages = doc.page_count

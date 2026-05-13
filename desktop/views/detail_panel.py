@@ -435,19 +435,40 @@ class DetailPanel(QWidget):
                 grid.addWidget(paper_cell, row, 1)
                 grid.addWidget(biblio_cell, row, 2)
             else:
-                # Read-only diff (already applied / skip)
+                # Read-only diff (already applied / skip).
+                # Dim the side that was NOT used in the final result.
+                applied = preview.biblio_status in ('applied', 'auto_committed')
+                # If applied and paper now matches biblio, biblio was adopted → dim paper side
+                if applied and diff.paper_value == diff.biblio_value:
+                    # After apply both sides are identical (biblio was adopted);
+                    # dim paper side to show biblio was the source
+                    paper_dim, biblio_dim = True, False
+                elif applied:
+                    # Values still differ → paper value was kept, biblio unused
+                    paper_dim, biblio_dim = False, True
+                else:
+                    paper_dim, biblio_dim = False, False
+
+                dim_style = 'color: #555;'
+
                 paper_lbl = QLabel(diff.paper_value or '(empty)')
                 paper_lbl.setWordWrap(True)
                 paper_lbl.setProperty(
                     'class',
                     'FieldValueStub' if diff.kind == 'fill' else 'FieldValue',
                 )
+                if paper_dim:
+                    paper_lbl.setStyleSheet(dim_style)
+
                 biblio_lbl = QLabel(diff.biblio_value or '(empty)')
                 biblio_lbl.setWordWrap(True)
                 biblio_lbl.setProperty(
                     'class',
                     'ConflictValue' if diff.kind == 'conflict' else 'FillValue',
                 )
+                if biblio_dim:
+                    biblio_lbl.setStyleSheet(dim_style)
+
                 grid.addWidget(paper_lbl, row, 1)
                 grid.addWidget(biblio_lbl, row, 2)
 

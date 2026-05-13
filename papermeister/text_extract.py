@@ -107,9 +107,20 @@ def _pages_from_raw(raw_result):
 def _resolve_filepath(paper_file):
     """Return (filepath, is_temp) for a PaperFile.
 
-    For Zotero files, downloads to a temp location. Caller must clean up if is_temp.
+    For Zotero files, downloads to pdf_cache so the PDF tab can reuse it.
     """
     if paper_file.zotero_key:
+        # Check pdf_cache first
+        filename = paper_file.path or f'{paper_file.zotero_key}.pdf'
+        cache_dir = os.path.join(
+            os.path.expanduser('~'), '.papermeister', 'pdf_cache',
+            paper_file.zotero_key,
+        )
+        cached_path = os.path.join(cache_dir, filename)
+        if os.path.isfile(cached_path):
+            return cached_path, False
+
+        # Download to pdf_cache
         from .preferences import get_pref
         from .zotero_client import ZoteroClient
         user_id = get_pref('zotero_user_id', '')
@@ -117,8 +128,11 @@ def _resolve_filepath(paper_file):
         if not user_id or not api_key:
             raise RuntimeError('Zotero credentials not configured')
         client = ZoteroClient(user_id, api_key)
-        tmp_path = client.download_attachment(paper_file.zotero_key)
-        return tmp_path, True
+        content = client._zot.file(paper_file.zotero_key)
+        os.makedirs(cache_dir, exist_ok=True)
+        with open(cached_path, 'wb') as f:
+            f.write(content)
+        return cached_path, False
     return paper_file.path, False
 
 

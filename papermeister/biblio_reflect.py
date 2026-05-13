@@ -27,6 +27,7 @@ SOURCE_RANK = {
     'llm-sonnet-vision': 50,
     'llm-haiku-vision':  40,
     'llm-sonnet':        30,
+    'llm-qwen':          25,
     'llm-haiku-v2':      22,
     'llm-haiku':         20,
 }
@@ -38,6 +39,20 @@ YEARLESS_DOCTYPES = {'book', 'chapter', 'report'}
 
 # doc_types that are explicitly out-of-scope for auto-commit (P08 §2.2)
 NON_AUTOCOMMIT_DOCTYPES = {'journal_issue', 'unknown', ''}
+
+
+def _normalize_name(name: str) -> str:
+    """Normalize an author name to 'Last First' (no comma, lowered) for comparison."""
+    name = name.strip()
+    if ',' in name:
+        parts = [p.strip() for p in name.split(',', 1)]
+        if len(parts) == 2 and parts[1]:
+            name = f'{parts[0]} {parts[1]}'
+    return ' '.join(name.lower().split())
+
+
+def _normalize_names(names: list[str]) -> list[str]:
+    return [_normalize_name(n) for n in names]
 
 
 Action = Literal['auto_commit', 'needs_review', 'skip']
@@ -206,6 +221,8 @@ def evaluate(biblio: PaperBiblio, paper: Paper) -> Decision:
 
     # No empty slots — check if biblio actually differs from Paper.
     # If all values match, there's nothing to review.
+    # Author names are normalized to "Last, First" for comparison because
+    # Paper stores "Last, First" while biblio may use "First Last".
     existing_names = [
         a.name for a in
         Author.select(Author.name).where(Author.paper == paper).order_by(Author.order)
@@ -215,7 +232,7 @@ def evaluate(biblio: PaperBiblio, paper: Paper) -> Decision:
         and biblio.year == paper.year
         and (biblio.journal or '').strip() == (paper.journal or '').strip()
         and (biblio.doi or '').strip() == (paper.doi or '').strip()
-        and authors == existing_names
+        and _normalize_names(authors) == _normalize_names(existing_names)
     )
     if all_match:
         return Decision('skip', 'already_complete', biblio.id)

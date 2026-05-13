@@ -1,12 +1,13 @@
-"""Bibliographic info extraction from OCR JSON.
-
-Step 2 (P05): input preparation infrastructure. No LLM calls yet.
-"""
+"""Bibliographic info extraction from OCR JSON."""
 
 import json
+import logging
 import os
+import re
 from dataclasses import dataclass, field, asdict
 from typing import Optional
+
+logger = logging.getLogger('biblio')
 
 OCR_JSON_DIR = os.path.join(os.path.expanduser('~'), '.papermeister', 'ocr_json')
 
@@ -93,3 +94,113 @@ def extract_first_pages(pages: list, max_chars: int = 6000, min_chars: int = 150
     if len(combined) > max_chars:
         combined = combined[:max_chars] + '\n[...truncated]'
     return combined
+
+
+_BIBLIO_PROMPT = (
+    "You are extracting bibliographic metadata from the first pages of an academic document (OCR'd text). "
+    "The text below may contain noise, broken lines, and layout artifacts.\n\n"
+    "Your task: extract the bibliographic information that is EXPLICITLY present in the text. "
+    "Do NOT guess or infer; if a field is not clearly stated, leave it empty/null.\n\n"
+    "Output STRICT JSON only (no prose, no markdown code fence) with this exact schema:\n"
+    '{"title": string, "authors": [string], "year": integer or null, '
+    '"journal": string, "doi": string, "abstract": string, '
+    '"doc_type": "article"|"book"|"chapter"|"thesis"|"report"|"unknown", '
+    '"language": string, "confidence": "high"|"medium"|"low", '
+    '"needs_visual_review": boolean, "notes": string}\n\n'
+    "Rules:\n"
+    "- Authors must be in the order shown in the document.\n"
+    "- Year: the publication year, not received/accepted dates.\n"
+    "- DOI: only if explicitly written.\n"
+    "- Set needs_visual_review=true if the first pages look like a journal-issue cover, "
+    "a table of contents, or any layout where spatial/visual structure is essential.\n"
+    "- Output ONLY the JSON object.\n\n"
+)
+
+
+def _parse_llm_json(text: str) -> dict:
+    """Extract a JSON object from LLM output, handling markdown fences and thinking tags."""
+    # Strip <think>...</think> blocks (Qwen3 thinking mode)
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+    # Try markdown code fence
+    m = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
+    if m:
+        return json.loads(m.group(1))
+    # Try bare JSON
+    if text.startswith('{'):
+        return json.loads(text)
+    # Find first {...}
+    m = re.search(r'\{.*\}', text, re.DOTALL)
+    if m:
+        return json.loads(m.group(0))
+    raise ValueError(f'No JSON found in LLM output: {text[:200]}')
+
+
+def _call_claude(prompt: str) -> str:
+    """Call Claude via claude -p CLI. Returns raw text output."""
+    import subprocess
+    proc = subprocess.run(
+        ['claude', '-p', '--model', 'claude-sonnet-4-6', '--output-format', 'json'],
+        input=prompt, capture_output=True, text=True, timeout=120,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f'claude exit {proc.returncode}')
+    envelope = json.loads(proc.stdout)
+    if envelope.get('is_error'):
+        raise RuntimeError(f'claude error: {envelope.get("result", "")[:200]}')
+    return envelope.get('result', '').strip()
+
+
+def _call_qwen(prompt: str, base_url: str) -> str:
+    """Call Qwen3 via OpenAI-compatible API. Returns raw text output."""
+    import requests as req
+    url = f'{base_url.rstrip("/")}/llm/v1/chat/completions'
+    logger.debug('Qwen request: POST %s', url)
+    resp = req.post(url, json={
+        'model': 'qwen',
+        'messages': [{'role': 'user', 'content': prompt}],
+        'max_tokens': 2048,
+        'temperature': 0.1,
+        'chat_template_kwargs': {'enable_thinking': False},
+    }, timeout=120)
+    if resp.status_code != 200:
+        logger.error('Qwen %d: %s', resp.status_code, resp.text[:500])
+    resp.raise_for_status()
+    data = resp.json()
+    return data['choices'][0]['message']['content'].strip()
+
+
+def extract_biblio_llm(file_hash: str, backend: str = 'claude') -> tuple[dict, str, str]:
+    """Extract biblio from OCR text using LLM.
+
+    Args:
+        file_hash: SHA256 hash of the PDF file
+        backend: 'claude' or 'qwen'
+
+    Returns:
+        (pred_dict, source_label, model_version) on success.
+        Raises on failure.
+    """
+    pages = load_ocr_pages(file_hash)
+    if not pages:
+        raise ValueError('No OCR pages found')
+    text = extract_first_pages(pages)
+    if not text:
+        raise ValueError('No text in first pages')
+
+    prompt = _BIBLIO_PROMPT + f"--- DOCUMENT TEXT ---\n{text}"
+
+    if backend == 'qwen':
+        from .preferences import get_pref
+        base_url = get_pref('ocr_pod_url', '')
+        if not base_url:
+            raise RuntimeError('Server URL not configured in Preferences')
+        raw = _call_qwen(prompt, base_url)
+        source = 'llm-qwen'
+        model_version = 'qwen3-14b'
+    else:
+        raw = _call_claude(prompt)
+        source = 'llm-sonnet'
+        model_version = 'claude-sonnet-4-6'
+
+    pred = _parse_llm_json(raw)
+    return pred, source, model_version

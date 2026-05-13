@@ -67,9 +67,8 @@ class ProcessWorker(QThread):
 
     def run(self):
         import threading
-        from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        from ..ocr import ensure_workers_ready, get_worker_status
+        from ..ocr import ensure_workers_ready, get_worker_status, is_wrapper_mode
 
         self._counter = 0
         self._counter_lock = threading.Lock()
@@ -93,9 +92,21 @@ class ProcessWorker(QThread):
             f'→ parallel: {max_concurrent}'
         )
 
+        if is_wrapper_mode():
+            from ..preferences import get_pref
+            min_queued = int(get_pref('ocr_min_queued_pages', 6))
+            processed, failed = self._run_wrapper_pipeline(min_queued_pages=min_queued)
+        else:
+            processed, failed = self._run_parallel(max_concurrent)
+
+        self.finished.emit(processed, failed)
+
+    def _run_parallel(self, max_concurrent: int):
+        """Original parallel mode for serverless/pod backends."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
         processed = 0
         failed = 0
-
         with ThreadPoolExecutor(max_workers=max_concurrent) as pool:
             futures = {
                 pool.submit(self._process_one, pf_id): pf_id
@@ -110,8 +121,195 @@ class ProcessWorker(QThread):
                     processed += 1
                 elif result is False:
                     failed += 1
+        return processed, failed
 
-        self.finished.emit(processed, failed)
+    def _run_wrapper_pipeline(self, min_queued_pages: int = 6):
+        """Pipelined wrapper mode: keep ≥ min_queued_pages on the server.
+
+        Submits PDFs ahead of time so the server always has enough pages
+        to fill its concurrency slots (default 6).
+        """
+        import time
+        from ..models import PaperFile
+        from ..text_extract import (
+            _resolve_filepath, _load_ocr_json, _pages_from_raw,
+            _save_ocr_json, OCR_JSON_DIR,
+            process_paper_file,
+        )
+        from ..ocr import wrapper_submit, wrapper_poll, wrapper_collect
+        from ..ingestion import hash_file
+
+        processed = 0
+        failed = 0
+        total = len(self.paper_file_ids)
+
+        # ── Helpers ──────────────────────────────────────────
+        def _prepare_file(pf_id):
+            """Download PDF if needed, fill hash, check cache.
+            Returns (pf, filepath, has_cache) or None on error.
+            """
+            pf = PaperFile.get_by_id(pf_id)
+            is_zotero = bool(pf.zotero_key)
+            filepath = None
+
+            if is_zotero and not pf.hash:
+                filepath, _ = _resolve_filepath(pf)
+                pf.hash = hash_file(filepath)
+                pf.save()
+
+            cached = _load_ocr_json(pf)
+            if cached:
+                return pf, filepath, True
+
+            if filepath is None:
+                filepath, _ = _resolve_filepath(pf)
+
+            return pf, filepath, False
+
+        def _finalize(pf, raw_result):
+            """Save OCR result and run the post-OCR pipeline (passages, FTS)."""
+            # Use process_paper_file which handles cache check internally.
+            # Since we already saved the OCR JSON, it will load from cache.
+            _save_ocr_json(pf, raw_result)
+            process_paper_file(pf)
+
+        # ── State tracking ───────────────────────────────────
+        # Each in-flight job: {job_id, pf_id, pf, total_pages, name}
+        in_flight = []       # jobs submitted, waiting for completion
+        submit_idx = 0       # next index into paper_file_ids to submit
+        counter = 0
+
+        def _queued_pages():
+            """Pages not yet completed across all in-flight jobs."""
+            return sum(j['total_pages'] - j.get('done_pages', 0) for j in in_flight)
+
+        # ── Submit helper ─────────────────────────────────────
+        def _submit_next():
+            """Try to submit the next file. Returns True if something was submitted/handled."""
+            nonlocal submit_idx, counter, processed, failed
+            if submit_idx >= total:
+                return False
+
+            pf_id = self.paper_file_ids[submit_idx]
+            submit_idx += 1
+            counter += 1
+            prefix = f'[{counter}/{total}]'
+
+            try:
+                pf, filepath, has_cache = _prepare_file(pf_id)
+            except Exception as e:
+                self.progress.emit(f'{prefix} FAILED (prepare): {e}')
+                pf = PaperFile.get_by_id(pf_id)
+                pf.status = 'failed'
+                pf.save()
+                self.file_done.emit(pf_id, 'failed')
+                failed += 1
+                return True
+
+            name = os.path.basename(pf.path)
+
+            if has_cache:
+                self.progress.emit(f'{prefix} {name} (cached)')
+                try:
+                    process_paper_file(pf)
+                    self.file_done.emit(pf_id, 'processed')
+                    processed += 1
+                except Exception as e:
+                    self.progress.emit(f'{prefix}   FAILED: {e}')
+                    pf.status = 'failed'
+                    pf.save()
+                    self.file_done.emit(pf_id, 'failed')
+                    failed += 1
+                return True
+
+            # Submit to wrapper
+            try:
+                self.progress.emit(f'{prefix} {name} → submitting…')
+                job_id, tp = wrapper_submit(filepath)
+                in_flight.append({
+                    'job_id': job_id, 'pf_id': pf_id, 'pf': pf,
+                    'total_pages': tp or 1, 'done_pages': 0,
+                    'name': name, 'prefix': prefix,
+                })
+                self.progress.emit(f'{prefix} {name} → queued ({tp} pages)')
+            except Exception as e:
+                self.progress.emit(f'{prefix} {name} FAILED (submit): {e}')
+                pf.status = 'failed'
+                pf.save()
+                self.file_done.emit(pf_id, 'failed')
+                failed += 1
+            return True
+
+        # ── Main loop ────────────────────────────────────────
+        # Seed: submit enough files to fill the queue
+        while submit_idx < total and _queued_pages() < min_queued_pages:
+            _submit_next()
+
+        while in_flight:
+            if self._cancelled:
+                break
+
+            time.sleep(5)
+
+            # Poll all in-flight jobs
+            still_flying = []
+            for job_info in in_flight:
+                if self._cancelled:
+                    break
+                try:
+                    job = wrapper_poll(job_info['job_id'])
+                except Exception:
+                    still_flying.append(job_info)
+                    continue
+
+                status = job['status']
+                dp = job.get('done_pages', 0)
+                tp = job.get('total_pages', job_info['total_pages'])
+                job_info['total_pages'] = tp
+                job_info['done_pages'] = dp
+
+                if status in ('done', 'done_with_errors'):
+                    pf = job_info['pf']
+                    prefix = job_info['prefix']
+                    try:
+                        raw_pages, total_pages = wrapper_collect(job)
+                        from datetime import datetime
+                        raw_result = {
+                            'pdf': job_info['name'],
+                            'processed_at': datetime.now().isoformat(),
+                            'total_pages': total_pages,
+                            'done_pages': len(raw_pages),
+                            'pages': sorted(raw_pages.values(), key=lambda p: p['page']),
+                        }
+                        _finalize(pf, raw_result)
+                        self.progress.emit(f'{prefix} {job_info["name"]} done ({tp} pages)')
+                        self.file_done.emit(job_info['pf_id'], 'processed')
+                        processed += 1
+                    except Exception as e:
+                        self.progress.emit(f'{prefix} {job_info["name"]} FAILED: {e}')
+                        pf.status = 'failed'
+                        pf.save()
+                        self.file_done.emit(job_info['pf_id'], 'failed')
+                        failed += 1
+                elif status == 'failed':
+                    pf = job_info['pf']
+                    pf.status = 'failed'
+                    pf.save()
+                    self.progress.emit(f'{job_info["prefix"]} {job_info["name"]} FAILED (server)')
+                    self.file_done.emit(job_info['pf_id'], 'failed')
+                    failed += 1
+                else:
+                    self.progress.emit(
+                        f'{job_info["prefix"]} {job_info["name"]} OCR {dp}/{tp} pages')
+                    still_flying.append(job_info)
+
+            in_flight = still_flying
+
+            # Refill: submit more to keep queue ≥ min_queued_pages
+            while submit_idx < total and _queued_pages() < min_queued_pages:
+                _submit_next()
+
+        return processed, failed
 
 
 class ProcessWindow(QWidget):
