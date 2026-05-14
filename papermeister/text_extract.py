@@ -89,6 +89,168 @@ def _load_ocr_json(paper_file):
         return json.load(f)
 
 
+PAPERMEISTER_META_SCHEMA = 1
+
+
+def record_biblio_applied(biblio):
+    """Update papermeister_meta in the OCR JSON after a PaperBiblio reaches a
+    terminal apply state ('applied' or 'auto_committed').
+
+    Writes locally + (if a sibling JSON is enrolled in Zotero AND
+    zotero_upload_ocr_json pref is on) pushes the new content back in-place
+    via Zotero's "replace attachment file" flow (key preserved).
+
+    Best-effort: any failure is swallowed. Caller should not need to handle.
+    """
+    import datetime
+    try:
+        _record_biblio_applied_impl(biblio)
+    except Exception:
+        # Diagnostic-only path; never let metadata sync break apply()
+        pass
+
+
+def _record_biblio_applied_impl(biblio):
+    pdf_hash = (biblio.file_hash or '').strip()
+    if not pdf_hash:
+        return
+
+    json_path = os.path.join(OCR_JSON_DIR, f'{pdf_hash}.json')
+    if not os.path.exists(json_path):
+        return
+
+    import datetime
+    with open(json_path, encoding='utf-8') as f:
+        data = json.load(f)
+
+    meta = data.get('papermeister_meta') or {}
+    meta['schema_version'] = PAPERMEISTER_META_SCHEMA
+    meta['biblio_state'] = biblio.status
+    meta['biblio_source'] = biblio.source or ''
+    meta['biblio_applied_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    data['papermeister_meta'] = meta
+
+    tmp = tempfile.NamedTemporaryFile(
+        mode='w', dir=OCR_JSON_DIR, suffix='.tmp', delete=False, encoding='utf-8',
+    )
+    try:
+        json.dump(data, tmp, ensure_ascii=False, indent=2)
+        tmp.close()
+        os.replace(tmp.name, json_path)
+    except Exception:
+        tmp.close()
+        if os.path.exists(tmp.name):
+            os.unlink(tmp.name)
+        raise
+
+    # Push to Zotero if user opted in and a sibling JSON attachment exists
+    from .preferences import get_pref
+    if not get_pref('zotero_upload_ocr_json', False):
+        return
+
+    sibling = (
+        PaperFile.select()
+        .where(
+            (PaperFile.paper == biblio.paper)
+            & (PaperFile.path == f'{pdf_hash}.json')
+            & (PaperFile.zotero_key.is_null(False))
+        )
+        .first()
+    )
+    if sibling is None:
+        return
+
+    user_id = get_pref('zotero_user_id', '')
+    api_key = get_pref('zotero_api_key', '')
+    if not user_id or not api_key:
+        return
+
+    from .zotero_client import ZoteroClient
+    from .ingestion import hash_file
+    client = ZoteroClient(user_id, api_key)
+    outcome = client.replace_attachment_file(sibling.zotero_key, json_path)
+
+    # Keep the local PaperFile row's hash consistent with the new content so
+    # later diagnostics / dedupe don't see a stale (or empty) value.
+    if outcome in ('updated', 'unchanged'):
+        new_hash = hash_file(json_path)
+        if new_hash and new_hash != (sibling.hash or ''):
+            sibling.hash = new_hash
+            sibling.save()
+
+
+def _try_fetch_sibling_json(paper_file, status_callback=None):
+    """If a sibling Zotero attachment named `{paper_file.hash}.json` exists,
+    download it, write to the local OCR cache, and return the parsed dict.
+
+    Returns None if no sibling found or if any step fails. Caller should
+    fall through to OCR on None.
+    """
+    if not paper_file.zotero_key or not paper_file.hash:
+        return None
+
+    expected_name = f'{paper_file.hash}.json'
+    sibling = (
+        PaperFile
+        .select()
+        .where(
+            (PaperFile.paper == paper_file.paper)
+            & (PaperFile.path == expected_name)
+            & (PaperFile.zotero_key.is_null(False))
+        )
+        .first()
+    )
+    if sibling is None or not sibling.zotero_key:
+        return None
+
+    from .preferences import get_pref
+    from .zotero_client import ZoteroClient
+    user_id = get_pref('zotero_user_id', '')
+    api_key = get_pref('zotero_api_key', '')
+    if not user_id or not api_key:
+        return None
+
+    try:
+        if status_callback:
+            status_callback('Loading OCR JSON from Zotero...')
+        client = ZoteroClient(user_id, api_key)
+        content = client._zot.file(sibling.zotero_key)
+        # pyzotero sniffs content-type: returns a dict for JSON attachments,
+        # bytes for binary, str for plain text. Normalise.
+        if isinstance(content, dict):
+            raw_result = content
+        elif isinstance(content, bytes):
+            raw_result = json.loads(content.decode('utf-8'))
+        else:
+            raw_result = json.loads(content)
+    except Exception as e:
+        if status_callback:
+            status_callback(f'Sibling JSON fetch failed: {e}')
+        return None
+
+    # Persist to local cache so subsequent runs hit fast and the OCR tab works.
+    try:
+        os.makedirs(OCR_JSON_DIR, exist_ok=True)
+        out_path = os.path.join(OCR_JSON_DIR, expected_name)
+        tmp = tempfile.NamedTemporaryFile(
+            mode='w', dir=OCR_JSON_DIR, suffix='.tmp', delete=False, encoding='utf-8',
+        )
+        try:
+            json.dump(raw_result, tmp, ensure_ascii=False, indent=2)
+            tmp.close()
+            os.replace(tmp.name, out_path)
+        except Exception:
+            tmp.close()
+            if os.path.exists(tmp.name):
+                os.unlink(tmp.name)
+            raise
+    except Exception:
+        # Failed to persist — still return the in-memory result so this run succeeds.
+        pass
+
+    return raw_result
+
+
 def _pages_from_raw(raw_result):
     """Extract (page_num, text) list from raw OCR result."""
     pages = []
@@ -157,6 +319,12 @@ def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=N
         paper_file.save()
 
     raw_result = _load_ocr_json(paper_file)
+
+    if raw_result is None and is_zotero:
+        # Cross-machine / post-cache-wipe shortcut: a previous run may have
+        # uploaded `{hash}.json` as a Zotero sibling attachment. Pull it down
+        # instead of paying for OCR again.
+        raw_result = _try_fetch_sibling_json(paper_file, status_callback=status_callback)
 
     if raw_result:
         if status_callback:

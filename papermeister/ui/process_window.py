@@ -133,7 +133,7 @@ class ProcessWorker(QThread):
         from ..models import PaperFile
         from ..text_extract import (
             _resolve_filepath, _load_ocr_json, _pages_from_raw,
-            _save_ocr_json, OCR_JSON_DIR,
+            _save_ocr_json, _try_fetch_sibling_json, OCR_JSON_DIR,
             process_paper_file,
         )
         from ..ocr import wrapper_submit, wrapper_poll, wrapper_collect
@@ -160,6 +160,15 @@ class ProcessWorker(QThread):
             cached = _load_ocr_json(pf)
             if cached:
                 return pf, filepath, True
+
+            # Cache miss — try pulling a sibling `{hash}.json` from Zotero
+            # before paying for OCR. Best-effort; falls through on any failure.
+            if is_zotero:
+                fetched = _try_fetch_sibling_json(
+                    pf, status_callback=lambda msg: self.progress.emit(msg),
+                )
+                if fetched:
+                    return pf, filepath, True
 
             if filepath is None:
                 filepath, _ = _resolve_filepath(pf)

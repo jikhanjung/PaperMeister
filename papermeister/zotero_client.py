@@ -294,3 +294,32 @@ class ZoteroClient:
         if unchanged:
             return unchanged[0].get('key', '')
         return None
+
+    def replace_attachment_file(self, attachment_key, file_path):
+        """Replace an existing attachment's file content in-place. Key is preserved.
+
+        Uses Zotero's "full upload to existing attachment" flow:
+        - GET item to fetch current md5
+        - upload_attachments with existing key + If-Match md5
+
+        Returns 'updated', 'unchanged', or None on failure.
+        """
+        import os
+        item = self._zot.item(attachment_key)
+        current_md5 = item['data'].get('md5', '') or None
+
+        payload = [{
+            'key': attachment_key,
+            'filename': os.path.basename(file_path),
+            'md5': current_md5,
+        }]
+        result = self._zot.upload_attachments(
+            payload, basedir=os.path.dirname(file_path) or '.',
+        )
+        if not isinstance(result, dict):
+            return None
+        if result.get('success'):
+            return 'updated'
+        if result.get('unchanged'):
+            return 'unchanged'
+        return None

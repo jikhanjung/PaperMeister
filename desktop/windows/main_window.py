@@ -455,8 +455,11 @@ class MainWindow(QMainWindow):
         self.status_bar.set_task(f'Extracting biblio for paper {paper_id}…')
 
         def _do_extract():
-            from papermeister.biblio import extract_biblio_llm
-            pred, source, model_version = extract_biblio_llm(file_hash, backend=biblio_backend)
+            from papermeister.biblio import extract_biblio_llm, BiblioAlreadyApplied
+            try:
+                pred, source, model_version = extract_biblio_llm(file_hash, backend=biblio_backend)
+            except BiblioAlreadyApplied as exc:
+                return {'skipped': True, 'meta': exc.meta}, None
             PaperBiblio.create(
                 paper=paper_id,
                 file_hash=file_hash,
@@ -488,17 +491,37 @@ class MainWindow(QMainWindow):
             self.status_bar.set_task(f'Biblio extraction failed: {err}')
             return
 
+        # LLM call was skipped because the OCR JSON already carries an applied
+        # papermeister_meta from another machine. Just update UI + drain queue.
+        if isinstance(pred, dict) and pred.get('skipped'):
+            meta = pred.get('meta') or {}
+            state = meta.get('biblio_state', '?')
+            source = meta.get('biblio_source', '?')
+            self.status_bar.set_task(
+                f'Biblio already {state} on Zotero ({source}) — skipped LLM for paper {paper_id}'
+            )
+            self.paper_list.update_status(paper_id, 'done')
+            if self.detail_panel._current_paper_id == paper_id:
+                self.detail_panel.show_paper(paper_id)
+            self._drain_biblio_queue()
+            return
+
         # Try auto-apply if biblio matches Zotero data
         from papermeister import biblio_reflect
         from papermeister.models import Paper
+        from papermeister.zotero_writeback import ZoteroWriteAccessDenied
         paper = Paper.get_or_none(Paper.id == paper_id)
         biblio = biblio_reflect.select_best_biblio(paper) if paper else None
         if biblio:
             decision = biblio_reflect.evaluate(biblio, paper)
             if decision.action == 'auto_commit':
-                biblio_reflect.apply_single(paper_id)
-                self.status_bar.set_task(f'Biblio extracted & auto-applied for paper {paper_id}')
-                self.paper_list.update_status(paper_id, 'done')
+                try:
+                    biblio_reflect.apply_single(paper_id)
+                except ZoteroWriteAccessDenied as e:
+                    self.status_bar.set_task(f'Biblio auto-apply blocked: {e}')
+                else:
+                    self.status_bar.set_task(f'Biblio extracted & auto-applied for paper {paper_id}')
+                    self.paper_list.update_status(paper_id, 'done')
             else:
                 self.status_bar.set_task(
                     f'Biblio extracted for paper {paper_id} (needs review: {decision.reason})')
@@ -537,8 +560,11 @@ class MainWindow(QMainWindow):
         self.status_bar.set_task(f'Extracting biblio for paper {paper_id}…')
 
         def _do_extract():
-            from papermeister.biblio import extract_biblio_llm
-            pred, source, model_version = extract_biblio_llm(file_hash, backend=biblio_backend)
+            from papermeister.biblio import extract_biblio_llm, BiblioAlreadyApplied
+            try:
+                pred, source, model_version = extract_biblio_llm(file_hash, backend=biblio_backend)
+            except BiblioAlreadyApplied as exc:
+                return {'skipped': True, 'meta': exc.meta}, None
             PaperBiblio.create(
                 paper=paper_id,
                 file_hash=file_hash,

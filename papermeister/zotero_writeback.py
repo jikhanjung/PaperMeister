@@ -27,6 +27,28 @@ from .models import Author, Paper, PaperBiblio, db
 from .zotero_client import ZoteroClient
 
 
+class ZoteroWriteAccessDenied(PermissionError):
+    """API key is missing write access for the targeted Zotero library."""
+
+
+def _update_item(client: ZoteroClient, payload: dict) -> None:
+    """PATCH wrapper that translates 403 into a clearer exception type.
+
+    Without this, pyzotero raises UserNotAuthorised with a wall-of-text
+    traceback that hits the UI as a generic background-task failure.
+    """
+    from pyzotero import zotero_errors
+
+    try:
+        client._zot.update_item(payload)
+    except zotero_errors.UserNotAuthorised as e:
+        raise ZoteroWriteAccessDenied(
+            'Zotero API key lacks write access. Create a new key with '
+            '"Allow write access" at zotero.org/settings/keys, or turn '
+            'off "Enable Zotero write-back" in Preferences.'
+        ) from e
+
+
 Action = Literal['noop', 'wrote', 'would_write', 'would_noop']
 
 
@@ -181,7 +203,7 @@ def writeback_biblio(
     payload = dict(data)
     payload.update(patch)
     # payload already has 'key' and 'version' from the fresh fetch.
-    client._zot.update_item(payload)   # returns True, raises on HTTP error
+    _update_item(client, payload)
 
     # 4. Re-fetch to get the authoritative new version + normalised fields
     #    (e.g. Zotero may rewrite 'date' → 'parsedDate' on the server).
@@ -342,7 +364,7 @@ def writeback_overrides(
 
     payload = dict(data)
     payload.update(patch)
-    client._zot.update_item(payload)
+    _update_item(client, payload)
 
     fresh = client._zot.item(paper.zotero_key)
     _refresh_local_paper(paper, fresh['data'], fresh.get('meta'), client)

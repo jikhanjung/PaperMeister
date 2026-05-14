@@ -289,11 +289,16 @@ def apply_merged(
         biblio.status = 'applied'
         biblio.review_reason = ''
         biblio.save()
+        from papermeister.text_extract import record_biblio_applied
+        record_biblio_applied(biblio)
         return False, 'No changes (kept current values)'
 
-    if paper.zotero_key:
+    from papermeister.preferences import get_pref
+
+    if paper.zotero_key and get_pref('zotero_writeback_enabled', False):
         return _apply_merged_zotero(paper, biblio, fields_to_apply)
 
+    # No zotero_key, or write-back disabled in preferences. Local-only update.
     return _apply_merged_local(paper, biblio, fields_to_apply)
 
 
@@ -319,6 +324,8 @@ def _apply_merged_zotero(
     biblio.status = 'applied'
     biblio.review_reason = result.reason
     biblio.save()
+    from papermeister.text_extract import record_biblio_applied
+    record_biblio_applied(biblio)
 
     applied_fields = ', '.join(sorted(fields_to_apply))
     if not result.changed:
@@ -376,6 +383,8 @@ def _apply_merged_local(
         biblio.status = 'applied'
         biblio.review_reason = ''
         biblio.save()
+        from papermeister.text_extract import record_biblio_applied
+        record_biblio_applied(biblio)
 
     applied_fields = ', '.join(sorted(fields_to_apply))
     return changes, f'Applied: {applied_fields}'

@@ -68,6 +68,38 @@ def load_ocr_pages(file_hash: str) -> list:
     ]
 
 
+def load_ocr_meta(file_hash: str) -> dict | None:
+    """Return the `papermeister_meta` dict embedded in the OCR JSON, or None.
+
+    Used to detect cross-machine state (e.g. biblio already applied on another
+    machine) without re-running the LLM.
+    """
+    path = os.path.join(OCR_JSON_DIR, f'{file_hash}.json')
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, encoding='utf-8') as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+    meta = data.get('papermeister_meta')
+    return meta if isinstance(meta, dict) else None
+
+
+class BiblioAlreadyApplied(Exception):
+    """Raised when extract_biblio_llm sees a JSON whose papermeister_meta
+    indicates biblio is already applied or auto-committed elsewhere.
+
+    Carries the meta dict so callers can decide how to surface the skip.
+    """
+    def __init__(self, meta: dict):
+        super().__init__(
+            f"biblio already applied (state={meta.get('biblio_state', '?')}, "
+            f"source={meta.get('biblio_source', '?')})"
+        )
+        self.meta = meta
+
+
 def extract_first_pages(pages: list, max_chars: int = 6000, min_chars: int = 1500) -> str:
     """Concatenate the first few pages until reaching max_chars.
 
@@ -178,8 +210,14 @@ def extract_biblio_llm(file_hash: str, backend: str = 'claude') -> tuple[dict, s
 
     Returns:
         (pred_dict, source_label, model_version) on success.
-        Raises on failure.
+        Raises BiblioAlreadyApplied if the OCR JSON's papermeister_meta
+        indicates a terminal apply state from another run — saves the LLM call.
+        Raises other exceptions on failure.
     """
+    meta = load_ocr_meta(file_hash)
+    if meta and meta.get('biblio_state') in ('applied', 'auto_committed'):
+        raise BiblioAlreadyApplied(meta)
+
     pages = load_ocr_pages(file_hash)
     if not pages:
         raise ValueError('No OCR pages found')

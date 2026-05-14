@@ -1,6 +1,7 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QButtonGroup,
+    QCheckBox,
     QDialog,
     QFormLayout,
     QHBoxLayout,
@@ -95,6 +96,20 @@ class PreferencesDialog(QDialog):
         zotero_form.addRow('API Key:', self.api_key_edit)
         layout.addLayout(zotero_form)
 
+        self.writeback_checkbox = QCheckBox('Enable Zotero write-back (Apply Biblio updates Zotero items)')
+        self.writeback_checkbox.setToolTip(
+            'When off, Apply Biblio updates only the local mirror. '
+            'Requires an API key with write access on zotero.org/settings/keys.'
+        )
+        layout.addWidget(self.writeback_checkbox)
+
+        self.upload_json_checkbox = QCheckBox('Upload OCR JSON as Zotero sibling attachment after OCR')
+        self.upload_json_checkbox.setToolTip(
+            'Uploads the raw OCR JSON cache to the same Zotero item as the PDF after OCR completes. '
+            'Runs once per paper (skips if a sibling JSON already exists). Requires write access.'
+        )
+        layout.addWidget(self.upload_json_checkbox)
+
         # Test connection button
         test_btn = QPushButton('Test Zotero Connection')
         test_btn.clicked.connect(self._test_connection)
@@ -144,6 +159,8 @@ class PreferencesDialog(QDialog):
             self._biblio_claude_radio.setChecked(True)
         self.user_id_edit.setText(get_pref('zotero_user_id', ''))
         self.api_key_edit.setText(get_pref('zotero_api_key', ''))
+        self.writeback_checkbox.setChecked(bool(get_pref('zotero_writeback_enabled', False)))
+        self.upload_json_checkbox.setChecked(bool(get_pref('zotero_upload_ocr_json', False)))
 
     def _test_connection(self):
         user_id = self.user_id_edit.text().strip()
@@ -186,5 +203,7 @@ class PreferencesDialog(QDialog):
         set_pref('biblio_backend', 'qwen' if self._biblio_qwen_radio.isChecked() else 'claude')
         set_pref('zotero_user_id', self.user_id_edit.text().strip())
         set_pref('zotero_api_key', self.api_key_edit.text().strip())
+        set_pref('zotero_writeback_enabled', self.writeback_checkbox.isChecked())
+        set_pref('zotero_upload_ocr_json', self.upload_json_checkbox.isChecked())
         reset_ocr_config()
         self.accept()

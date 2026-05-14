@@ -42,12 +42,27 @@ NON_AUTOCOMMIT_DOCTYPES = {'journal_issue', 'unknown', ''}
 
 
 def _normalize_name(name: str) -> str:
-    """Normalize an author name to 'Last First' (no comma, lowered) for comparison."""
+    """Normalize an author name to 'last first' (lowered) for comparison.
+
+    Handles both "Last, First" (Zotero-style, as stored on Paper.authors)
+    and "First Last" (LLM extraction output). Without unifying these,
+    `"Smith, John"` and `"John Smith"` compared unequal and the evaluator
+    incorrectly raised override_conflict even though the UI rendered both
+    the same way through format_author_display.
+    """
     name = name.strip()
     if ',' in name:
-        parts = [p.strip() for p in name.split(',', 1)]
-        if len(parts) == 2 and parts[1]:
-            name = f'{parts[0]} {parts[1]}'
+        last, _, first = name.partition(',')
+        last, first = last.strip(), first.strip()
+        if last and first:
+            name = f'{last} {first}'
+        else:
+            name = last or first
+    else:
+        tokens = name.split()
+        if len(tokens) >= 2:
+            # Treat the trailing token as the surname: "John Q Smith" → "smith john q"
+            name = f'{tokens[-1]} {" ".join(tokens[:-1])}'
     return ' '.join(name.lower().split())
 
 
@@ -219,22 +234,27 @@ def evaluate(biblio: PaperBiblio, paper: Paper) -> Decision:
     if any_fill:
         return Decision('auto_commit', '', biblio.id)
 
-    # No empty slots — check if biblio actually differs from Paper.
-    # If all values match, there's nothing to review.
-    # Author names are normalized to "Last, First" for comparison because
-    # Paper stores "Last, First" while biblio may use "First Last".
+    # No empty slots in Paper — biblio either says the same thing or has
+    # nothing to add. An empty biblio field is not a conflict (the biblio
+    # simply did not extract that field); a non-empty biblio field that
+    # disagrees with Paper IS a conflict and needs review.
     existing_names = [
         a.name for a in
         Author.select(Author.name).where(Author.paper == paper).order_by(Author.order)
     ]
-    all_match = (
-        (biblio.title or '').strip() == (paper.title or '').strip()
-        and biblio.year == paper.year
-        and (biblio.journal or '').strip() == (paper.journal or '').strip()
-        and (biblio.doi or '').strip() == (paper.doi or '').strip()
-        and _normalize_names(authors) == _normalize_names(existing_names)
+
+    def _no_conflict(paper_val: str, biblio_val: str) -> bool:
+        bv = (biblio_val or '').strip()
+        return not bv or bv == (paper_val or '').strip()
+
+    no_conflict = (
+        _no_conflict(paper.title, biblio.title)
+        and (biblio.year is None or biblio.year == paper.year)
+        and _no_conflict(paper.journal, biblio.journal)
+        and _no_conflict(paper.doi, biblio.doi)
+        and (not authors or _normalize_names(authors) == _normalize_names(existing_names))
     )
-    if all_match:
+    if no_conflict:
         return Decision('skip', 'already_complete', biblio.id)
 
     return Decision('needs_review', 'override_conflict', biblio.id)
@@ -265,11 +285,13 @@ def apply(
     The single-paper entry point `apply_single()` later overrides to 'applied'
     when called from manual confirmation contexts (GUI / CLI --paper).
     """
-    if paper.zotero_key:
-        # Zotero-sourced — write upstream first, then refresh local mirror.
+    from .preferences import get_pref
+
+    if paper.zotero_key and get_pref('zotero_writeback_enabled', False):
+        # Zotero-sourced and write-back enabled — PATCH upstream first, then
+        # refresh local mirror from the authoritative response.
         from . import zotero_writeback
         from .zotero_client import ZoteroClient
-        from .preferences import get_pref
 
         client = ZoteroClient(
             get_pref('zotero_user_id', ''),
@@ -286,13 +308,16 @@ def apply(
             biblio.status = 'auto_committed'
             biblio.review_reason = result.reason
             biblio.save()
+            from .text_extract import record_biblio_applied
+            record_biblio_applied(biblio)
 
         # Even a no-op (action='noop') counts as "successfully reflected" for
         # the caller: Zotero is authoritative and already complete. Only a
         # real API write changes data, so `changed` mirrors that.
         return result.changed
 
-    # filesystem stub (currently 0 rows; future standalone flow)
+    # Zotero-sourced with write-back disabled → fall through to local-only.
+    # Mirror diverges from Zotero on next pull sync; user opted in by toggling off.
     return _local_apply(biblio, paper, dry_run=dry_run)
 
 
@@ -372,6 +397,8 @@ def _local_apply(biblio: PaperBiblio, paper: Paper, *, dry_run: bool = False) ->
         biblio.status = 'auto_committed'
         biblio.review_reason = ''
         biblio.save()
+        from .text_extract import record_biblio_applied
+        record_biblio_applied(biblio)
 
     return changes
 
@@ -411,6 +438,8 @@ def apply_single(
         fresh = PaperBiblio.get(PaperBiblio.id == biblio.id)
         fresh.status = 'applied'
         fresh.save()
+        from .text_extract import record_biblio_applied
+        record_biblio_applied(fresh)
     return decision, changed
 
 
