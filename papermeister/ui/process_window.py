@@ -94,7 +94,32 @@ class ProcessWorker(QThread):
 
         if is_wrapper_mode():
             from ..preferences import get_pref
-            min_queued = int(get_pref('ocr_min_queued_pages', 6))
+            from ..ocr import wrapper_get_stats
+            # Resolve queue depth target. Explicit pref wins (user override);
+            # otherwise follow the server's mode-aware recommendation.
+            configured = get_pref('ocr_min_queued_pages', None)
+            if configured is not None:
+                min_queued = max(1, int(configured))
+                self.progress.emit(
+                    f'Queue depth target: {min_queued} pages (pref override)'
+                )
+            else:
+                stats = wrapper_get_stats()
+                rec = int(stats.get('recommended_concurrency') or 0)
+                if rec > 0:
+                    min_queued = rec
+                    mode = stats.get('mode', '?')
+                    alive = stats.get('ocr_backends_alive', '?')
+                    total = stats.get('ocr_backends_total', '?')
+                    self.progress.emit(
+                        f'Queue depth target: {min_queued} pages '
+                        f'(mode={mode}, OCR backends {alive}/{total})'
+                    )
+                else:
+                    min_queued = 6
+                    self.progress.emit(
+                        f'Queue depth target: {min_queued} pages (stats unavailable, default)'
+                    )
             processed, failed = self._run_wrapper_pipeline(min_queued_pages=min_queued)
         else:
             processed, failed = self._run_parallel(max_concurrent)

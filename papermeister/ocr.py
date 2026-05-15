@@ -423,6 +423,27 @@ def wrapper_list_jobs() -> list:
         return []
 
 
+def wrapper_get_stats() -> dict:
+    """Fetch /api/stats — counts + OCR backend capacity / mode.
+
+    Returns {} on failure. Key fields used by the client:
+      - recommended_concurrency: int (mode-aware in-flight target)
+      - mode: '2ocr' | 'llm+ocr' | '1ocr' | 'llm' | 'down'
+      - ocr_backends_alive, ocr_backends_total
+
+    Server caches probes for 5s so this is cheap to call.
+    """
+    _ensure_config()
+    try:
+        resp = requests.get(f'{_WRAPPER_URL}/api/stats', timeout=5)
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, dict) else {}
+    except Exception as exc:
+        logger.warning('wrapper_get_stats failed: %s', exc)
+        return {}
+
+
 def wrapper_poll(job_id: str) -> dict:
     """Poll a wrapper job. Returns the full job dict."""
     _ensure_config()
