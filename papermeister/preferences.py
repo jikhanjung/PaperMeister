@@ -34,3 +34,19 @@ def set_pref(key, value):
     data = _load().copy()
     data[key] = value
     _save(data)
+
+
+def get_client_id() -> str:
+    """Return a stable per-install identifier sent to the OCR wrapper.
+
+    Generated lazily on first call (`papermeister-{8 hex}`) and persisted
+    to preferences.json. The wrapper uses (file_hash, client_id) for dedup
+    and we use the same id to distinguish our own jobs from others' when
+    deciding whether to wait on a busy server.
+    """
+    cid = get_pref('client_id', '')
+    if not cid:
+        import uuid
+        cid = f'papermeister-{uuid.uuid4().hex[:8]}'
+        set_pref('client_id', cid)
+    return cid

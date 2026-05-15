@@ -509,7 +509,7 @@ class MainWindow(QMainWindow):
         # Try auto-apply if biblio matches Zotero data
         from papermeister import biblio_reflect
         from papermeister.models import Paper
-        from papermeister.zotero_writeback import ZoteroWriteAccessDenied
+        from papermeister.zotero_writeback import ZoteroWriteAccessDenied, ZoteroPatchRejected
         paper = Paper.get_or_none(Paper.id == paper_id)
         biblio = biblio_reflect.select_best_biblio(paper) if paper else None
         if biblio:
@@ -519,6 +519,8 @@ class MainWindow(QMainWindow):
                     biblio_reflect.apply_single(paper_id)
                 except ZoteroWriteAccessDenied as e:
                     self.status_bar.set_task(f'Biblio auto-apply blocked: {e}')
+                except ZoteroPatchRejected as e:
+                    self.status_bar.set_task(f'Zotero rejected biblio patch (paper {paper_id}): {e}')
                 else:
                     self.status_bar.set_task(f'Biblio extracted & auto-applied for paper {paper_id}')
                     self.paper_list.update_status(paper_id, 'done')

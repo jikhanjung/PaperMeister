@@ -136,8 +136,9 @@ class ProcessWorker(QThread):
             _save_ocr_json, _try_fetch_sibling_json, OCR_JSON_DIR,
             process_paper_file,
         )
-        from ..ocr import wrapper_submit, wrapper_poll, wrapper_collect
+        from ..ocr import wrapper_submit, wrapper_poll, wrapper_collect, wrapper_list_jobs
         from ..ingestion import hash_file
+        from ..preferences import get_pref, get_client_id
 
         processed = 0
         failed = 0
@@ -248,6 +249,38 @@ class ProcessWorker(QThread):
                 self.file_done.emit(pf_id, 'failed')
                 failed += 1
             return True
+
+        # ── Pre-flight: wait for the server to clear other clients' jobs ─
+        # Filter by client_id so we only wait on OTHER clients (e.g. another
+        # papermeister install, or a different tool sharing this server).
+        # Our own previous-session jobs that are still active don't count —
+        # there's no point in waiting on ourselves.
+        if get_pref('ocr_wait_for_others', True):
+            ACTIVE = {'queued', 'processing'}
+            my_cid = get_client_id()
+            wait_seconds = 0
+            while not self._cancelled:
+                jobs = wrapper_list_jobs()
+                others = [
+                    j for j in jobs
+                    if j.get('status') in ACTIVE and j.get('client_id') != my_cid
+                ]
+                if not others:
+                    if wait_seconds:
+                        self.progress.emit(
+                            f'Server is now idle (waited {wait_seconds}s). Starting submissions.'
+                        )
+                    break
+                pages_ahead = sum(
+                    max(0, (j.get('total_pages') or 0) - (j.get('done_pages') or 0))
+                    for j in others
+                )
+                self.progress.emit(
+                    f'Waiting for server: {len(others)} external job(s) active, '
+                    f'~{pages_ahead} pages ahead. Re-checking in 15s…'
+                )
+                time.sleep(15)
+                wait_seconds += 15
 
         # ── Main loop ────────────────────────────────────────
         # Seed: submit enough files to fill the queue

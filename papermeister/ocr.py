@@ -373,17 +373,29 @@ def wrapper_submit(pdf_path: str) -> tuple[str, int]:
     """Submit PDF to wrapper. Returns (job_id, total_pages).
 
     total_pages may be 0 until the server finishes parsing the PDF.
+    Sends our `client_id` in the form so the server can dedup repeat
+    submissions of the same file by this install — and so other clients'
+    GET /ocr listings can tell our jobs apart from theirs.
     """
     _ensure_config()
+    from .preferences import get_client_id
     submit_url = f'{_WRAPPER_URL}/ocr'
     logger.info('Wrapper submit: POST %s (%s)', submit_url, os.path.basename(pdf_path))
     with open(pdf_path, 'rb') as f:
-        resp = requests.post(submit_url, files={'file': f}, timeout=60)
+        resp = requests.post(
+            submit_url,
+            files={'file': f},
+            data={'client_id': get_client_id()},
+            timeout=60,
+        )
     if resp.status_code != 200:
         logger.error('Wrapper submit %d: %s', resp.status_code, resp.text[:500])
     resp.raise_for_status()
     data = resp.json()
     job_id = data['job_id']
+    if data.get('cached'):
+        logger.info('Wrapper returned cached job %s for %s',
+                    job_id, os.path.basename(pdf_path))
     # First poll to get total_pages (server may need a moment to parse PDF)
     try:
         poll = requests.get(f'{_WRAPPER_URL}/ocr/{job_id}', timeout=10).json()
@@ -392,6 +404,23 @@ def wrapper_submit(pdf_path: str) -> tuple[str, int]:
         total_pages = 0
     logger.info('Wrapper job_id: %s, total_pages: %d', job_id, total_pages)
     return job_id, total_pages
+
+
+def wrapper_list_jobs() -> list:
+    """List all jobs known to the wrapper server (without page bodies).
+
+    Used by the pipeline to detect server load from other users before
+    submitting our first PDF. Returns [] on failure (treat as idle).
+    """
+    _ensure_config()
+    try:
+        resp = requests.get(f'{_WRAPPER_URL}/ocr', timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, list) else []
+    except Exception as exc:
+        logger.warning('wrapper_list_jobs failed: %s', exc)
+        return []
 
 
 def wrapper_poll(job_id: str) -> dict:

@@ -31,11 +31,37 @@ class ZoteroWriteAccessDenied(PermissionError):
     """API key is missing write access for the targeted Zotero library."""
 
 
-def _update_item(client: ZoteroClient, payload: dict) -> None:
-    """PATCH wrapper that translates 403 into a clearer exception type.
+class ZoteroPatchRejected(RuntimeError):
+    """Zotero rejected the patch payload (e.g. wrong field for itemType)."""
 
-    Without this, pyzotero raises UserNotAuthorised with a wall-of-text
-    traceback that hits the UI as a generic background-task failure.
+
+# Zotero uses a different "journal-like" field per itemType. publicationTitle
+# is the article/magazine default; bookSection/conferencePaper diverge.
+# Add more rows as new doc_type → itemType mappings come up in the wild.
+ITEM_TYPE_JOURNAL_FIELD: dict[str, str] = {
+    'journalArticle':   'publicationTitle',
+    'magazineArticle':  'publicationTitle',
+    'newspaperArticle': 'publicationTitle',
+    'bookSection':      'bookTitle',
+    'conferencePaper':  'proceedingsTitle',
+    'encyclopediaArticle': 'encyclopediaTitle',
+    'dictionaryEntry':  'dictionaryTitle',
+}
+
+
+def _journal_field_for(item_type: str) -> str | None:
+    """Return the Zotero field name that holds the "container title" for
+    this itemType, or None if the type has no such field (e.g. `book`,
+    `thesis`). Callers must SKIP the journal write when this is None.
+    """
+    return ITEM_TYPE_JOURNAL_FIELD.get(item_type or '')
+
+
+def _update_item(client: ZoteroClient, payload: dict) -> None:
+    """PATCH wrapper that translates pyzotero errors into clearer types.
+
+    Without this, pyzotero raises UserNotAuthorised / UnsupportedParams with
+    wall-of-text tracebacks that hit the UI as generic background failures.
     """
     from pyzotero import zotero_errors
 
@@ -47,6 +73,11 @@ def _update_item(client: ZoteroClient, payload: dict) -> None:
             '"Allow write access" at zotero.org/settings/keys, or turn '
             'off "Enable Zotero write-back" in Preferences.'
         ) from e
+    except zotero_errors.UnsupportedParams as e:
+        # Most common cause: a field name that's not valid for this itemType
+        # (e.g. publicationTitle on bookSection). Surface the original message
+        # but wrapped in a tidy exception.
+        raise ZoteroPatchRejected(str(e).strip() or 'Zotero rejected patch (400)') from e
 
 
 Action = Literal['noop', 'wrote', 'would_write', 'would_noop']
@@ -99,9 +130,16 @@ def _compute_patch(
     if not (data.get('date') or '').strip() and biblio.year is not None:
         patch['date'] = str(biblio.year)
 
-    # publicationTitle (journal)
-    if not (data.get('publicationTitle') or '').strip() and (biblio.journal or '').strip():
-        patch['publicationTitle'] = biblio.journal.strip()
+    # "Journal-like" container title — Zotero uses different field names per
+    # itemType (publicationTitle for articles, bookTitle for bookSection, …).
+    # Skip entirely if this itemType has no such field.
+    journal_field = _journal_field_for(data.get('itemType', ''))
+    if (
+        journal_field
+        and not (data.get(journal_field) or '').strip()
+        and (biblio.journal or '').strip()
+    ):
+        patch[journal_field] = biblio.journal.strip()
 
     # DOI (note: Zotero's field name is uppercase)
     if not (data.get('DOI') or '').strip() and (biblio.doi or '').strip():
@@ -266,9 +304,13 @@ def _compute_override_patch(overrides: dict, data: dict) -> dict:
             patch['date'] = new
 
     if 'journal' in overrides and overrides['journal'] is not None:
-        new = (overrides['journal'] or '').strip()
-        if new != (data.get('publicationTitle') or '').strip():
-            patch['publicationTitle'] = new
+        journal_field = _journal_field_for(data.get('itemType', ''))
+        if journal_field:
+            new = (overrides['journal'] or '').strip()
+            if new != (data.get(journal_field) or '').strip():
+                patch[journal_field] = new
+        # itemType has no journal-like field — silently drop the override;
+        # user can edit Zotero directly for these (book, thesis, etc.).
 
     if 'doi' in overrides and overrides['doi'] is not None:
         new = (overrides['doi'] or '').strip()

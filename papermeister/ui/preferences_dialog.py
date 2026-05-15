@@ -118,6 +118,26 @@ class PreferencesDialog(QDialog):
         self.status_label = QLabel('')
         layout.addWidget(self.status_label)
 
+        layout.addSpacing(16)
+
+        # About section — shows the client_id used for OCR server dedup
+        # / wait-for-others discrimination. Read-only.
+        about_label = QLabel('About')
+        about_label.setStyleSheet('font-weight: bold; font-size: 14px;')
+        layout.addWidget(about_label)
+
+        from ..preferences import get_client_id
+        client_id_row = QFormLayout()
+        cid_value = QLineEdit(get_client_id())
+        cid_value.setReadOnly(True)
+        cid_value.setToolTip(
+            'Per-install identifier sent to the OCR wrapper. '
+            'Used for server-side dedup and to distinguish your jobs from '
+            "other clients' jobs when the server is busy."
+        )
+        client_id_row.addRow('Client ID:', cid_value)
+        layout.addLayout(client_id_row)
+
         layout.addStretch()
 
         # Buttons
