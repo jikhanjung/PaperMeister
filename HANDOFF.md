@@ -33,7 +33,7 @@
   - **Zotero incremental sync** (시작 시 자동 + Sync 버튼 + 우클릭 Full Sync, progress 표시 + 아이콘 pulse 애니메이션)
   - **PaperFolder** M2M junction table — Zotero multi-collection membership 지원
   - **ProcessWindow**: Cancel 버튼 + 서버 상태 폴링 표시 + 완료 시 pill 실시간 갱신
-  - **Wrapper 파이프라인 모드**: 서버 큐에 항상 N페이지 이상 유지 (`ocr_min_queued_pages` pref, 기본 6). OCR 완료 파일부터 자동 biblio 추출 (병렬 진행)
+  - **Wrapper 파이프라인 모드**: 서버 큐에 항상 N페이지 이상 유지. `ocr_min_queued_pages` pref가 미설정이면 서버 `/api/stats::recommended_concurrency` 자동 추종 (mode `llm+ocr`=6, `2ocr`=12), 숫자면 override. OCR 완료 파일부터 자동 biblio 추출 (병렬 진행)
   - **Extract Biblio**: 우클릭 → Sonnet 4.6 또는 Qwen3-14B로 서지 추출, 자동 apply (Zotero 데이터 일치 시)
   - **PDF 캐시**: `~/.papermeister/pdf_cache/{zotero_key}/{filename}` — OCR 다운로드도 같은 캐시 사용
   - **Apply Biblio → pill 업데이트** 연결
