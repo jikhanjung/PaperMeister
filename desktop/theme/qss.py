@@ -133,16 +133,16 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
     border-left: 1px solid {c['border.subtle']};
 }}
 
-/* ── Panel tabs (source nav + detail panel) ───────────────── */
-#SourceTabs::pane, #DetailTabs::pane {{
+/* ── Panel tabs (source nav + detail panel + prefs) ───────── */
+#SourceTabs::pane, #DetailTabs::pane, #PrefsTabs::pane {{
     background-color: {c['bg.panel']};
     border: none;
     border-top: 1px solid {c['border.subtle']};
 }}
-#SourceTabs QTabBar, #DetailTabs QTabBar {{
+#SourceTabs QTabBar, #DetailTabs QTabBar, #PrefsTabs QTabBar {{
     background-color: {c['bg.panel']};
 }}
-#SourceTabs QTabBar::tab, #DetailTabs QTabBar::tab {{
+#SourceTabs QTabBar::tab, #DetailTabs QTabBar::tab, #PrefsTabs QTabBar::tab {{
     background-color: {c['bg.panel']};
     color: {c['text.muted']};
     padding: 8px 14px;
@@ -151,10 +151,10 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
     font-size: {FONT['size.sm']}px;
     font-weight: {FONT['weight.medium']};
 }}
-#SourceTabs QTabBar::tab:hover, #DetailTabs QTabBar::tab:hover {{
+#SourceTabs QTabBar::tab:hover, #DetailTabs QTabBar::tab:hover, #PrefsTabs QTabBar::tab:hover {{
     color: {c['text.primary']};
 }}
-#SourceTabs QTabBar::tab:selected, #DetailTabs QTabBar::tab:selected {{
+#SourceTabs QTabBar::tab:selected, #DetailTabs QTabBar::tab:selected, #PrefsTabs QTabBar::tab:selected {{
     color: {c['text.primary']};
     border-bottom: 2px solid {c['accent.primary']};
 }}

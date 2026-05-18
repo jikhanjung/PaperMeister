@@ -233,13 +233,19 @@ class MainWindow(QMainWindow):
 
     def _on_file_processed(self, paper_file_id: int, status: str):
         """Update the pill for a single paper after OCR completes,
-        then auto-run biblio extraction if OCR succeeded."""
+        then auto-run biblio extraction if OCR succeeded and the
+        auto-extract pref is on."""
         from papermeister.models import PaperFile
+        from papermeister.preferences import get_pref
         pf = PaperFile.get_or_none(PaperFile.id == paper_file_id)
         if not pf:
             return
         self.paper_list.update_status(pf.paper_id, status)
-        if status == 'processed' and pf.hash:
+        if (
+            status == 'processed'
+            and pf.hash
+            and get_pref('auto_biblio_extract', True)
+        ):
             self._auto_biblio_queue.append((pf.paper_id, pf.id))
             self._drain_biblio_queue()
 
@@ -283,39 +289,67 @@ class MainWindow(QMainWindow):
         return ids
 
     def _process_folder(self, folder_id: int):
-        """Process all pending files in a folder and its subfolders."""
+        """Process pending + failed files in a folder and its subfolders.
+
+        Failed files (e.g. from a server restart mid-OCR) are retried —
+        their status is reset to 'pending' before submission so the pill
+        transitions cleanly during reprocessing.
+        """
         from papermeister.models import Paper, PaperFile, PaperFolder
 
         all_folder_ids = self._collect_folder_ids(folder_id)
 
-        # Collect pending PDF file IDs for this folder tree
-        file_ids = [
-            pf.id for pf in (
-                PaperFile.select(PaperFile.id)
-                .join(Paper)
-                .join(PaperFolder, on=(PaperFolder.paper == Paper.id))
-                .where(
-                    PaperFolder.folder << all_folder_ids,
-                    PaperFile.status == 'pending',
-                    PaperFile.path.endswith('.pdf'),
-                )
+        rows = list(
+            PaperFile.select(PaperFile.id, PaperFile.status)
+            .join(Paper)
+            .join(PaperFolder, on=(PaperFolder.paper == Paper.id))
+            .where(
+                PaperFolder.folder << all_folder_ids,
+                PaperFile.status.in_(['pending', 'failed']),
+                PaperFile.path.endswith('.pdf'),
             )
-        ]
+        )
+        pending_ids = [r.id for r in rows if r.status == 'pending']
+        failed_ids = [r.id for r in rows if r.status == 'failed']
+        file_ids = pending_ids + failed_ids
 
         if not file_ids:
-            self.status_bar.set_task('No pending PDF files in this folder')
+            self.status_bar.set_task('No pending or failed PDF files in this folder')
             return
+
+        if failed_ids and pending_ids:
+            message = (
+                f'Process {len(pending_ids)} pending + retry {len(failed_ids)} failed PDF(s)?\n'
+                f'OCR will run, then biblio extraction for completed files.'
+            )
+        elif failed_ids:
+            message = (
+                f'Retry {len(failed_ids)} failed PDF(s)?\n'
+                f'OCR will run, then biblio extraction for completed files.'
+            )
+        else:
+            message = (
+                f'Process {len(pending_ids)} pending PDF(s)?\n'
+                f'OCR will run, then biblio extraction for completed files.'
+            )
 
         resp = QMessageBox.question(
             self,
             'Process Folder',
-            f'Process {len(file_ids)} pending PDF(s)?\n'
-            f'OCR will run, then biblio extraction for completed files.',
+            message,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
         )
         if resp != QMessageBox.StandardButton.Yes:
             return
+
+        # Flip failed → pending so pill state matches what's about to happen.
+        if failed_ids:
+            PaperFile.update(status='pending').where(PaperFile.id.in_(failed_ids)).execute()
+            for fid in failed_ids:
+                pf = PaperFile.get_or_none(PaperFile.id == fid)
+                if pf:
+                    self.paper_list.update_status(pf.paper_id, 'pending')
 
         if self._process_window is None:
             from papermeister.ui.process_window import ProcessWindow

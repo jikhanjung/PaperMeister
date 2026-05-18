@@ -227,13 +227,24 @@ class PaperListView(QTreeWidget):
         file_id = item.data(0, Qt.ItemDataRole.UserRole + 2)
         status = item.text(0)  # column 0 DisplayRole: pending/processed/failed/review/none
 
+        from papermeister.preferences import get_pref
+        manual_biblio_enabled = bool(get_pref('manual_biblio_extract', True))
+
         menu = QMenu(self)
         if status == 'pending':
             menu.addAction('Process OCR', lambda: self.context_action.emit('process', paper_id, file_id or 0))
         elif status == 'failed':
             menu.addAction('Retry OCR', lambda: self.context_action.emit('retry', paper_id, file_id or 0))
         elif status == 'processed':
-            menu.addAction('Extract Biblio', lambda: self.context_action.emit('extract_biblio', paper_id, file_id or 0))
+            extract_act = menu.addAction(
+                'Extract Biblio',
+                lambda: self.context_action.emit('extract_biblio', paper_id, file_id or 0),
+            )
+            if not manual_biblio_enabled:
+                extract_act.setEnabled(False)
+                extract_act.setToolTip(
+                    'Disabled: turn on "Enable manual biblio extraction" in Preferences → Biblio'
+                )
             menu.addAction('Open PDF', lambda: self.context_action.emit('open_pdf', paper_id, file_id or 0))
         elif status == 'review':
             menu.addAction('Review Biblio', lambda: self.context_action.emit('review_biblio', paper_id, 0))

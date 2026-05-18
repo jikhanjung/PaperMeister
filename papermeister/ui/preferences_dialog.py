@@ -10,7 +10,9 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QRadioButton,
+    QTabWidget,
     QVBoxLayout,
+    QWidget,
 )
 
 
@@ -18,19 +20,40 @@ class PreferencesDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle('Preferences')
-        self.setMinimumWidth(450)
+        self.setMinimumWidth(500)
+        self.setMinimumHeight(420)
         self._setup_ui()
         self._load_values()
 
     def _setup_ui(self):
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
 
-        # OCR Engine section
-        ocr_label = QLabel('OCR Engine')
-        ocr_label.setStyleSheet('font-weight: bold; font-size: 14px;')
-        layout.addWidget(ocr_label)
+        self._tabs = QTabWidget(self)
+        self._tabs.setObjectName('PrefsTabs')
+        self._tabs.addTab(self._build_ocr_tab(), 'OCR')
+        self._tabs.addTab(self._build_biblio_tab(), 'Biblio')
+        self._tabs.addTab(self._build_zotero_tab(), 'Zotero')
+        self._tabs.addTab(self._build_about_tab(), 'About')
+        outer.addWidget(self._tabs)
 
-        # Backend radio buttons
+        # Bottom buttons (shared across tabs)
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        save_btn = QPushButton('Save')
+        save_btn.setDefault(True)
+        save_btn.clicked.connect(self._save)
+        cancel_btn = QPushButton('Cancel')
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(save_btn)
+        btn_layout.addWidget(cancel_btn)
+        outer.addLayout(btn_layout)
+
+    # ── Tab: OCR ────────────────────────────────────────────────
+
+    def _build_ocr_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+
         self._ocr_runpod_radio = QRadioButton('RunPod Serverless')
         self._ocr_pod_radio = QRadioButton('Direct vLLM')
         self._ocr_wrapper_radio = QRadioButton('Wrapper API')
@@ -42,33 +65,44 @@ class PreferencesDialog(QDialog):
         layout.addWidget(self._ocr_pod_radio)
         layout.addWidget(self._ocr_wrapper_radio)
 
-        # RunPod fields
-        self._runpod_form = QFormLayout()
+        runpod_form = QFormLayout()
         self.runpod_endpoint_edit = QLineEdit()
         self.runpod_endpoint_edit.setPlaceholderText('Serverless endpoint ID')
-        self._runpod_form.addRow('Endpoint ID:', self.runpod_endpoint_edit)
-
+        runpod_form.addRow('Endpoint ID:', self.runpod_endpoint_edit)
         self.runpod_api_key_edit = QLineEdit()
         self.runpod_api_key_edit.setPlaceholderText('RunPod API key')
         self.runpod_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self._runpod_form.addRow('API Key:', self.runpod_api_key_edit)
-        layout.addLayout(self._runpod_form)
+        runpod_form.addRow('API Key:', self.runpod_api_key_edit)
+        layout.addLayout(runpod_form)
 
-        # Pod / Wrapper URL field (shared — both use ocr_pod_url)
-        self._pod_form = QFormLayout()
+        pod_form = QFormLayout()
         self.ocr_pod_url_edit = QLineEdit()
         self.ocr_pod_url_edit.setPlaceholderText('http://172.16.112.150:8080')
-        self._pod_form.addRow('URL:', self.ocr_pod_url_edit)
-        layout.addLayout(self._pod_form)
+        pod_form.addRow('URL:', self.ocr_pod_url_edit)
+        layout.addLayout(pod_form)
 
         self._ocr_group.buttonClicked.connect(self._on_ocr_backend_changed)
 
-        layout.addSpacing(16)
+        layout.addStretch()
+        return page
 
-        # Biblio extraction section
-        biblio_label = QLabel('Biblio Extraction')
-        biblio_label.setStyleSheet('font-weight: bold; font-size: 14px;')
-        layout.addWidget(biblio_label)
+    # ── Tab: Biblio ─────────────────────────────────────────────
+
+    def _build_biblio_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+
+        self.auto_biblio_checkbox = QCheckBox('Auto-extract biblio after OCR completes')
+        self.auto_biblio_checkbox.setToolTip(
+            'When off, the pipeline stops at OCR done — no biblio extraction is queued.'
+        )
+        layout.addWidget(self.auto_biblio_checkbox)
+
+        self.manual_biblio_checkbox = QCheckBox('Enable manual biblio extraction (right-click → Extract Biblio)')
+        self.manual_biblio_checkbox.setToolTip(
+            'When off, the right-click "Extract Biblio" item is greyed out.'
+        )
+        layout.addWidget(self.manual_biblio_checkbox)
 
         self._biblio_claude_radio = QRadioButton('Claude Sonnet (claude -p, Max plan)')
         self._biblio_qwen_radio = QRadioButton('Qwen3-14B (local server, uses OCR URL)')
@@ -78,23 +112,37 @@ class PreferencesDialog(QDialog):
         layout.addWidget(self._biblio_claude_radio)
         layout.addWidget(self._biblio_qwen_radio)
 
-        layout.addSpacing(16)
+        # Radios enabled if either auto OR manual is on (= biblio extraction
+        # happens via at least one path, so the engine choice is meaningful).
+        self.auto_biblio_checkbox.toggled.connect(self._refresh_biblio_radio_state)
+        self.manual_biblio_checkbox.toggled.connect(self._refresh_biblio_radio_state)
 
-        # Zotero section
-        zotero_label = QLabel('Zotero API')
-        zotero_label.setStyleSheet('font-weight: bold; font-size: 14px;')
-        layout.addWidget(zotero_label)
+        layout.addStretch()
+        return page
 
-        zotero_form = QFormLayout()
+    def _refresh_biblio_radio_state(self):
+        any_on = (
+            self.auto_biblio_checkbox.isChecked()
+            or self.manual_biblio_checkbox.isChecked()
+        )
+        self._biblio_claude_radio.setEnabled(any_on)
+        self._biblio_qwen_radio.setEnabled(any_on)
+
+    # ── Tab: Zotero ─────────────────────────────────────────────
+
+    def _build_zotero_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+
+        form = QFormLayout()
         self.user_id_edit = QLineEdit()
         self.user_id_edit.setPlaceholderText('Numeric user ID from zotero.org/settings/keys')
-        zotero_form.addRow('User ID:', self.user_id_edit)
-
+        form.addRow('User ID:', self.user_id_edit)
         self.api_key_edit = QLineEdit()
         self.api_key_edit.setPlaceholderText('API key from zotero.org/settings/keys')
         self.api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        zotero_form.addRow('API Key:', self.api_key_edit)
-        layout.addLayout(zotero_form)
+        form.addRow('API Key:', self.api_key_edit)
+        layout.addLayout(form)
 
         self.writeback_checkbox = QCheckBox('Enable Zotero write-back (Apply Biblio updates Zotero items)')
         self.writeback_checkbox.setToolTip(
@@ -110,7 +158,6 @@ class PreferencesDialog(QDialog):
         )
         layout.addWidget(self.upload_json_checkbox)
 
-        # Test connection button
         test_btn = QPushButton('Test Zotero Connection')
         test_btn.clicked.connect(self._test_connection)
         layout.addWidget(test_btn)
@@ -118,16 +165,22 @@ class PreferencesDialog(QDialog):
         self.status_label = QLabel('')
         layout.addWidget(self.status_label)
 
-        layout.addSpacing(16)
+        layout.addStretch()
+        return page
 
-        # About section — shows the client_id used for OCR server dedup
-        # / wait-for-others discrimination. Read-only.
-        about_label = QLabel('About')
-        about_label.setStyleSheet('font-weight: bold; font-size: 14px;')
-        layout.addWidget(about_label)
+    # ── Tab: About ──────────────────────────────────────────────
+
+    def _build_about_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
 
         from ..preferences import get_client_id
-        client_id_row = QFormLayout()
+
+        intro = QLabel('PaperMeister desktop')
+        intro.setStyleSheet('font-weight: bold; font-size: 14px;')
+        layout.addWidget(intro)
+
+        form = QFormLayout()
         cid_value = QLineEdit(get_client_id())
         cid_value.setReadOnly(True)
         cid_value.setToolTip(
@@ -135,22 +188,21 @@ class PreferencesDialog(QDialog):
             'Used for server-side dedup and to distinguish your jobs from '
             "other clients' jobs when the server is busy."
         )
-        client_id_row.addRow('Client ID:', cid_value)
-        layout.addLayout(client_id_row)
+        form.addRow('Client ID:', cid_value)
+        layout.addLayout(form)
+
+        hint = QLabel(
+            'Client ID is generated lazily on first OCR submission and '
+            'persisted to ~/.papermeister/preferences.json.'
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet('color: #888;')
+        layout.addWidget(hint)
 
         layout.addStretch()
+        return page
 
-        # Buttons
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        save_btn = QPushButton('Save')
-        save_btn.setDefault(True)
-        save_btn.clicked.connect(self._save)
-        cancel_btn = QPushButton('Cancel')
-        cancel_btn.clicked.connect(self.reject)
-        btn_layout.addWidget(save_btn)
-        btn_layout.addWidget(cancel_btn)
-        layout.addLayout(btn_layout)
+    # ── Helpers ─────────────────────────────────────────────────
 
     def _on_ocr_backend_changed(self):
         is_runpod = self._ocr_runpod_radio.isChecked()
@@ -177,6 +229,9 @@ class PreferencesDialog(QDialog):
             self._biblio_qwen_radio.setChecked(True)
         else:
             self._biblio_claude_radio.setChecked(True)
+        self.auto_biblio_checkbox.setChecked(bool(get_pref('auto_biblio_extract', True)))
+        self.manual_biblio_checkbox.setChecked(bool(get_pref('manual_biblio_extract', True)))
+        self._refresh_biblio_radio_state()
         self.user_id_edit.setText(get_pref('zotero_user_id', ''))
         self.api_key_edit.setText(get_pref('zotero_api_key', ''))
         self.writeback_checkbox.setChecked(bool(get_pref('zotero_writeback_enabled', False)))
@@ -221,6 +276,8 @@ class PreferencesDialog(QDialog):
         set_pref('runpod_api_key', self.runpod_api_key_edit.text().strip())
         set_pref('ocr_pod_url', self.ocr_pod_url_edit.text().strip())
         set_pref('biblio_backend', 'qwen' if self._biblio_qwen_radio.isChecked() else 'claude')
+        set_pref('auto_biblio_extract', self.auto_biblio_checkbox.isChecked())
+        set_pref('manual_biblio_extract', self.manual_biblio_checkbox.isChecked())
         set_pref('zotero_user_id', self.user_id_edit.text().strip())
         set_pref('zotero_api_key', self.api_key_edit.text().strip())
         set_pref('zotero_writeback_enabled', self.writeback_checkbox.isChecked())
