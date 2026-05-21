@@ -158,6 +158,17 @@ class PreferencesDialog(QDialog):
         )
         layout.addWidget(self.upload_json_checkbox)
 
+        self.promote_standalone_checkbox = QCheckBox(
+            'Auto-create parent item for standalone PDFs (uses filename as title)'
+        )
+        self.promote_standalone_checkbox.setToolTip(
+            'When OCR completes on a standalone PDF (one without a Zotero parent item), '
+            'create a "document" parent item using the filename as title and re-parent the PDF under it. '
+            'Equivalent to Zotero GUI\'s "Create Parent Item…" action. Runs before OCR JSON upload. '
+            'Requires write access.'
+        )
+        layout.addWidget(self.promote_standalone_checkbox)
+
         test_btn = QPushButton('Test Zotero Connection')
         test_btn.clicked.connect(self._test_connection)
         layout.addWidget(test_btn)
@@ -236,6 +247,7 @@ class PreferencesDialog(QDialog):
         self.api_key_edit.setText(get_pref('zotero_api_key', ''))
         self.writeback_checkbox.setChecked(bool(get_pref('zotero_writeback_enabled', False)))
         self.upload_json_checkbox.setChecked(bool(get_pref('zotero_upload_ocr_json', False)))
+        self.promote_standalone_checkbox.setChecked(bool(get_pref('auto_promote_standalone', True)))
 
     def _test_connection(self):
         user_id = self.user_id_edit.text().strip()
@@ -282,5 +294,6 @@ class PreferencesDialog(QDialog):
         set_pref('zotero_api_key', self.api_key_edit.text().strip())
         set_pref('zotero_writeback_enabled', self.writeback_checkbox.isChecked())
         set_pref('zotero_upload_ocr_json', self.upload_json_checkbox.isChecked())
+        set_pref('auto_promote_standalone', self.promote_standalone_checkbox.isChecked())
         reset_ocr_config()
         self.accept()

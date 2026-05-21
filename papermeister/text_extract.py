@@ -402,14 +402,44 @@ def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=N
         paper_file.status = 'processed'
         paper_file.save()
 
-    # Upload OCR JSON as Zotero sibling attachment (opt-in, best-effort)
+    # Promote standalone PDFs to parent items so subsequent JSON upload
+    # has a real parent to attach under. Skips no-op for already-parented
+    # PDFs. Opt-out via `auto_promote_standalone` pref.
     from .preferences import get_pref
-    if is_zotero and get_pref('zotero_upload_ocr_json', False):
+    if (
+        is_zotero
+        and paper.zotero_key
+        and paper.zotero_key == paper_file.zotero_key
+        and get_pref('auto_promote_standalone', True)
+    ):
+        try:
+            from .zotero_client import ZoteroClient
+            from .zotero_writeback import promote_standalone_with_filename
+            user_id = get_pref('zotero_user_id', '')
+            api_key = get_pref('zotero_api_key', '')
+            if user_id and api_key:
+                if status_callback:
+                    status_callback('Creating Zotero parent item (filename as title)...')
+                client = ZoteroClient(user_id, api_key)
+                new_parent_key = promote_standalone_with_filename(
+                    paper_file, client=client,
+                )
+                if new_parent_key and status_callback:
+                    status_callback(f'  → parent created: {new_parent_key}')
+        except Exception as e:
+            if status_callback:
+                status_callback(f'Parent item creation failed: {e}')
+
+    # Upload OCR JSON as Zotero sibling attachment (opt-in, best-effort).
+    # Match per PDF (by hash-based filename), not "any JSON on this paper" —
+    # a parent item with multiple PDF children needs one JSON per PDF.
+    if is_zotero and get_pref('zotero_upload_ocr_json', False) and paper_file.hash:
+        json_filename = f'{paper_file.hash}.json'
         existing_json = (
             PaperFile.select()
             .where(
                 (PaperFile.paper == paper)
-                & (PaperFile.path.endswith('.json'))
+                & (PaperFile.path == json_filename)
             )
             .first()
         )

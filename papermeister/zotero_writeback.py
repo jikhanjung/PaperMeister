@@ -414,3 +414,84 @@ def writeback_overrides(
     return WritebackResult(
         action='wrote', changed=True, patch=patch,
     )
+
+
+def promote_standalone_with_filename(
+    paper_file,
+    *,
+    client: ZoteroClient,
+    item_type: str = 'document',
+) -> str | None:
+    """Promote a standalone PDF to a Zotero parent item.
+
+    Creates a parent item with the PDF's filename (minus extension) as
+    title, then re-parents the PDF attachment under it. No LLM metadata
+    involved — this is the lightweight equivalent of Zotero GUI's
+    "Create Parent Item…" action.
+
+    Args:
+        paper_file: PaperFile pointing at the standalone PDF.
+        client:     authenticated ZoteroClient (must have write access).
+        item_type:  Zotero itemType for the new parent (default 'document'
+                    — most neutral, fewest required fields).
+
+    Returns the new parent's Zotero key on success. Returns None if the
+    paper isn't standalone (no-op). Raises on Zotero API failure.
+    """
+    import os
+
+    paper = paper_file.paper
+
+    # Standalone = Paper.zotero_key == PaperFile.zotero_key (the attachment
+    # is acting as its own canonical record). Anything else is already
+    # parented — nothing to promote.
+    if not paper.zotero_key or paper.zotero_key != paper_file.zotero_key:
+        return None
+
+    # Pull the PDF attachment to read its collections (so the new parent
+    # ends up in the same place) before we re-parent it.
+    pdf_item = client._zot.item(paper_file.zotero_key)
+    pdf_data = pdf_item['data']
+    collections = pdf_data.get('collections', []) or []
+
+    title = paper.title or os.path.splitext(os.path.basename(paper_file.path))[0]
+
+    payload = {
+        'itemType': item_type,
+        'title': title,
+        'collections': collections,
+        'tags': [],
+        'relations': {},
+    }
+
+    try:
+        resp = client._zot.create_items([payload])
+    except Exception as exc:
+        msg = str(exc).lower()
+        if 'forbidden' in msg or 'not authorised' in msg or '403' in msg:
+            raise ZoteroWriteAccessDenied(
+                'Zotero API key lacks write access — cannot create parent item. '
+                'Update the key with write permission, or turn off '
+                '"Auto-create parent item for standalone PDFs" in Preferences → Zotero.'
+            ) from exc
+        raise
+
+    successes = resp.get('successful', {}) if isinstance(resp, dict) else {}
+    if not successes:
+        raise RuntimeError(f'create_items returned no success: {resp}')
+    new_parent_key = list(successes.values())[0]['key']
+
+    # Re-parent the PDF. Children inherit collections from their parent,
+    # so clear the attachment's collection membership to avoid duplicates.
+    pdf_data['parentItem'] = new_parent_key
+    pdf_data['collections'] = []
+    client._zot.update_item(pdf_data)
+
+    # Local DB: Paper.zotero_key now points at the new parent. PaperFile.zotero_key
+    # stays the same (it's still the attachment, just parented now).
+    paper.zotero_key = new_parent_key
+    if not paper.title:
+        paper.title = title
+    paper.save()
+
+    return new_parent_key
