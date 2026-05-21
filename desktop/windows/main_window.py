@@ -382,15 +382,21 @@ class MainWindow(QMainWindow):
             )
         )
 
-        # Filter: has OCR JSON on disk AND no JSON sibling yet
-        paper_ids_with_json = set(
-            pf.paper_id for pf in
-            PaperFile.select(PaperFile.paper)
-            .where(PaperFile.path.endswith('.json'))
-        )
+        # Filter: has OCR JSON on disk AND no JSON sibling yet — per PDF, not per
+        # paper. A parent item with multiple PDF children needs one JSON each;
+        # checking only "any JSON on this paper" would skip PDF #2/#3 incorrectly.
+        # JSON filename pattern is `{hash}.json`.
+        existing_jsons = set()
+        for jpf in PaperFile.select(PaperFile.paper, PaperFile.path).where(
+            PaperFile.path.endswith('.json')
+        ):
+            name = jpf.path
+            if name.endswith('.json'):
+                existing_jsons.add((jpf.paper_id, name[:-5]))
+
         todo = [
             pf for pf in pdf_files
-            if pf.paper_id not in paper_ids_with_json
+            if (pf.paper_id, pf.hash) not in existing_jsons
             and os.path.exists(os.path.join(OCR_JSON_DIR, f'{pf.hash}.json'))
         ]
 

@@ -12,6 +12,16 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Match the desktop app's SSL monkey-patch (institutional CAs trip pyzotero).
+import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+_original_request = requests.api.request
+def _no_verify_request(method, url, **kwargs):
+    kwargs.setdefault('verify', False)
+    return _original_request(method, url, **kwargs)
+requests.api.request = _no_verify_request
+
 from papermeister.database import init_db
 from papermeister.models import Paper, PaperFile, db
 from papermeister.preferences import get_pref
@@ -98,14 +108,22 @@ def main():
     if backfilled:
         log(f'  → {backfilled}개 백필 완료')
 
-    # 같은 paper에 이미 JSON sibling PaperFile 있는 것 제외
-    paper_ids_with_json = set(
-        pf.paper_id for pf in PaperFile.select(PaperFile.paper).where(
-            PaperFile.path.endswith('.json')
-        )
-    )
+    # 이미 매칭되는 JSON PaperFile이 있는 PDF 제외.
+    # multi-PDF paper 지원: paper 단위가 아니라 (paper_id, hash) 쌍으로 매칭해서,
+    # PDF #2/#3 처럼 JSON이 아직 안 올라간 sibling은 후보로 남게 함.
+    # JSON 파일명 패턴은 `{hash}.json` (text_extract._upload_ocr_json_to_zotero).
+    existing_jsons = set()
+    for jpf in PaperFile.select(PaperFile.paper, PaperFile.path).where(
+        PaperFile.path.endswith('.json')
+    ):
+        name = jpf.path
+        if name.endswith('.json'):
+            existing_jsons.add((jpf.paper_id, name[:-5]))
 
-    todo = [pf for pf in candidates if pf.paper_id not in paper_ids_with_json]
+    todo = [
+        pf for pf in candidates
+        if (pf.paper_id, pf.hash) not in existing_jsons
+    ]
     log(f'업로드 대상: {len(todo)}')
 
     if args.limit > 0:
