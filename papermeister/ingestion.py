@@ -3,7 +3,10 @@ import os
 import shutil
 from pathlib import Path
 
-from .models import db, Source, Folder, Paper, Author, PaperFile, PaperFolder
+from .models import (
+    db, Source, Folder, Paper, Author, PaperFile, PaperFolder,
+    PaperBiblio, Passage,
+)
 
 
 def hash_file(filepath):
@@ -181,6 +184,41 @@ def _get_or_create_zotero_folder(source, collection):
     return folder
 
 
+def _merge_stale_standalone(old_paper, new_paper):
+    """Move all records from an obsolete standalone Paper to its new parent.
+
+    Triggered when sync sees a PDF attachment that's now a child of a real
+    Zotero parent item, but the local DB still has the standalone Paper
+    that was created when the PDF was synced parent-less. Common cause:
+    the user ran "Create Parent Item…" in the Zotero GUI between syncs.
+
+    Migrates: PaperFile, PaperBiblio, Passage, and FTS rows. Discards the
+    old Paper's authors (always empty for standalone) and folder links
+    (the new parent already has its own from the sync).
+    """
+    if old_paper.id == new_paper.id:
+        return
+    with db.atomic():
+        PaperFile.update(paper=new_paper).where(PaperFile.paper == old_paper).execute()
+        PaperBiblio.update(paper=new_paper).where(PaperBiblio.paper == old_paper).execute()
+        Passage.update(paper=new_paper).where(Passage.paper == old_paper).execute()
+        # passage_fts denormalizes paper_id, title, authors — keep them
+        # consistent with the new canonical paper.
+        new_authors_str = ', '.join(
+            a.name for a in
+            Author.select(Author.name)
+            .where(Author.paper == new_paper)
+            .order_by(Author.order)
+        )
+        db.execute_sql(
+            'UPDATE passage_fts SET paper_id = ?, title = ?, authors = ? '
+            'WHERE paper_id = ?',
+            [new_paper.id, new_paper.title, new_authors_str, old_paper.id],
+        )
+        # Authors and PaperFolder cascade away with the old paper.
+        old_paper.delete_instance()
+
+
 def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=None,
                       zotero_client=None):
     """Process items from library-wide incremental fetch.
@@ -293,7 +331,61 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
             existing_pf = PaperFile.select().where(
                 PaperFile.zotero_key == att['key'],
             ).first()
-            if not existing_pf:
+            if existing_pf:
+                # Detect "stale standalone" — the attachment was previously
+                # synced as parent-less, so a Paper with Paper.zotero_key ==
+                # this attachment's key was created. Now Zotero has given
+                # the PDF a real parent (the item we're processing) and we
+                # need to fold the obsolete Paper into it.
+                if (
+                    existing_pf.paper_id != paper.id
+                    and existing_pf.paper.zotero_key == att['key']
+                ):
+                    if progress_callback:
+                        progress_callback(
+                            f'  merging stale standalone Paper {existing_pf.paper_id} '
+                            f'→ {paper.id} ({att["filename"]})'
+                        )
+                    _merge_stale_standalone(existing_pf.paper, paper)
+                # Otherwise the PaperFile is already correctly parented
+                # (idempotent re-sync), nothing to do.
+                continue
+            ct = att.get('content_type', '')
+            fname = att['filename']
+            is_derived = (
+                ct == 'application/json' or fname.lower().endswith('.json')
+            )
+            PaperFile.create(
+                paper=paper,
+                path=fname,
+                hash='',
+                status='processed' if is_derived else 'pending',
+                zotero_key=att['key'],
+            )
+
+    # Handle orphan attachments (parent not in this incremental batch).
+    if orphan_attachments:
+        for parent_key, atts in orphan_attachments.items():
+            paper = Paper.select().where(Paper.zotero_key == parent_key).first()
+            if not paper:
+                continue
+            for att in atts:
+                existing_pf = PaperFile.select().where(
+                    PaperFile.zotero_key == att['key'],
+                ).first()
+                if existing_pf:
+                    if (
+                        existing_pf.paper_id != paper.id
+                        and existing_pf.paper.zotero_key == att['key']
+                    ):
+                        if progress_callback:
+                            progress_callback(
+                                f'  merging stale standalone Paper '
+                                f'{existing_pf.paper_id} → {paper.id} '
+                                f'({att["filename"]})'
+                            )
+                        _merge_stale_standalone(existing_pf.paper, paper)
+                    continue
                 ct = att.get('content_type', '')
                 fname = att['filename']
                 is_derived = (
@@ -306,30 +398,6 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
                     status='processed' if is_derived else 'pending',
                     zotero_key=att['key'],
                 )
-
-    # Handle orphan attachments (parent not in this incremental batch).
-    if orphan_attachments:
-        for parent_key, atts in orphan_attachments.items():
-            paper = Paper.select().where(Paper.zotero_key == parent_key).first()
-            if not paper:
-                continue
-            for att in atts:
-                existing_pf = PaperFile.select().where(
-                    PaperFile.zotero_key == att['key'],
-                ).first()
-                if not existing_pf:
-                    ct = att.get('content_type', '')
-                    fname = att['filename']
-                    is_derived = (
-                        ct == 'application/json' or fname.lower().endswith('.json')
-                    )
-                    PaperFile.create(
-                        paper=paper,
-                        path=fname,
-                        hash='',
-                        status='processed' if is_derived else 'pending',
-                        zotero_key=att['key'],
-                    )
 
     # Backfill: find Zotero-sourced papers that have no PaperFile at all
     # (missed by earlier syncs). Fetch their children from the API.
@@ -351,7 +419,26 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
                     cdata = child.get('data', {})
                     if cdata.get('itemType') != 'attachment':
                         continue
-                    if PaperFile.select().where(PaperFile.zotero_key == cdata['key']).exists():
+                    existing_pf = PaperFile.select().where(
+                        PaperFile.zotero_key == cdata['key'],
+                    ).first()
+                    if existing_pf:
+                        # Same stale-standalone migration as the main sync
+                        # loop. This is the auto-recovery path: Paper `mp`
+                        # has no PaperFile in DB, but its child attachment
+                        # already exists as part of an older standalone
+                        # Paper that needs to be folded in.
+                        if (
+                            existing_pf.paper_id != mp.id
+                            and existing_pf.paper.zotero_key == cdata['key']
+                        ):
+                            if progress_callback:
+                                progress_callback(
+                                    f'  merging stale standalone Paper '
+                                    f'{existing_pf.paper_id} → {mp.id} '
+                                    f'({cdata.get("filename", cdata["key"])})'
+                                )
+                            _merge_stale_standalone(existing_pf.paper, mp)
                         continue
                     ct = cdata.get('contentType', '')
                     fname = cdata.get('filename', cdata['key'])
