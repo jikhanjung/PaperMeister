@@ -21,6 +21,9 @@ class PaperRow:
     folder_id: int | None  # used by Ctrl+click → reveal in SourceNav
     status: str  # PaperFile.status — pending/processed/failed, or 'none'
     is_stub: bool
+    # True when the Zotero record is the attachment itself (no parent item).
+    # Drives the "re-OCR to create parent" right-click action.
+    is_standalone: bool = False
 
 
 def _author_string(paper_id: int) -> str:
@@ -112,6 +115,11 @@ def _row_from_paper(paper: Paper, source_name: str) -> PaperRow:
         if has_applied:
             file_status = 'done'
     display_title = paper.title or '(untitled)'
+    is_standalone = bool(
+        paper.zotero_key
+        and pfile is not None
+        and paper.zotero_key == pfile.zotero_key
+    )
     return PaperRow(
         paper_id=paper.id,
         file_id=pfile.id if pfile else None,
@@ -123,6 +131,7 @@ def _row_from_paper(paper: Paper, source_name: str) -> PaperRow:
         folder_id=paper.folder_id,
         status=file_status,
         is_stub=_is_stub(paper),
+        is_standalone=is_standalone,
     )
 
 

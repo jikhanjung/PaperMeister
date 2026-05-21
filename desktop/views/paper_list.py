@@ -168,11 +168,33 @@ class PaperListView(QTreeWidget):
         self._populate(rows)
 
     def update_status(self, paper_id: int, new_status: str):
-        """Update the status pill for a single paper without reloading the list."""
+        """Update the status pill for a single paper without reloading the list.
+
+        Also re-evaluates the row's `is_standalone` flag from DB, since OCR
+        completion may have triggered an auto-promote (Paper.zotero_key changes
+        to the new parent key, so the row is no longer standalone).
+        """
+        from papermeister.models import Paper, PaperFile
         for i in range(self.topLevelItemCount()):
             item = self.topLevelItem(i)
             if item.data(0, Qt.ItemDataRole.UserRole) == paper_id:
                 item.setText(0, new_status)
+                paper = Paper.get_or_none(Paper.id == paper_id)
+                if paper is not None and paper.zotero_key:
+                    pfile = (
+                        PaperFile.select(PaperFile.zotero_key)
+                        .where(
+                            (PaperFile.paper == paper)
+                            & (~PaperFile.path.endswith('.json'))
+                        )
+                        .first()
+                    )
+                    is_standalone = bool(
+                        pfile and pfile.zotero_key == paper.zotero_key
+                    )
+                else:
+                    is_standalone = False
+                item.setData(0, Qt.ItemDataRole.UserRole + 3, is_standalone)
                 break
 
     def clear_rows(self):
@@ -197,6 +219,7 @@ class PaperListView(QTreeWidget):
                 item.setData(0, Qt.ItemDataRole.UserRole + 1, row.folder_id)
             if row.file_id is not None:
                 item.setData(0, Qt.ItemDataRole.UserRole + 2, row.file_id)
+            item.setData(0, Qt.ItemDataRole.UserRole + 3, row.is_standalone)
             if row.is_stub:
                 font = item.font(3)
                 font.setItalic(True)
@@ -225,17 +248,35 @@ class PaperListView(QTreeWidget):
             return
         paper_id = item.data(0, Qt.ItemDataRole.UserRole)
         file_id = item.data(0, Qt.ItemDataRole.UserRole + 2)
-        status = item.text(0)  # column 0 DisplayRole: pending/processed/failed/review/none
+        is_standalone = bool(item.data(0, Qt.ItemDataRole.UserRole + 3))
+        status = item.text(0)  # column 0 DisplayRole: pending/processed/failed/review/done/none
 
         from papermeister.preferences import get_pref
         manual_biblio_enabled = bool(get_pref('manual_biblio_extract', True))
 
         menu = QMenu(self)
+
+        # OCR action — pending/failed always get it; standalone PDFs also get
+        # it in processed/done/review states so the user can re-trigger OCR
+        # (loads from cache) and the auto-promote hook creates a parent item.
         if status == 'pending':
-            menu.addAction('Process OCR', lambda: self.context_action.emit('process', paper_id, file_id or 0))
+            menu.addAction(
+                'Process OCR',
+                lambda: self.context_action.emit('process', paper_id, file_id or 0),
+            )
         elif status == 'failed':
-            menu.addAction('Retry OCR', lambda: self.context_action.emit('retry', paper_id, file_id or 0))
-        elif status == 'processed':
+            menu.addAction(
+                'Retry OCR',
+                lambda: self.context_action.emit('retry', paper_id, file_id or 0),
+            )
+        elif is_standalone and file_id:
+            menu.addAction(
+                'Process OCR (re-run + create parent item)',
+                lambda: self.context_action.emit('process', paper_id, file_id or 0),
+            )
+
+        # Status-specific other actions.
+        if status == 'processed':
             extract_act = menu.addAction(
                 'Extract Biblio',
                 lambda: self.context_action.emit('extract_biblio', paper_id, file_id or 0),
@@ -249,8 +290,9 @@ class PaperListView(QTreeWidget):
         elif status == 'review':
             menu.addAction('Review Biblio', lambda: self.context_action.emit('review_biblio', paper_id, 0))
             menu.addAction('Open PDF', lambda: self.context_action.emit('open_pdf', paper_id, file_id or 0))
-        else:
-            return  # 'none' — no PDF, nothing to do
+        elif status == 'done':
+            menu.addAction('Open PDF', lambda: self.context_action.emit('open_pdf', paper_id, file_id or 0))
+        # pending/failed/none have no further actions beyond the OCR action above.
 
         if not menu.isEmpty():
             menu.exec(event.globalPos())

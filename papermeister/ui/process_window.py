@@ -23,10 +23,12 @@ class ProcessWorker(QThread):
 
     def __init__(self, paper_file_ids):
         super().__init__()
-        self.paper_file_ids = paper_file_ids
+        import threading
+        self.paper_file_ids = list(paper_file_ids)
         self._counter = 0
         self._counter_lock = None
         self._cancelled = False
+        self._id_lock = threading.Lock()
 
     def _next_index(self):
         with self._counter_lock:
@@ -35,6 +37,20 @@ class ProcessWorker(QThread):
 
     def cancel(self):
         self._cancelled = True
+
+    def enqueue(self, new_ids):
+        """Append more PaperFile IDs to the active processing queue.
+        Dedupes against the full list (already-submitted + still-pending)
+        so re-triggers (e.g. Rail Process re-click) don't double-process
+        in-flight files. The running loop picks new IDs up on its next
+        iteration."""
+        if not new_ids:
+            return 0
+        with self._id_lock:
+            existing = set(self.paper_file_ids)
+            added = [pf_id for pf_id in new_ids if pf_id not in existing]
+            self.paper_file_ids.extend(added)
+            return len(added)
 
     def _process_one(self, pf_id):
         """Process a single PaperFile. Runs in a thread pool thread."""
@@ -127,25 +143,46 @@ class ProcessWorker(QThread):
         self.finished.emit(processed, failed)
 
     def _run_parallel(self, max_concurrent: int):
-        """Original parallel mode for serverless/pod backends."""
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        """Parallel mode for serverless/pod backends.
+
+        Polling pattern (rather than `as_completed` over a snapshot) so
+        ``enqueue()`` calls during the run get picked up — new IDs
+        appended to ``self.paper_file_ids`` are submitted as soon as a
+        pool slot frees.
+        """
+        import time
+        from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 
         processed = 0
         failed = 0
+        submit_idx = 0
+        futures: dict = {}
+
         with ThreadPoolExecutor(max_workers=max_concurrent) as pool:
-            futures = {
-                pool.submit(self._process_one, pf_id): pf_id
-                for pf_id in self.paper_file_ids
-            }
-            for future in as_completed(futures):
+            while True:
                 if self._cancelled:
                     pool.shutdown(wait=False, cancel_futures=True)
                     break
-                result = future.result()
-                if result is True:
-                    processed += 1
-                elif result is False:
-                    failed += 1
+
+                while len(futures) < max_concurrent and submit_idx < len(self.paper_file_ids):
+                    pf_id = self.paper_file_ids[submit_idx]
+                    submit_idx += 1
+                    futures[pool.submit(self._process_one, pf_id)] = pf_id
+
+                if not futures:
+                    if submit_idx >= len(self.paper_file_ids):
+                        break
+                    time.sleep(0.5)
+                    continue
+
+                done, _ = wait(futures, timeout=1.0, return_when=FIRST_COMPLETED)
+                for fut in done:
+                    result = fut.result()
+                    del futures[fut]
+                    if result is True:
+                        processed += 1
+                    elif result is False:
+                        failed += 1
         return processed, failed
 
     def _run_wrapper_pipeline(self, min_queued_pages: int = 6):
@@ -167,7 +204,8 @@ class ProcessWorker(QThread):
 
         processed = 0
         failed = 0
-        total = len(self.paper_file_ids)
+        # NOTE: total is read dynamically as len(self.paper_file_ids) below —
+        # enqueue() can append to the list mid-run.
 
         # ── Helpers ──────────────────────────────────────────
         def _prepare_file(pf_id):
@@ -222,13 +260,13 @@ class ProcessWorker(QThread):
         def _submit_next():
             """Try to submit the next file. Returns True if something was submitted/handled."""
             nonlocal submit_idx, counter, processed, failed
-            if submit_idx >= total:
+            if submit_idx >= len(self.paper_file_ids):
                 return False
 
             pf_id = self.paper_file_ids[submit_idx]
             submit_idx += 1
             counter += 1
-            prefix = f'[{counter}/{total}]'
+            prefix = f'[{counter}/{len(self.paper_file_ids)}]'
 
             try:
                 pf, filepath, has_cache = _prepare_file(pf_id)
@@ -309,12 +347,26 @@ class ProcessWorker(QThread):
 
         # ── Main loop ────────────────────────────────────────
         # Seed: submit enough files to fill the queue
-        while submit_idx < total and _queued_pages() < min_queued_pages:
+        while submit_idx < len(self.paper_file_ids) and _queued_pages() < min_queued_pages:
             _submit_next()
 
-        while in_flight:
+        while True:
             if self._cancelled:
                 break
+
+            # Exit condition: nothing in flight AND no more to submit.
+            # enqueue() may have appended after the queue drained, so we
+            # check len(self.paper_file_ids) here rather than a captured total.
+            if not in_flight:
+                if submit_idx >= len(self.paper_file_ids):
+                    break
+                # New IDs arrived; try to seed again before sleeping.
+                while submit_idx < len(self.paper_file_ids) and _queued_pages() < min_queued_pages:
+                    _submit_next()
+                if not in_flight:
+                    # All newly added files were cache hits (or all errored).
+                    # Loop back to recheck without sleeping.
+                    continue
 
             time.sleep(5)
 
@@ -373,7 +425,7 @@ class ProcessWorker(QThread):
             in_flight = still_flying
 
             # Refill: submit more to keep queue ≥ min_queued_pages
-            while submit_idx < total and _queued_pages() < min_queued_pages:
+            while submit_idx < len(self.paper_file_ids) and _queued_pages() < min_queued_pages:
                 _submit_next()
 
         return processed, failed
@@ -435,9 +487,29 @@ class ProcessWindow(QWidget):
         layout.addLayout(bottom_layout)
 
     def start(self, paper_file_ids):
-        """Start processing the given PaperFile IDs."""
+        """Start processing the given PaperFile IDs.
+
+        If a run is already active, append the new IDs to the live queue
+        instead of refusing — the user can stack collections without
+        waiting for the current batch to finish.
+        """
         if self._worker and self._worker.isRunning():
-            self._log_message('Already processing — please wait.', color='orange')
+            added = self._worker.enqueue(paper_file_ids)
+            if added:
+                self._total += added
+                self.progress_bar.setRange(0, self._total)
+                self.progress_count.setText(f'{self._done} / {self._total}')
+                self._log_message(
+                    f'+ Added {added} file(s) to queue (total now {self._total}).',
+                    color='#3a8ee6',
+                )
+            else:
+                self._log_message(
+                    f'All {len(paper_file_ids)} requested file(s) already queued.',
+                    color='gray',
+                )
+            self.show()
+            self.raise_()
             return
 
         self._total = len(paper_file_ids)
