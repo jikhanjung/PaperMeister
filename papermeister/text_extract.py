@@ -290,7 +290,18 @@ def _resolve_filepath(paper_file):
         if not user_id or not api_key:
             raise RuntimeError('Zotero credentials not configured')
         client = ZoteroClient(user_id, api_key)
-        content = client._zot.file(paper_file.zotero_key)
+        try:
+            content = client._zot.file(paper_file.zotero_key)
+        except Exception as e:
+            raise RuntimeError(
+                f'Zotero file download failed for key={paper_file.zotero_key} '
+                f'path={paper_file.path!r}: {e.__class__.__name__}: {e}'
+            ) from e
+        if not content:
+            raise RuntimeError(
+                f'Zotero returned empty content for key={paper_file.zotero_key} '
+                f'path={paper_file.path!r} — attachment likely missing from web storage'
+            )
         os.makedirs(cache_dir, exist_ok=True)
         with open(cached_path, 'wb') as f:
             f.write(content)

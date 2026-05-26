@@ -442,12 +442,32 @@ class ProcessWindow(QWidget):
         self.setMinimumSize(700, 450)
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.Window)
         self._worker = None
+        self._log_path = None
         self._setup_ui()
 
         self._status_timer = QTimer(self)
         self._status_timer.timeout.connect(self._poll_server_status)
         self._status_timer.start(5000)
         self._poll_server_status()
+
+    def _get_log_path(self):
+        """Return today's log file path, creating ~/.papermeister/logs/ if needed."""
+        log_dir = os.path.join(os.path.expanduser('~'), '.papermeister', 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        fname = f'ocr_{datetime.now().strftime("%Y%m%d")}.log'
+        return os.path.join(log_dir, fname)
+
+    def _write_log_file(self, msg):
+        """Append one line to the daily OCR log. Failures are swallowed (UI keeps working)."""
+        try:
+            path = self._get_log_path()
+            if self._log_path != path:
+                self._log_path = path
+            ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            with open(path, 'a', encoding='utf-8') as f:
+                f.write(f'[{ts}] {msg}\n')
+        except Exception:
+            pass
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -520,6 +540,7 @@ class ProcessWindow(QWidget):
         self.current_label.setText('Starting...')
 
         self._log_message(f'=== Starting: {self._total} files ===')
+        self._log_message(f'Log file: {self._get_log_path()}', color='gray')
 
         self.cancel_btn.setEnabled(True)
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.WaitCursor))
@@ -537,6 +558,7 @@ class ProcessWindow(QWidget):
             self.log.append(f'<span style="color:{color}">[{ts}] {msg}</span>')
         else:
             self.log.append(f'[{ts}] {msg}')
+        self._write_log_file(msg)
 
     def _on_progress(self, msg):
         self.current_label.setText(msg)
