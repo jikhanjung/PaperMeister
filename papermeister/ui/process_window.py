@@ -298,13 +298,20 @@ class ProcessWorker(QThread):
             # Submit to wrapper
             try:
                 self.progress.emit(f'{prefix} {name} → submitting…')
-                job_id, tp = wrapper_submit(filepath)
+                job_id, tp, in_progress = wrapper_submit(filepath)
                 in_flight.append({
                     'job_id': job_id, 'pf_id': pf_id, 'pf': pf,
                     'total_pages': tp or 1, 'done_pages': 0,
                     'name': name, 'prefix': prefix,
                 })
-                self.progress.emit(f'{prefix} {name} → queued ({tp} pages)')
+                if in_progress:
+                    # Server matched a still-running job for this hash — we'll
+                    # poll it instead of starting a duplicate.
+                    self.progress.emit(
+                        f'{prefix} {name} → resumed in-flight job {job_id[:8]} ({tp} pages)'
+                    )
+                else:
+                    self.progress.emit(f'{prefix} {name} → queued ({tp} pages)')
             except Exception as e:
                 self.progress.emit(f'{prefix} {name} FAILED (submit): {e}')
                 pf.status = 'failed'

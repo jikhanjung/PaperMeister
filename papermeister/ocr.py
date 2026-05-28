@@ -369,8 +369,8 @@ def _wrapper_health_check() -> bool:
         return False
 
 
-def wrapper_submit(pdf_path: str) -> tuple[str, int]:
-    """Submit PDF to wrapper. Returns (job_id, total_pages).
+def wrapper_submit(pdf_path: str) -> tuple[str, int, bool]:
+    """Submit PDF to wrapper. Returns (job_id, total_pages, in_progress).
 
     Reads page count locally via PyMuPDF before submission so the caller
     can compute queue depth accurately even when the server hasn't finished
@@ -381,6 +381,12 @@ def wrapper_submit(pdf_path: str) -> tuple[str, int]:
     Sends our `client_id` in the form so the server can dedup repeat
     submissions of the same file by this install — and so other clients'
     GET /ocr listings can tell our jobs apart from theirs.
+
+    The server may dedup against active jobs too (status processing/queued),
+    not just completed ones. In that case it returns the existing job_id
+    with `cached=true, in_progress=true` and we resume polling instead of
+    queuing a duplicate. `in_progress=False` for new submits and for
+    cached `done` jobs (older servers omit the field, treated as False).
     """
     _ensure_config()
     from .preferences import get_client_id
@@ -418,9 +424,12 @@ def wrapper_submit(pdf_path: str) -> tuple[str, int]:
     resp.raise_for_status()
     data = resp.json()
     job_id = data['job_id']
-    if data.get('cached'):
-        logger.info('Wrapper returned cached job %s for %s',
-                    job_id, os.path.basename(pdf_path))
+    cached = bool(data.get('cached'))
+    in_progress = bool(data.get('in_progress'))
+    if cached:
+        state = 'in-progress' if in_progress else 'completed'
+        logger.info('Wrapper returned cached %s job %s for %s',
+                    state, job_id, os.path.basename(pdf_path))
     # First poll to get total_pages (server may need a moment to parse PDF)
     try:
         poll = requests.get(f'{_WRAPPER_URL}/ocr/{job_id}', timeout=10).json()
@@ -432,7 +441,7 @@ def wrapper_submit(pdf_path: str) -> tuple[str, int]:
     if total_pages <= 0:
         total_pages = local_pages
     logger.info('Wrapper job_id: %s, total_pages: %d', job_id, total_pages)
-    return job_id, total_pages
+    return job_id, total_pages, in_progress
 
 
 def wrapper_list_jobs() -> list:
@@ -507,7 +516,7 @@ def _wrapper_ocr_pdf(pdf_path: str, timeout: float = 600, poll_interval: float =
 
     Single-file convenience wrapper around submit/poll/collect.
     """
-    job_id, total_pages = wrapper_submit(pdf_path)
+    job_id, total_pages, _in_progress = wrapper_submit(pdf_path)
 
     # Poll until server reports a terminal status.
     poll_errors = 0
