@@ -9,7 +9,7 @@ Tabs
 
 Stub banner sits above the tab bar so it is visible regardless of tab.
 """
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -77,6 +77,84 @@ def _empty_label(text: str) -> QLabel:
     return lbl
 
 
+class _LazyPdfView(QScrollArea):
+    """Scroll area that renders PDF pages on demand as they enter the viewport.
+
+    Page placeholders are sized upfront from `page.rect` (cheap — no decode),
+    so the scrollbar reflects total document height immediately. Pages are
+    decoded to QPixmap only when they overlap the viewport plus a lookahead.
+    """
+
+    _ZOOM = 1.5
+    _LOOKAHEAD_PX = 800
+
+    def __init__(self, doc, parent=None):
+        super().__init__(parent)
+        self.setWidgetResizable(True)
+        self.setFrameShape(QScrollArea.Shape.NoFrame)
+
+        import fitz
+        self._doc = doc
+        self._matrix = fitz.Matrix(self._ZOOM, self._ZOOM)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(SPACING['sm'])
+
+        self._page_labels: list[QLabel] = []
+        self._rendered: list[bool] = []
+
+        for i in range(len(doc)):
+            page = doc[i]
+            w = int(page.rect.width * self._ZOOM)
+            h = int(page.rect.height * self._ZOOM)
+            lbl = QLabel()
+            lbl.setFixedSize(w, h)
+            lbl.setStyleSheet('background: #1a1a1a;')
+            layout.addWidget(lbl, alignment=Qt.AlignmentFlag.AlignHCenter)
+            self._page_labels.append(lbl)
+            self._rendered.append(False)
+
+        layout.addStretch(1)
+        self.setWidget(container)
+
+        self.verticalScrollBar().valueChanged.connect(self._render_visible)
+        # Defer first render so label .y() is populated by the layout pass.
+        QTimer.singleShot(0, self._render_visible)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._render_visible()
+
+    def _render_visible(self):
+        if self._doc is None:
+            return
+        vp_top = self.verticalScrollBar().value()
+        vp_bottom = vp_top + self.viewport().height()
+        for i, lbl in enumerate(self._page_labels):
+            if self._rendered[i]:
+                continue
+            y_top = lbl.y()
+            y_bottom = y_top + lbl.height()
+            if y_bottom < vp_top - self._LOOKAHEAD_PX:
+                continue
+            if y_top > vp_bottom + self._LOOKAHEAD_PX:
+                continue
+            self._render_page(i)
+
+    def _render_page(self, idx: int):
+        if self._rendered[idx] or self._doc is None:
+            return
+        from PyQt6.QtGui import QImage, QPixmap
+        page = self._doc[idx]
+        pix = page.get_pixmap(matrix=self._matrix)
+        fmt = QImage.Format.Format_RGB888 if pix.n == 3 else QImage.Format.Format_RGBA8888
+        qimg = QImage(pix.samples, pix.width, pix.height, pix.stride, fmt)
+        self._page_labels[idx].setPixmap(QPixmap.fromImage(qimg))
+        self._rendered[idx] = True
+
+
 class DetailPanel(QWidget):
     apply_completed = pyqtSignal(int, bool, str)  # paper_id, changed, action
 
@@ -109,6 +187,11 @@ class DetailPanel(QWidget):
         self._ocr_browser: QTextBrowser | None = None
 
         self._current_paper_id: int | None = None
+        self._current_detail = None
+        self._pdf_built = False
+        self._text_built = False
+        self._pdf_wrapper: QWidget | None = None
+        self._text_wrapper: QWidget | None = None
         self._apply_task: BackgroundTask | None = None
         self._apply_btn: QPushButton | None = None
         self._biblio_id: int | None = None
@@ -121,6 +204,12 @@ class DetailPanel(QWidget):
 
     def _empty_state(self):
         self._banner.hide()
+        self._current_detail = None
+        self._current_paper_id = None
+        try:
+            self._tabs.currentChanged.disconnect(self._on_tab_changed)
+        except (TypeError, RuntimeError):
+            pass
         self._tabs.clear()
         placeholder = _empty_label('Select a paper to see details')
         self._tabs.addTab(placeholder, 'Details')
@@ -132,6 +221,7 @@ class DetailPanel(QWidget):
             return
 
         self._current_paper_id = paper_id
+        self._current_detail = detail
         self._apply_btn = None
 
         # Stub banner
@@ -141,19 +231,59 @@ class DetailPanel(QWidget):
         else:
             self._banner.hide()
 
-        # Rebuild all three tabs from scratch — simpler than patching in place,
-        # and the tree is small enough that this is imperceptible.
         current_idx = self._tabs.currentIndex() if self._tabs.count() > 0 else 0
-        self._tabs.clear()
 
+        # Drop the prior connection before clear(); clear() doesn't detach signals.
+        try:
+            self._tabs.currentChanged.disconnect(self._on_tab_changed)
+        except (TypeError, RuntimeError):
+            pass
+
+        self._tabs.clear()
+        self._pdf_built = False
+        self._text_built = False
+
+        # Metadata is cheap — build now. PDF/Text wrappers stay empty until
+        # the user activates the tab; that's where the OCR-JSON read and
+        # PDF page renders happen.
         self._tabs.addTab(self._build_metadata_tab(detail), 'Metadata')
-        self._tabs.addTab(self._build_pdf_tab(detail), 'PDF')
-        self._tabs.addTab(self._build_ocr_tab(detail), 'Text')
+        self._pdf_wrapper = self._make_lazy_wrapper()
+        self._tabs.addTab(self._pdf_wrapper, 'PDF')
+        self._text_wrapper = self._make_lazy_wrapper()
+        self._tabs.addTab(self._text_wrapper, 'Text')
+
+        self._tabs.currentChanged.connect(self._on_tab_changed)
 
         # Restore previously-selected tab when switching papers so the user
         # doesn't get snapped back to Metadata every click.
         if 0 <= current_idx < self._tabs.count():
             self._tabs.setCurrentIndex(current_idx)
+
+        # setCurrentIndex doesn't fire currentChanged if the index is unchanged,
+        # so force a build check for the active tab.
+        self._on_tab_changed(self._tabs.currentIndex())
+
+    @staticmethod
+    def _make_lazy_wrapper() -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        return w
+
+    def _on_tab_changed(self, idx: int):
+        if self._current_detail is None:
+            return
+        if idx == 1 and not self._pdf_built and self._pdf_wrapper is not None:
+            self._pdf_built = True
+            self._pdf_wrapper.layout().addWidget(
+                self._build_pdf_tab(self._current_detail)
+            )
+        elif idx == 2 and not self._text_built and self._text_wrapper is not None:
+            self._text_built = True
+            self._text_wrapper.layout().addWidget(
+                self._build_ocr_tab(self._current_detail)
+            )
 
     # ── Metadata tab ─────────────────────────────────────────
 
@@ -199,9 +329,13 @@ class DetailPanel(QWidget):
         add_row(3, 'Journal', d.journal, stub=not d.journal)
         add_row(4, 'DOI',     d.doi, stub=not d.doi)
         add_row(5, 'Source',  d.source_name or '—')
+        next_row = 6
+        if d.paper_zotero_key:
+            add_row(next_row, 'Zotero Key', d.paper_zotero_key)
+            next_row += 1
         if d.collections:
             paths = '\n'.join(path for _, path in d.collections)
-            add_row(6, 'Collection', paths)
+            add_row(next_row, 'Collection', paths)
         layout.addLayout(grid)
         return frame
 
@@ -254,36 +388,13 @@ class DetailPanel(QWidget):
         return self._render_pdf(pdf_path)
 
     def _render_pdf(self, pdf_path: str) -> QWidget:
-        """Render a local PDF file as page images."""
+        """Open the PDF and hand it to the lazy-render scroll view."""
         import fitz
-
         try:
             doc = fitz.open(pdf_path)
         except Exception as exc:
             return self._ocr_empty_panel(f'Failed to open PDF: {exc}')
-
-        host = QWidget()
-        layout = QVBoxLayout(host)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(SPACING['sm'])
-
-        for page_idx in range(len(doc)):
-            page = doc[page_idx]
-            mat = fitz.Matrix(1.5, 1.5)
-            pix = page.get_pixmap(matrix=mat)
-            from PyQt6.QtGui import QImage, QPixmap
-            fmt = QImage.Format.Format_RGB888 if pix.n == 3 else QImage.Format.Format_RGBA8888
-            qimg = QImage(pix.samples, pix.width, pix.height, pix.stride, fmt)
-            pixmap = QPixmap.fromImage(qimg)
-
-            page_lbl = QLabel()
-            page_lbl.setPixmap(pixmap)
-            page_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-            layout.addWidget(page_lbl)
-
-        doc.close()
-        layout.addStretch(1)
-        return _scroll_wrap(host)
+        return _LazyPdfView(doc)
 
     def _build_pdf_download_panel(self, d) -> QWidget:
         """Show a download button for Zotero-hosted PDFs."""
@@ -330,11 +441,21 @@ class DetailPanel(QWidget):
         def _on_downloaded(path):
             btn.setText('Downloaded')
             self._download_status.setText('')
-            # Replace download panel with rendered PDF
-            idx = self._tabs.currentIndex()
-            self._tabs.removeTab(idx)
-            self._tabs.insertTab(idx, self._render_pdf(path), 'PDF')
-            self._tabs.setCurrentIndex(idx)
+            # Swap the download panel out for the rendered view inside the
+            # same wrapper — removing the tab would break the lazy-tab indices.
+            wrapper = self._pdf_wrapper
+            if wrapper is None:
+                return
+            try:
+                lay = wrapper.layout()
+                while lay.count():
+                    item = lay.takeAt(0)
+                    w = item.widget()
+                    if w:
+                        w.deleteLater()
+                lay.addWidget(self._render_pdf(path))
+            except RuntimeError:
+                pass  # wrapper destroyed (user switched papers mid-download)
 
         def _on_download_failed(msg):
             btn.setEnabled(True)
@@ -359,7 +480,7 @@ class DetailPanel(QWidget):
             return cached
 
         client = ZoteroClient(get_pref('zotero_user_id'), get_pref('zotero_api_key'))
-        content = client._zot.file(zotero_key)
+        content = client.download_file_content(zotero_key)
 
         os.makedirs(cache_dir, exist_ok=True)
         with open(cached, 'wb') as f:

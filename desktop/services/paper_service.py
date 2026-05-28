@@ -253,6 +253,7 @@ class PaperDetail:
     file_status: str
     file_hash: str
     file_zotero_key: str
+    paper_zotero_key: str
     is_stub: bool
     latest_biblio: dict | None  # flattened PaperBiblio or None
     ocr_preview: str | None
@@ -333,6 +334,7 @@ def load_detail(paper_id: int) -> PaperDetail | None:
         file_status=file_status,
         file_hash=file_hash,
         file_zotero_key=file_zotero_key,
+        paper_zotero_key=paper.zotero_key or '',
         is_stub=_is_stub(paper),
         latest_biblio=biblio_dict,
         ocr_preview=None,  # Phase 4: read from ocr_json cache

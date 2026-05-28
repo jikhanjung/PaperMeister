@@ -372,20 +372,45 @@ def _wrapper_health_check() -> bool:
 def wrapper_submit(pdf_path: str) -> tuple[str, int]:
     """Submit PDF to wrapper. Returns (job_id, total_pages).
 
-    total_pages may be 0 until the server finishes parsing the PDF.
+    Reads page count locally via PyMuPDF before submission so the caller
+    can compute queue depth accurately even when the server hasn't finished
+    parsing the PDF by the time we poll. Without this, large multi-page
+    PDFs reported `total_pages=0` and the pipeline kept submitting more
+    files to hit its queue-depth target.
+
     Sends our `client_id` in the form so the server can dedup repeat
     submissions of the same file by this install — and so other clients'
     GET /ocr listings can tell our jobs apart from theirs.
     """
     _ensure_config()
     from .preferences import get_client_id
+
+    local_pages = 0
+    try:
+        import fitz
+        doc = fitz.open(pdf_path)
+        try:
+            local_pages = doc.page_count
+        finally:
+            doc.close()
+    except Exception as exc:
+        logger.warning('Local page-count failed for %s: %s',
+                       os.path.basename(pdf_path), exc)
+
     submit_url = f'{_WRAPPER_URL}/ocr'
-    logger.info('Wrapper submit: POST %s (%s)', submit_url, os.path.basename(pdf_path))
+    logger.info('Wrapper submit: POST %s (%s, %d pages local)',
+                submit_url, os.path.basename(pdf_path), local_pages)
+    form: dict = {'client_id': get_client_id()}
+    if local_pages > 0:
+        # Hint to the server — it can use this for scheduling/queue depth
+        # without having to parse the PDF itself. Server should treat as
+        # advisory and verify against its own parse.
+        form['total_pages'] = str(local_pages)
     with open(pdf_path, 'rb') as f:
         resp = requests.post(
             submit_url,
             files={'file': f},
-            data={'client_id': get_client_id()},
+            data=form,
             timeout=60,
         )
     if resp.status_code != 200:
@@ -399,9 +424,13 @@ def wrapper_submit(pdf_path: str) -> tuple[str, int]:
     # First poll to get total_pages (server may need a moment to parse PDF)
     try:
         poll = requests.get(f'{_WRAPPER_URL}/ocr/{job_id}', timeout=10).json()
-        total_pages = poll.get('total_pages', 0)
+        total_pages = poll.get('total_pages', 0) or 0
     except Exception:
         total_pages = 0
+    # Server count wins when available (handles cached jobs); otherwise fall
+    # back to the local count so queue-depth accounting isn't undercounted.
+    if total_pages <= 0:
+        total_pages = local_pages
     logger.info('Wrapper job_id: %s, total_pages: %d', job_id, total_pages)
     return job_id, total_pages
 
