@@ -214,15 +214,8 @@ def _try_fetch_sibling_json(paper_file, status_callback=None):
         if status_callback:
             status_callback('Loading OCR JSON from Zotero...')
         client = ZoteroClient(user_id, api_key)
-        content = client._zot.file(sibling.zotero_key)
-        # pyzotero sniffs content-type: returns a dict for JSON attachments,
-        # bytes for binary, str for plain text. Normalise.
-        if isinstance(content, dict):
-            raw_result = content
-        elif isinstance(content, bytes):
-            raw_result = json.loads(content.decode('utf-8'))
-        else:
-            raw_result = json.loads(content)
+        content = client.download_file_content(sibling.zotero_key)
+        raw_result = json.loads(content.decode('utf-8'))
     except Exception as e:
         if status_callback:
             status_callback(f'Sibling JSON fetch failed: {e}')
@@ -289,9 +282,22 @@ def _resolve_filepath(paper_file):
         api_key = get_pref('zotero_api_key', '')
         if not user_id or not api_key:
             raise RuntimeError('Zotero credentials not configured')
+        import requests
         client = ZoteroClient(user_id, api_key)
         try:
-            content = client._zot.file(paper_file.zotero_key)
+            content = client.download_file_content(paper_file.zotero_key)
+        except requests.HTTPError as e:
+            status = e.response.status_code if e.response is not None else '?'
+            if status == 404:
+                raise RuntimeError(
+                    f'Zotero has no file for key={paper_file.zotero_key} '
+                    f'path={paper_file.path!r} (HTTP 404) — the attachment record '
+                    f'exists but its file is missing from Zotero web storage'
+                ) from e
+            raise RuntimeError(
+                f'Zotero file download failed for key={paper_file.zotero_key} '
+                f'path={paper_file.path!r}: HTTP {status}'
+            ) from e
         except Exception as e:
             raise RuntimeError(
                 f'Zotero file download failed for key={paper_file.zotero_key} '

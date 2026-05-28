@@ -255,6 +255,39 @@ class ZoteroClient:
         orphan_atts = {k: atts_by_parent[k] for k in orphan_keys}
         return results, orphan_atts
 
+    def download_file_content(self, attachment_key):
+        """Download raw file bytes for an attachment, bypassing pyzotero's
+        Content-Type sniffing.
+
+        pyzotero's Zotero.file() guesses the return format from the response's
+        Content-Type header and falls back to JSON decoding when it can't match
+        a known type. Attachments imported via 'imported_url' are served from
+        S3 with an *empty* Content-Type, so pyzotero tries to json.loads() the
+        PDF bytes and raises JSONDecodeError even though the file is valid. A
+        plain GET that follows the redirect and returns raw .content sidesteps
+        the guessing entirely.
+
+        Returns: bytes.
+        Raises: requests.HTTPError — notably 404 when the attachment record
+            exists but its file was never uploaded to Zotero web storage
+            (linkMode 'imported_file' with no synced file).
+        """
+        import requests
+        url = (
+            f'{self._zot.endpoint}/{self._zot.library_type}/'
+            f'{self._zot.library_id}/items/{attachment_key.upper()}/file'
+        )
+        resp = requests.get(
+            url,
+            headers={
+                'Zotero-API-Key': self.api_key,
+                'Zotero-API-Version': '3',
+            },
+            timeout=180,
+        )
+        resp.raise_for_status()
+        return resp.content
+
     def download_attachment(self, attachment_key):
         """Download a PDF attachment to a temp file. Returns file path.
 
@@ -263,8 +296,7 @@ class ZoteroClient:
         dest_dir = os.path.join(os.path.expanduser('~'), '.papermeister', 'tmp')
         os.makedirs(dest_dir, exist_ok=True)
 
-        # Use file() to get raw binary content instead of dump()
-        content = self._zot.file(attachment_key)
+        content = self.download_file_content(attachment_key)
 
         out_path = os.path.join(dest_dir, f'{attachment_key}.pdf')
         with open(out_path, 'wb') as f:
