@@ -353,8 +353,16 @@ class ProcessWorker(QThread):
                 wait_seconds += 15
 
         # ── Main loop ────────────────────────────────────────
-        # Seed: submit enough files to fill the queue
-        while submit_idx < len(self.paper_file_ids) and _queued_pages() < min_queued_pages:
+        # Seed: submit enough files to fill the queue. Each refill loop in
+        # this run respects _cancelled so a Cancel click stops further
+        # submissions immediately — without the check, the next file gets
+        # queued *after* the cancel signal because the top-of-loop check
+        # fires too late.
+        while (
+            submit_idx < len(self.paper_file_ids)
+            and _queued_pages() < min_queued_pages
+            and not self._cancelled
+        ):
             _submit_next()
 
         while True:
@@ -368,7 +376,11 @@ class ProcessWorker(QThread):
                 if submit_idx >= len(self.paper_file_ids):
                     break
                 # New IDs arrived; try to seed again before sleeping.
-                while submit_idx < len(self.paper_file_ids) and _queued_pages() < min_queued_pages:
+                while (
+                    submit_idx < len(self.paper_file_ids)
+                    and _queued_pages() < min_queued_pages
+                    and not self._cancelled
+                ):
                     _submit_next()
                 if not in_flight:
                     # All newly added files were cache hits (or all errored).
@@ -431,8 +443,14 @@ class ProcessWorker(QThread):
 
             in_flight = still_flying
 
-            # Refill: submit more to keep queue ≥ min_queued_pages
-            while submit_idx < len(self.paper_file_ids) and _queued_pages() < min_queued_pages:
+            # Refill: submit more to keep queue ≥ min_queued_pages, unless
+            # the user cancelled — otherwise the next file is submitted
+            # *after* the cancel signal and the cancel feels ignored.
+            while (
+                submit_idx < len(self.paper_file_ids)
+                and _queued_pages() < min_queued_pages
+                and not self._cancelled
+            ):
                 _submit_next()
 
         return processed, failed
