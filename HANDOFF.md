@@ -176,6 +176,13 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 
 ## 최근 세션 요약
 
+**2026-06-05 (세션 41)** — [devlog 045](./devlog/20260605_045_Items_Backfill_Removal.md)
+- 세션 40 끝의 timing 로그로 Phase 2 items가 변경 0건인데 25.91s 발견. items 내부 phase별 logging 추가해서 `backfill (29 papers checked, 0 new) took 25.91s`로 hotspot 확정 — PaperFile 없는 reference-only paper 29편에 매번 `zot.children()` API call
+- Git archaeology: commit `857a6d8` (devlog 029, 2026-04-16)에 도입. 당시 "9,877편 중 1편의 historical case"를 잡기 위한 임시 안전망. 그게 매 sync마다 무기한 돌면서 누적 overhead
+- 사용자 지적: cold/incremental 어느 시나리오에서도 정상 sync면 backfill 불필요 — 누락 발생은 main loop 버그라 거기서 fix해야
+- backfill 로직을 별도 함수 `backfill_missing_paperfiles(zotero_client, ...)`로 추출 후 sync_zotero_items에서 호출 제거. 미래에 진짜 필요 시 script/REPL에서 명시적 호출 가능. dormant 이유 docstring에 박음 (도입 이력 + 측정 수치 + git ref)
+- **세션 40+41 통합 결과**: 전체 sync 31s → **5s** (83% 절감). Phase 1 11.40s→1.99s, Phase 2 26s→~1s, Phase 3 (trash) 2s 유지
+
 **2026-06-05 (세션 40)** — [devlog 044](./devlog/20260605_044_Collections_Incremental_Sync.md)
 - Phase 1 collections sync가 547개 collection에서 매번 11s. logging 추가로 hotspot 잡음: `get_collections()` API call 7.21s + `sync_zotero_collections` 2회 호출 4.19s
 - **Incremental 전환**: `get_collections(since=last_col_ver)` 활용. 이미 코드는 있었는데 worker가 since를 안 넘김. 별도 pref `zotero_collections_version` 신설 (items phase의 `zotero_library_version`과 race 없도록 분리). 변경 없으면 sync(fresh) 호출 자체 생략

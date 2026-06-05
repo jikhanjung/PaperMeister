@@ -168,6 +168,7 @@ class ZoteroSyncWorker(QThread):
             orphan_attachments=orphans,
             progress_callback=_progress_cb,
             zotero_client=client,
+            logger=logger,
         )
         logger.info('sync_zotero_items: new=%d, updated=%d', new_items, updated_items)
 

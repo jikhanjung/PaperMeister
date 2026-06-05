@@ -2,6 +2,7 @@ import datetime
 import hashlib
 import os
 import shutil
+import time
 from pathlib import Path
 
 from .models import (
@@ -242,7 +243,7 @@ def _merge_stale_standalone(old_paper, new_paper):
 
 
 def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=None,
-                      zotero_client=None):
+                      zotero_client=None, logger=None):
     """Process items from library-wide incremental fetch.
 
     Creates/updates Papers, PaperFiles, and PaperFolders from items returned
@@ -251,14 +252,23 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
     at once and uses each item's `collections` array to build PaperFolder
     membership.
 
-    If zotero_client is provided and a paper has no attachments in this batch,
-    children are fetched from the API to pick up attachments not included in
-    incremental syncs.
+    If logger is provided, per-phase timing is emitted at INFO level so we
+    can see whether time is going to the main loop or orphan processing.
+
+    Note: previously this function also ran a per-paper `zot.children()`
+    backfill at the end to catch attachments missed by earlier syncs. It's
+    now in `backfill_missing_paperfiles()` and not called from any sync
+    path — see that function's docstring for the rationale.
 
     Returns (new_count, updated_count).
     """
+    def _log(msg):
+        if logger is not None:
+            logger.info('items: %s', msg)
+
     new_count = 0
     updated_count = 0
+    main_t0 = time.perf_counter()
 
     for i, item in enumerate(items):
         if progress_callback:
@@ -387,12 +397,17 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
                 zotero_key=att['key'],
             )
 
+    _log(f'main loop ({len(items)} items) took {time.perf_counter() - main_t0:.2f}s')
+
     # Handle orphan attachments (parent not in this incremental batch).
+    orphan_t0 = time.perf_counter()
+    n_orphan_atts = 0
     if orphan_attachments:
         for parent_key, atts in orphan_attachments.items():
             paper = Paper.select().where(Paper.zotero_key == parent_key).first()
             if not paper:
                 continue
+            n_orphan_atts += len(atts)
             for att in atts:
                 existing_pf = PaperFile.select().where(
                     PaperFile.zotero_key == att['key'],
@@ -424,64 +439,96 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
                     zotero_key=att['key'],
                 )
 
-    # Backfill: find Zotero-sourced papers that have no PaperFile at all
-    # (missed by earlier syncs). Fetch their children from the API.
-    if zotero_client is not None:
-        processed_keys = {item['key'] for item in items}
-        orphan_parent_keys = set(orphan_attachments or {})
-        already_handled = processed_keys | orphan_parent_keys
-
-        missing_file_papers = (
-            Paper.select(Paper.id, Paper.zotero_key)
-            .where(Paper.zotero_key != '')
-            .where(Paper.zotero_key.not_in(already_handled))
-            .where(~(Paper.id << PaperFile.select(PaperFile.paper).distinct()))
-        )
-        for mp in missing_file_papers:
-            try:
-                children = zotero_client._zot.children(mp.zotero_key)
-                for child in children:
-                    cdata = child.get('data', {})
-                    if cdata.get('itemType') != 'attachment':
-                        continue
-                    existing_pf = PaperFile.select().where(
-                        PaperFile.zotero_key == cdata['key'],
-                    ).first()
-                    if existing_pf:
-                        # Same stale-standalone migration as the main sync
-                        # loop. This is the auto-recovery path: Paper `mp`
-                        # has no PaperFile in DB, but its child attachment
-                        # already exists as part of an older standalone
-                        # Paper that needs to be folded in.
-                        if (
-                            existing_pf.paper_id != mp.id
-                            and existing_pf.paper.zotero_key == cdata['key']
-                        ):
-                            if progress_callback:
-                                progress_callback(
-                                    f'  merging stale standalone Paper '
-                                    f'{existing_pf.paper_id} → {mp.id} '
-                                    f'({cdata.get("filename", cdata["key"])})'
-                                )
-                            _merge_stale_standalone(existing_pf.paper, mp)
-                        _refresh_existing_attachment(existing_pf, cdata)
-                        continue
-                    ct = cdata.get('contentType', '')
-                    fname = cdata.get('filename', cdata['key'])
-                    is_derived = ct == 'application/json' or fname.lower().endswith('.json')
-                    PaperFile.create(
-                        paper=mp,
-                        path=fname,
-                        hash='',
-                        status='processed' if is_derived else 'pending',
-                        zotero_key=cdata['key'],
-                    )
-                    if progress_callback:
-                        progress_callback(f'Backfilled attachment for "{mp.zotero_key}"')
-            except Exception:
-                pass  # network error — next sync will retry
+    _log(
+        f'orphan_attachments ({n_orphan_atts} atts across '
+        f'{len(orphan_attachments) if orphan_attachments else 0} parents) '
+        f'took {time.perf_counter() - orphan_t0:.2f}s'
+    )
 
     return new_count, updated_count
+
+
+def backfill_missing_paperfiles(zotero_client, progress_callback=None, logger=None):
+    """Dormant safety net — not wired into any sync path.
+
+    For every Zotero-sourced Paper with no PaperFile in DB, fetches
+    `zot.children()` and creates PaperFile rows for any attachments found.
+    The previous version of `sync_zotero_items` called this at the end of
+    every sync.
+
+    Why it's now dormant (2026-06-05):
+    - Introduced in commit 857a6d8 (devlog 029, 2026-04-16) to recover
+      one historical case — 1 paper out of 9,877. A normal cold-start
+      sync that pulls collections/items/attachments correctly reconstructs
+      the parent/child relations without this, so the only way a paper
+      ends up here is a bug in the main sync loop that we should fix there.
+    - Each call does one API round-trip per "missing" paper. On a typical
+      library most of those are reference-only items (no PDF intentionally),
+      so the loop polled the same ~29 keys every sync for ~25s and added 0
+      attachments. Pure overhead.
+
+    Kept as a standalone function in case a similar one-shot recovery is
+    ever needed again — call it explicitly from a script or REPL.
+    """
+    def _log(msg):
+        if logger is not None:
+            logger.info('backfill: %s', msg)
+
+    t0 = time.perf_counter()
+    n_checked = 0
+    n_added = 0
+
+    missing_file_papers = (
+        Paper.select(Paper.id, Paper.zotero_key)
+        .where(Paper.zotero_key != '')
+        .where(~(Paper.id << PaperFile.select(PaperFile.paper).distinct()))
+    )
+    for mp in missing_file_papers:
+        n_checked += 1
+        try:
+            children = zotero_client._zot.children(mp.zotero_key)
+            for child in children:
+                cdata = child.get('data', {})
+                if cdata.get('itemType') != 'attachment':
+                    continue
+                existing_pf = PaperFile.select().where(
+                    PaperFile.zotero_key == cdata['key'],
+                ).first()
+                if existing_pf:
+                    if (
+                        existing_pf.paper_id != mp.id
+                        and existing_pf.paper.zotero_key == cdata['key']
+                    ):
+                        if progress_callback:
+                            progress_callback(
+                                f'  merging stale standalone Paper '
+                                f'{existing_pf.paper_id} → {mp.id} '
+                                f'({cdata.get("filename", cdata["key"])})'
+                            )
+                        _merge_stale_standalone(existing_pf.paper, mp)
+                    _refresh_existing_attachment(existing_pf, cdata)
+                    continue
+                ct = cdata.get('contentType', '')
+                fname = cdata.get('filename', cdata['key'])
+                is_derived = ct == 'application/json' or fname.lower().endswith('.json')
+                PaperFile.create(
+                    paper=mp,
+                    path=fname,
+                    hash='',
+                    status='processed' if is_derived else 'pending',
+                    zotero_key=cdata['key'],
+                )
+                n_added += 1
+                if progress_callback:
+                    progress_callback(f'Backfilled attachment for "{mp.zotero_key}"')
+        except Exception:
+            pass  # network error — caller can re-run
+
+    _log(
+        f'{n_checked} papers checked via children API, '
+        f'{n_added} new attachments, took {time.perf_counter() - t0:.2f}s'
+    )
+    return n_checked, n_added
 
 
 def sync_trash_state(zotero_client, progress_callback=None):
