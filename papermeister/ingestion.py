@@ -184,6 +184,27 @@ def _get_or_create_zotero_folder(source, collection):
     return folder
 
 
+def _refresh_existing_attachment(existing_pf, att):
+    """Apply attachment field updates that incremental sync otherwise skips.
+
+    When a PaperFile with the same zotero_key already exists, the sync loops
+    `continue` past it — so filename renames done on the Zotero side never
+    propagate. This helper covers that gap for the fields we currently store.
+
+    Also resets `failed` entries that never produced a hash back to `pending`,
+    on the theory that the failure was likely caused by the stale path
+    (Windows-illegal chars, length limits, encoding issues).
+    """
+    new_fname = att.get('filename', '')
+    if not new_fname or existing_pf.path == new_fname:
+        return
+    existing_pf.path = new_fname
+    if existing_pf.status == 'failed' and not existing_pf.hash:
+        existing_pf.status = 'pending'
+        existing_pf.failure_reason = ''
+    existing_pf.save()
+
+
 def _merge_stale_standalone(old_paper, new_paper):
     """Move all records from an obsolete standalone Paper to its new parent.
 
@@ -348,7 +369,9 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
                         )
                     _merge_stale_standalone(existing_pf.paper, paper)
                 # Otherwise the PaperFile is already correctly parented
-                # (idempotent re-sync), nothing to do.
+                # (idempotent re-sync). Still refresh fields the user may
+                # have changed on the Zotero side (e.g. attachment rename).
+                _refresh_existing_attachment(existing_pf, att)
                 continue
             ct = att.get('content_type', '')
             fname = att['filename']
@@ -385,6 +408,7 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
                                 f'({att["filename"]})'
                             )
                         _merge_stale_standalone(existing_pf.paper, paper)
+                    _refresh_existing_attachment(existing_pf, att)
                     continue
                 ct = att.get('content_type', '')
                 fname = att['filename']
@@ -439,6 +463,7 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
                                     f'({cdata.get("filename", cdata["key"])})'
                                 )
                             _merge_stale_standalone(existing_pf.paper, mp)
+                        _refresh_existing_attachment(existing_pf, cdata)
                         continue
                     ct = cdata.get('contentType', '')
                     fname = cdata.get('filename', cdata['key'])

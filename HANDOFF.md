@@ -96,6 +96,13 @@
 - [ ] 테스트 코드 작성
 - [ ] DB 삭제 후 복구 경로 실증 테스트 (Phase 1 잔여)
 
+### Zotero sync 양방향성 보강 (이번 세션에서 별도 작업으로 분리)
+- [ ] **PaperFolder remove (컬렉션 멤버십 양방향 sync)** — 현재 `sync_zotero_items`는 `PaperFolder.get_or_create`만 호출 → add-only. 사용자가 Zotero에서 컬렉션 멤버십을 빼거나 다른 컬렉션으로 옮겨도 옛 링크가 잔존. 정책 결정 필요: "Zotero source of truth로 mirror" vs "add-only 보존". 전자라면 item의 `collections` 배열 기준으로 set-difference로 제거
+- [ ] **Trash / 삭제 핸들링** — Zotero에서 paper/attachment를 trash로 보내도 우리 DB에 영구 잔존. pyzotero `trash` endpoint + `deleted` flag 활용 설계 필요 (PaperBiblio cascade 보호도 같이 고민)
+- [ ] **PaperFile MD5 추적** — Zotero가 attachment에 대해 자체 md5를 보관. 우리는 추적 안 해서 사용자가 Zotero에서 PDF를 새 파일로 교체해도 옛 hash 기반 OCR cache를 그대로 사용. Phase 2 sync-centric 데이터 모델 개정과 함께 다루는 게 자연스러움
+- [ ] **PaperFile.content_type 컬럼 추가** — 현재 mime은 attachment dict에서 일회성 `is_derived` 판정에만 쓰임. 컬럼 추가 후 sync에서 동기화하면 mimetype 변경(corner case) 추적 가능
+- [ ] **itemType 캐시** — write-back에서 `ITEM_TYPE_JOURNAL_FIELD` 분기는 매번 fresh fetch로 itemType을 알아냄. 로컬에 캐시할지는 use case 더 봐야
+
 ---
 
 ## 결정된 사항
@@ -165,6 +172,14 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 ---
 
 ## 최근 세션 요약
+
+**2026-06-05 (세션 38)** — [devlog 041](./devlog/20260605_041_Sync_Refresh_Attachment_Path.md)
+- 캐시 점검: OCR 사실상 완료 (9,923 / 9,933 PDF processed, 99.9%). 잔존 10편 PDF 분석 — HTTP 404 (Zotero web storage에 file 없음) 7편 + Windows 파일명 문제 1편 (CDTGJND5, z-lib 책) + pending 2편
+- **`sync_zotero_items`의 attachment filename 갱신 누락 fix**: 기존엔 `existing_pf` 발견 시 `continue`로 skip → 사용자가 Zotero에서 attachment를 rename해도 우리 `PaperFile.path`는 영구 옛 값. `_refresh_existing_attachment(existing_pf, att)` 헬퍼 신설, 3 hot path(메인 loop / orphan / backfill) 모두에서 `continue` 직전 호출
+- **`failed + hash==''` 자동 리셋**: path가 바뀌었고 hash가 비어있었다면 (= 한 번도 OCR 시작 못함) status='pending'으로 리셋 + `failure_reason` clear. hash가 있는 failed (OCR 자체 실패)는 path 변경과 무관해서 자동 리셋 대상 아님
+- 라이브 검증 통과 (CDTGJND5): Sync → path 갱신 + status `failed→pending` 자동 전환 → Process → OCR 성공
+- HANDOFF.md "Zotero sync 양방향성 보강" 섹션 신설: PaperFolder remove / Trash 처리 / MD5 추적 / `content_type` 컬럼 / itemType 캐시 5개 TODO
+- 조사 중 확인: `Folder.name`과 `Folder.parent` 변경은 이미 `sync_zotero_collections`에서 처리되고 있음 (line 127-129, 150-152)
 
 **2026-05-28 (세션 37)** — [devlog 037](./devlog/20260528_037_Lazy_PDF_Render_Tab_Build_OCR_Submit_Hint.md) · [devlog 038](./devlog/20260528_038_Zotero_File_Direct_Download_Bypass.md)
 - **DetailPanel 응답성 개선**: paper 클릭 → 패널 표시 지연이 큰 PDF에서 눈에 띄게 길었음. 원인은 `show_paper()`가 세 탭을 즉시 빌드하면서 PDF 모든 페이지를 1.5x QPixmap으로 동기 렌더. 두 단계 lazy화:
