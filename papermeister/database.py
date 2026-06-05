@@ -52,6 +52,16 @@ def _migrate(database):
     if 'failure_reason' not in pf_columns:
         database.execute_sql("ALTER TABLE paperfile ADD COLUMN failure_reason TEXT DEFAULT ''")
 
+    # trashed_at on Paper and PaperFile (Zotero trash flag, NULL = not trashed)
+    cursor = database.execute_sql("PRAGMA table_info('paper')").fetchall()
+    columns = {row[1] for row in cursor}
+    if 'trashed_at' not in columns:
+        database.execute_sql('ALTER TABLE paper ADD COLUMN trashed_at DATETIME')
+    cursor = database.execute_sql("PRAGMA table_info('paperfile')").fetchall()
+    pf_columns = {row[1] for row in cursor}
+    if 'trashed_at' not in pf_columns:
+        database.execute_sql('ALTER TABLE paperfile ADD COLUMN trashed_at DATETIME')
+
     # PaperFolder backfill: seed from Paper.folder for existing data.
     # After backfill, flag for full item sync to populate multi-collection membership.
     tables = [t[0] for t in database.execute_sql(

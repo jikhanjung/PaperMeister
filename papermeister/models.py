@@ -38,6 +38,9 @@ class Paper(BaseModel):
     folder = peewee.ForeignKeyField(Folder, null=True, backref='papers', on_delete='SET NULL')
     zotero_key = peewee.TextField(default='')  # Zotero parent item key
     created_at = peewee.DateTimeField(default=datetime.datetime.now)
+    # Set when the corresponding Zotero item is in trash; cleared on restore.
+    # Permanent deletion (empty-trash) is a separate concern, not handled yet.
+    trashed_at = peewee.DateTimeField(null=True)
 
 
 class Author(BaseModel):
@@ -53,6 +56,10 @@ class PaperFile(BaseModel):
     status = peewee.TextField(default='pending')  # pending, processed, failed
     failure_reason = peewee.TextField(default='')  # free-form, e.g. ocr_failed|download_failed|encrypted
     zotero_key = peewee.TextField(default='')  # Zotero attachment key
+    # Set when the Zotero attachment is in trash; cleared on restore.
+    # Independent of the parent Paper's trashed_at (a user can trash a single
+    # attachment without trashing the parent item).
+    trashed_at = peewee.DateTimeField(null=True)
 
 
 class PaperBiblio(BaseModel):

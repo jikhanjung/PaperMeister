@@ -98,7 +98,9 @@
 
 ### Zotero sync 양방향성 보강 (이번 세션에서 별도 작업으로 분리)
 - [ ] **PaperFolder remove (컬렉션 멤버십 양방향 sync)** — 현재 `sync_zotero_items`는 `PaperFolder.get_or_create`만 호출 → add-only. 사용자가 Zotero에서 컬렉션 멤버십을 빼거나 다른 컬렉션으로 옮겨도 옛 링크가 잔존. 정책 결정 필요: "Zotero source of truth로 mirror" vs "add-only 보존". 전자라면 item의 `collections` 배열 기준으로 set-difference로 제거
-- [ ] **Trash / 삭제 핸들링** — Zotero에서 paper/attachment를 trash로 보내도 우리 DB에 영구 잔존. pyzotero `trash` endpoint + `deleted` flag 활용 설계 필요 (PaperBiblio cascade 보호도 같이 고민)
+- [x] ~~**Trash flag**~~ — Paper/PaperFile에 `trashed_at` 추가, sync 시 양방향 갱신(set/clear) 구현 완료 (세션 39). UI 표시(숨김 vs 회색)는 별도 결정 필요
+- [ ] **영구 삭제 (empty-trash) 핸들링** — `zot.deleted(since=N)`로 영구 삭제된 key 목록 처리. 현재는 영구 삭제와 restore가 sync 입장에서 동일하게 보여 silently clear됨 (PaperBiblio cascade 보호 정책 같이 고민)
+- [ ] **Trash 상태 UI 노출** — `trashed_at IS NOT NULL`인 Paper를 PaperList에서 숨길지/회색 처리할지/별도 "Trash" library 필터로 모을지 결정
 - [ ] **PaperFile MD5 추적** — Zotero가 attachment에 대해 자체 md5를 보관. 우리는 추적 안 해서 사용자가 Zotero에서 PDF를 새 파일로 교체해도 옛 hash 기반 OCR cache를 그대로 사용. Phase 2 sync-centric 데이터 모델 개정과 함께 다루는 게 자연스러움
 - [ ] **PaperFile.content_type 컬럼 추가** — 현재 mime은 attachment dict에서 일회성 `is_derived` 판정에만 쓰임. 컬럼 추가 후 sync에서 동기화하면 mimetype 변경(corner case) 추적 가능
 - [ ] **itemType 캐시** — write-back에서 `ITEM_TYPE_JOURNAL_FIELD` 분기는 매번 fresh fetch로 itemType을 알아냄. 로컬에 캐시할지는 use case 더 봐야
@@ -172,6 +174,15 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 ---
 
 ## 최근 세션 요약
+
+**2026-06-05 (세션 39)** — [devlog 042](./devlog/20260605_042_Zotero_Trash_Flag_Sync.md)
+- Zotero 서버에서 trash로 보낸 item이 우리 DB에 영구 잔존하던 빈틈 메움. `Paper.trashed_at` + `PaperFile.trashed_at` (DateTimeField, null) 추가. NULL=정상, datetime=trash 들어간 시점
+- `ZoteroClient.get_trash_keys()` 신설 — `zot.trash()` everything 페이지네이션 wrap, uppercase key set 반환. Zotero는 `/items/trash`에 `since` 지원 안 하므로 full snapshot
+- `papermeister.ingestion.sync_trash_state(zotero_client)` 신설 — Paper/PaperFile에 양방향 sync (in trash & flag NULL → set, flag NOT NULL & not in trash → clear). 영구 삭제는 restore와 sync 입장에서 구분 불가 → silently clear로 두는 게 현재 한계 (PaperBiblio cascade 보호 위해 영구 삭제 핸들링은 별도 작업)
+- `desktop/workers/zotero_sync.ZoteroSyncWorker._sync()` Phase 3로 추가, try/except로 best-effort (실패해도 메인 sync는 성공). 상태바에 `Trash sync: trashed N papers / M files, restored ...` 출력
+- CLI sync에는 hook 안 함 (CLI sync는 collections만 다루는 다른 경로)
+- 마이그레이션 검증: 9,888 papers / 19,983 paperfiles DB 사본에 적용 → 컬럼 추가 OK, 초기값 NULL, 기존 데이터 무손상
+- UI 표시(숨김/회색/별도 필터)는 미정 — 데이터만 박아두고 사용자 결정 대기
 
 **2026-06-05 (세션 38)** — [devlog 041](./devlog/20260605_041_Sync_Refresh_Attachment_Path.md)
 - 캐시 점검: OCR 사실상 완료 (9,923 / 9,933 PDF processed, 99.9%). 잔존 10편 PDF 분석 — HTTP 404 (Zotero web storage에 file 없음) 7편 + Windows 파일명 문제 1편 (CDTGJND5, z-lib 책) + pending 2편

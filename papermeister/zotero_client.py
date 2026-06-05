@@ -255,6 +255,26 @@ class ZoteroClient:
         orphan_atts = {k: atts_by_parent[k] for k in orphan_keys}
         return results, orphan_atts
 
+    def get_trash_keys(self):
+        """Fetch all keys currently in Zotero trash.
+
+        Zotero's trash endpoint does not support `since` (no incremental form),
+        so this returns a full snapshot. For typical libraries trash stays
+        small, so the cost is acceptable on each sync.
+
+        Returns:
+            set[str] — uppercase keys for every item (parent + attachment)
+            currently in trash.
+        """
+        raw = self._zot.everything(self._zot.trash())
+        keys = set()
+        for it in raw or []:
+            data = it.get('data') or {}
+            k = data.get('key') or it.get('key')
+            if k:
+                keys.add(k.upper())
+        return keys
+
     def download_file_content(self, attachment_key):
         """Download raw file bytes for an attachment, bypassing pyzotero's
         Content-Type sniffing.

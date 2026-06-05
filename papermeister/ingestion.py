@@ -1,3 +1,4 @@
+import datetime
 import hashlib
 import os
 import shutil
@@ -481,6 +482,72 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
                 pass  # network error — next sync will retry
 
     return new_count, updated_count
+
+
+def sync_trash_state(zotero_client, progress_callback=None):
+    """Sync Zotero trash state to local `trashed_at` flags.
+
+    Zotero's trash endpoint does not support `since`, so this fetches the full
+    trash on each call. Trash typically stays small so the cost is acceptable.
+
+    Two-way sync against the snapshot:
+    - In Zotero trash AND locally `trashed_at IS NULL` → flag (newly trashed)
+    - Locally `trashed_at IS NOT NULL` AND not in trash → clear (restored)
+
+    Permanent deletion (empty-trash) is a separate concern, not handled here:
+    a row whose Zotero key was purged from trash since the previous sync looks
+    identical to a restore. Until the permanent-delete path is wired in, the
+    flag will be silently cleared in that case, which is harmless (the row
+    simply stays around as a dangling pointer to a no-longer-existing Zotero
+    item; future operations against it will 404).
+
+    Returns dict with counts for newly_trashed_papers, restored_papers,
+    newly_trashed_files, restored_files.
+    """
+    if progress_callback:
+        progress_callback('Fetching Zotero trash…')
+
+    trash_keys = zotero_client.get_trash_keys()
+    if progress_callback:
+        progress_callback(f'Trash contains {len(trash_keys)} items')
+
+    now = datetime.datetime.now()
+    trash_list = list(trash_keys)
+
+    with db.atomic():
+        if trash_list:
+            newly_trashed_p = Paper.update(trashed_at=now).where(
+                (Paper.zotero_key.in_(trash_list))
+                & (Paper.trashed_at.is_null())
+            ).execute()
+            restored_p = Paper.update(trashed_at=None).where(
+                (Paper.trashed_at.is_null(False))
+                & (Paper.zotero_key.not_in(trash_list))
+            ).execute()
+            newly_trashed_pf = PaperFile.update(trashed_at=now).where(
+                (PaperFile.zotero_key.in_(trash_list))
+                & (PaperFile.trashed_at.is_null())
+            ).execute()
+            restored_pf = PaperFile.update(trashed_at=None).where(
+                (PaperFile.trashed_at.is_null(False))
+                & (PaperFile.zotero_key.not_in(trash_list))
+            ).execute()
+        else:
+            newly_trashed_p = 0
+            newly_trashed_pf = 0
+            restored_p = Paper.update(trashed_at=None).where(
+                Paper.trashed_at.is_null(False)
+            ).execute()
+            restored_pf = PaperFile.update(trashed_at=None).where(
+                PaperFile.trashed_at.is_null(False)
+            ).execute()
+
+    return {
+        'newly_trashed_papers': newly_trashed_p,
+        'restored_papers': restored_p,
+        'newly_trashed_files': newly_trashed_pf,
+        'restored_files': restored_pf,
+    }
 
 
 def fetch_zotero_collection_items(zotero_client, source, folder, progress_callback=None):

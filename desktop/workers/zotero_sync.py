@@ -61,6 +61,7 @@ class ZoteroSyncWorker(QThread):
     def _sync(self) -> dict:
         from papermeister.ingestion import (
             get_or_create_zotero_source, sync_zotero_collections, sync_zotero_items,
+            sync_trash_state,
         )
         from papermeister.preferences import get_pref, set_pref
         from papermeister.zotero_client import ZoteroClient, load_cached_collections
@@ -122,6 +123,29 @@ class ZoteroSyncWorker(QThread):
         )
         logger.info('sync_zotero_items: new=%d, updated=%d', new_items, updated_items)
 
+        # ── Phase 3: trash ───────────────────────────────────
+        # Full snapshot (Zotero trash endpoint has no incremental form).
+        # Cheap in practice because trash stays small.
+        try:
+            trash_result = sync_trash_state(client, progress_callback=_progress_cb)
+            logger.info('sync_trash_state: %s', trash_result)
+            nt_p = trash_result['newly_trashed_papers']
+            r_p = trash_result['restored_papers']
+            nt_f = trash_result['newly_trashed_files']
+            r_f = trash_result['restored_files']
+            if any((nt_p, r_p, nt_f, r_f)):
+                self._log_progress(
+                    f'Trash sync: trashed {nt_p} papers / {nt_f} files, '
+                    f'restored {r_p} papers / {r_f} files'
+                )
+            else:
+                self._log_progress('Trash sync: no changes.')
+        except Exception:
+            # Trash sync is best-effort; don't fail the whole sync over it.
+            import traceback
+            logger.warning('Trash sync failed:\n%s', traceback.format_exc())
+            trash_result = None
+
         # Store new version and clear flag.
         new_version = client.get_library_version()
         set_pref('zotero_library_version', new_version)
@@ -134,4 +158,5 @@ class ZoteroSyncWorker(QThread):
             'new': new_items,
             'updated': updated_items,
             'version': new_version,
+            'trash': trash_result,
         }
