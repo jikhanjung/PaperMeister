@@ -42,13 +42,21 @@ def search(query, limit=50, max_passages=200_000):
     # We stop adding new papers once we hit `limit`, but we still collect
     # additional matches for already-seen papers so each result carries a
     # few snippets for the detail view.
+    # Trashed papers are skipped (Paper.trashed_at IS NOT NULL); the FTS
+    # index itself doesn't track trash state, so we filter post-hoc.
     seen_papers: dict[int, dict] = {}
+    skipped_trashed: set[int] = set()
     for paper_id, page, passage_id, snippet, rank in rows:
+        if paper_id in skipped_trashed:
+            continue
         entry = seen_papers.get(paper_id)
         if entry is None:
             if len(seen_papers) >= limit:
                 continue
             paper = Paper.get_by_id(paper_id)
+            if paper.trashed_at is not None:
+                skipped_trashed.add(paper_id)
+                continue
             entry = {'paper': paper, 'matches': []}
             seen_papers[paper_id] = entry
         if len(entry['matches']) < 5:  # cap per-paper snippets

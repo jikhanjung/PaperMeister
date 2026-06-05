@@ -136,7 +136,11 @@ def _row_from_paper(paper: Paper, source_name: str) -> PaperRow:
 
 
 def list_by_library(key: str, limit: int = 500) -> list[PaperRow]:
-    """Paper rows for a Library folder. Cheap-first joins; no N+1 by design."""
+    """Paper rows for a Library folder. Cheap-first joins; no N+1 by design.
+
+    All keys except 'trash' filter out trashed papers; 'trash' returns the
+    inverse.
+    """
     rows: list[PaperRow] = []
 
     if key == 'all':
@@ -145,6 +149,7 @@ def list_by_library(key: str, limit: int = 500) -> list[PaperRow]:
             .select(Paper, Folder, Source)
             .join(Folder, JOIN.LEFT_OUTER, on=(Paper.folder == Folder.id))
             .join(Source, JOIN.LEFT_OUTER, on=(Folder.source == Source.id))
+            .where(Paper.trashed_at.is_null())
             .order_by(Paper.id.desc())
             .limit(limit)
         )
@@ -161,13 +166,13 @@ def list_by_library(key: str, limit: int = 500) -> list[PaperRow]:
             .select(Paper, Folder, Source)
             .join(Folder, JOIN.LEFT_OUTER, on=(Paper.folder == Folder.id))
             .join(Source, JOIN.LEFT_OUTER, on=(Folder.source == Source.id))
-            .where(Paper.id.in_(paper_ids))
+            .where(Paper.id.in_(paper_ids) & Paper.trashed_at.is_null())
             .order_by(Paper.id.desc())
             .limit(limit)
         )
     elif key == 'needs_review':
         # Same helper the Library tree uses for the count — guaranteed
-        # to return the identical set of paper_ids.
+        # to return the identical set of paper_ids (already excludes trashed).
         from .library import needs_review_paper_ids
         biblio_paper_ids = needs_review_paper_ids()
         if not biblio_paper_ids:
@@ -188,8 +193,18 @@ def list_by_library(key: str, limit: int = 500) -> list[PaperRow]:
             .select(Paper, Folder, Source)
             .join(Folder, JOIN.LEFT_OUTER, on=(Paper.folder == Folder.id))
             .join(Source, JOIN.LEFT_OUTER, on=(Folder.source == Source.id))
-            .where(Paper.created_at >= cutoff)
+            .where((Paper.created_at >= cutoff) & Paper.trashed_at.is_null())
             .order_by(Paper.created_at.desc())
+            .limit(limit)
+        )
+    elif key == 'trash':
+        query = (
+            Paper
+            .select(Paper, Folder, Source)
+            .join(Folder, JOIN.LEFT_OUTER, on=(Paper.folder == Folder.id))
+            .join(Source, JOIN.LEFT_OUTER, on=(Folder.source == Source.id))
+            .where(Paper.trashed_at.is_null(False))
+            .order_by(Paper.trashed_at.desc())
             .limit(limit)
         )
     else:
@@ -211,7 +226,10 @@ def list_by_folder(folder_id: int, limit: int = 500) -> list[PaperRow]:
     query = (
         Paper.select()
         .join(PaperFolder, on=(PaperFolder.paper == Paper.id))
-        .where(PaperFolder.folder == folder_id)
+        .where(
+            (PaperFolder.folder == folder_id)
+            & (Paper.trashed_at.is_null())
+        )
         .order_by(Paper.id.desc())
         .limit(limit)
     )
@@ -226,7 +244,7 @@ def list_by_source(source_id: int, limit: int = 500) -> list[PaperRow]:
         .select(Paper, Folder, Source)
         .join(Folder, on=(Paper.folder == Folder.id))
         .join(Source, on=(Folder.source == Source.id))
-        .where(Source.id == source_id)
+        .where((Source.id == source_id) & (Paper.trashed_at.is_null()))
         .order_by(Paper.id.desc())
         .limit(limit)
     )

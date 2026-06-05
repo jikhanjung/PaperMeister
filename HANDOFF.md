@@ -98,9 +98,10 @@
 
 ### Zotero sync 양방향성 보강 (이번 세션에서 별도 작업으로 분리)
 - [ ] **PaperFolder remove (컬렉션 멤버십 양방향 sync)** — 현재 `sync_zotero_items`는 `PaperFolder.get_or_create`만 호출 → add-only. 사용자가 Zotero에서 컬렉션 멤버십을 빼거나 다른 컬렉션으로 옮겨도 옛 링크가 잔존. 정책 결정 필요: "Zotero source of truth로 mirror" vs "add-only 보존". 전자라면 item의 `collections` 배열 기준으로 set-difference로 제거
-- [x] ~~**Trash flag**~~ — Paper/PaperFile에 `trashed_at` 추가, sync 시 양방향 갱신(set/clear) 구현 완료 (세션 39). UI 표시(숨김 vs 회색)는 별도 결정 필요
+- [x] ~~**Trash flag**~~ — Paper/PaperFile에 `trashed_at` 추가, sync 시 양방향 갱신(set/clear) 구현 완료 (세션 39)
+- [x] ~~**Trash 상태 UI 노출**~~ — 모든 목록(collection/library/source/search)에서 자동 숨김 + Library에 "Trash" 항목 추가 완료 (세션 39, 후속)
 - [ ] **영구 삭제 (empty-trash) 핸들링** — `zot.deleted(since=N)`로 영구 삭제된 key 목록 처리. 현재는 영구 삭제와 restore가 sync 입장에서 동일하게 보여 silently clear됨 (PaperBiblio cascade 보호 정책 같이 고민)
-- [ ] **Trash 상태 UI 노출** — `trashed_at IS NOT NULL`인 Paper를 PaperList에서 숨길지/회색 처리할지/별도 "Trash" library 필터로 모을지 결정
+- [ ] **PaperList에서 Trash 복원 UX** — Zotero에서 복원 시 다음 sync에서 자동 clear되지만, desktop 내에서 우클릭 "Restore from trash"로 즉시 Zotero PATCH(`deleted: 0`) + local clear 가능하게 할지 결정
 - [ ] **PaperFile MD5 추적** — Zotero가 attachment에 대해 자체 md5를 보관. 우리는 추적 안 해서 사용자가 Zotero에서 PDF를 새 파일로 교체해도 옛 hash 기반 OCR cache를 그대로 사용. Phase 2 sync-centric 데이터 모델 개정과 함께 다루는 게 자연스러움
 - [ ] **PaperFile.content_type 컬럼 추가** — 현재 mime은 attachment dict에서 일회성 `is_derived` 판정에만 쓰임. 컬럼 추가 후 sync에서 동기화하면 mimetype 변경(corner case) 추적 가능
 - [ ] **itemType 캐시** — write-back에서 `ITEM_TYPE_JOURNAL_FIELD` 분기는 매번 fresh fetch로 itemType을 알아냄. 로컬에 캐시할지는 use case 더 봐야
@@ -174,6 +175,14 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 ---
 
 ## 최근 세션 요약
+
+**2026-06-05 (세션 39 후속)** — [devlog 043](./devlog/20260605_043_Trash_UI_Hide_And_Library_Filter.md)
+- 042에서 `trashed_at` 컬럼만 박았더니 사용자 지적: "collection별 item 목록 보여줄 때 trashed_at 체크 안 하는 것 같은데?". 4개 데이터 소스 (`list_by_library` / `list_by_folder` / `list_by_source` / FTS5 `search`) 모두 필터 없었음
+- **숨김 정책**: 모든 일반 목록에서 trashed paper 자동 제외 (Zotero GUI 표준 동작). Library 트리에 `('trash', 'Trash')` 항목 신설 — `trashed_at IS NOT NULL` 전용 뷰. `paper_service.list_by_library('trash')`도 추가
+- 모든 카운트 함수 (`_count_all`, `_count_status`, `_count_recent`, `needs_review_paper_ids`) 도 trashed 제외 — 트리 카운트와 list가 구조적으로 일치 보장
+- FTS5 검색은 post-hoc 필터 (FTS 인덱스 자체엔 trash 신호 없음). `seen_papers` dedupe 루프에서 `paper.trashed_at` 체크 후 skip + `skipped_trashed` 캐시로 중복 페치 방지
+- 검증: 사용자 DB 사본에서 All Papers 9,888 → 9,887, Trash 항목 카운트 1 (Segment Anything), 같은 제목의 다른 paper(id=9891)가 검색 top 1로 올라옴. 모든 hot path에서 정확히 trash 1건 제외
+- UI 변경 없음(Library 트리 자동 노출), 우클릭 "Restore" 액션은 TODO로 남김 (현재는 Zotero에서 복원 후 다음 sync로 자동 clear 경로만)
 
 **2026-06-05 (세션 39)** — [devlog 042](./devlog/20260605_042_Zotero_Trash_Flag_Sync.md)
 - Zotero 서버에서 trash로 보낸 item이 우리 DB에 영구 잔존하던 빈틈 메움. `Paper.trashed_at` + `PaperFile.trashed_at` (DateTimeField, null) 추가. NULL=정상, datetime=trash 들어간 시점
