@@ -176,6 +176,13 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 
 ## 최근 세션 요약
 
+**2026-06-05 (세션 40)** — [devlog 044](./devlog/20260605_044_Collections_Incremental_Sync.md)
+- Phase 1 collections sync가 547개 collection에서 매번 11s. logging 추가로 hotspot 잡음: `get_collections()` API call 7.21s + `sync_zotero_collections` 2회 호출 4.19s
+- **Incremental 전환**: `get_collections(since=last_col_ver)` 활용. 이미 코드는 있었는데 worker가 since를 안 넘김. 별도 pref `zotero_collections_version` 신설 (items phase의 `zotero_library_version`과 race 없도록 분리). 변경 없으면 sync(fresh) 호출 자체 생략
+- 결과 (A만): 11.40s → **4.00s** (변경 없는 일반 sync 기준). `get_collections` 7.21s → 0.77s
+- **B도 같이 적용**: `load_cached_collections` + `sync(cached)` 통째 제거. 사용자 확인 — 예전 DB migration 시 들어간 잔재, Folder 테이블이 persistent라 cold-start UI 응답성 가치 0. 추가 2s 절감으로 phase 1 total ~2s 예상 (검증 보류)
+- 남은 후보: `get_library_version()` 추가 round-trip ~1s, `sync_zotero_collections` 내부 bulk pre-fetch — 둘 다 micro-optimization으로 보류
+
 **2026-06-05 (세션 39 후속)** — [devlog 043](./devlog/20260605_043_Trash_UI_Hide_And_Library_Filter.md)
 - 042에서 `trashed_at` 컬럼만 박았더니 사용자 지적: "collection별 item 목록 보여줄 때 trashed_at 체크 안 하는 것 같은데?". 4개 데이터 소스 (`list_by_library` / `list_by_folder` / `list_by_source` / FTS5 `search`) 모두 필터 없었음
 - **숨김 정책**: 모든 일반 목록에서 trashed paper 자동 제외 (Zotero GUI 표준 동작). Library 트리에 `('trash', 'Trash')` 항목 신설 — `trashed_at IS NOT NULL` 전용 뷰. `paper_service.list_by_library('trash')`도 추가

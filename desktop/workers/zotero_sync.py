@@ -1,6 +1,7 @@
 """Background worker for Zotero sync with progress reporting."""
 import logging
 import os
+import time
 from PyQt6.QtCore import QThread, pyqtSignal
 
 _LOG_DIR = os.path.join(os.path.expanduser('~'), '.papermeister', 'logs')
@@ -64,29 +65,76 @@ class ZoteroSyncWorker(QThread):
             sync_trash_state,
         )
         from papermeister.preferences import get_pref, set_pref
-        from papermeister.zotero_client import ZoteroClient, load_cached_collections
+        from papermeister.zotero_client import ZoteroClient
 
         client = ZoteroClient(self._user_id, self._api_key)
         source = get_or_create_zotero_source(self._user_id)
         logger.debug('Source: id=%s, name=%s', source.id, source.name)
 
-        # Read item sync state BEFORE collections phase (which overwrites
-        # zotero_library_version as a side effect of sync_zotero_collections).
+        # Read both sync states BEFORE collections phase. sync_zotero_collections
+        # overwrites zotero_library_version as a side effect (used by items),
+        # while collections itself tracks a separate zotero_collections_version
+        # so an items-only change doesn't force a full collections refetch.
         needs_full = get_pref('paperfolder_needs_full_sync', False)
         last_version = get_pref('zotero_library_version', None)
+        last_col_ver = get_pref('zotero_collections_version', None)
         since = None if needs_full else (int(last_version) if last_version else None)
-        logger.debug('Item sync plan: needs_full=%s, last_version=%s, since=%s', needs_full, last_version, since)
+        col_since = None if needs_full else (int(last_col_ver) if last_col_ver else None)
+        logger.debug(
+            'Sync plan: needs_full=%s, item_since=%s, col_since=%s',
+            needs_full, since, col_since,
+        )
 
         # ── Phase 1: collections ─────────────────────────────
+        # The Folder table is persistent, so SourceNav already shows the
+        # last-known collection tree before sync starts. We no longer pre-warm
+        # from the JSON cache (load_cached_collections + sync(cached)) because
+        # that path duplicated the work fresh sync does and added 2s of pure
+        # overhead on every sync (see devlog 044).
+        phase1_start = time.perf_counter()
         self._log_progress('Syncing collections…')
-        cached = load_cached_collections()
-        logger.debug('Cached collections: %s', len(cached) if cached else 'none')
-        if cached:
-            sync_zotero_collections(client, source, cached)
 
-        fresh = client.get_collections()
-        sync_zotero_collections(client, source, fresh)
-        col_count = len(fresh) if fresh else 0
+        t0 = time.perf_counter()
+        fresh = client.get_collections(since=col_since)
+        logger.info(
+            'collections: get_collections(since=%s) took %.2fs (%d entries)',
+            col_since, time.perf_counter() - t0,
+            len(fresh) if fresh else 0,
+        )
+
+        if fresh is None:
+            # Incremental fetch returned None → no collection changes since
+            # last_col_ver. Folder table already reflects the truth; nothing
+            # to apply.
+            self._log_progress('No collection changes.')
+            # Show the cached count for the status message; an empty trail
+            # would look like the library is empty.
+            from papermeister.models import Folder
+            col_count = (
+                Folder.select().where(Folder.source == source).count()
+            )
+        else:
+            t0 = time.perf_counter()
+            sync_zotero_collections(client, source, fresh)
+            logger.info(
+                'collections: sync(fresh) took %.2fs',
+                time.perf_counter() - t0,
+            )
+            col_count = len(fresh)
+
+        # Stamp the collections-specific version regardless of whether anything
+        # changed — sync_zotero_collections only overwrites zotero_library_version
+        # (used by items), so without this our col_since would never advance.
+        try:
+            new_col_ver = client.get_library_version()
+            set_pref('zotero_collections_version', new_col_ver)
+        except Exception:
+            pass
+
+        logger.info(
+            'collections: phase 1 total %.2fs',
+            time.perf_counter() - phase1_start,
+        )
         self._log_progress(f'Collections synced ({col_count}). Fetching items…')
 
         # ── Phase 2: items ───────────────────────────────────
