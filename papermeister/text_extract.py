@@ -9,6 +9,24 @@ from .models import db, Paper, PaperFile, Passage, Author
 OCR_JSON_DIR = os.path.join(os.path.expanduser('~'), '.papermeister', 'ocr_json')
 
 
+def ocr_json_filename(paper_file):
+    """Filename for the OCR JSON sibling of a PDF PaperFile.
+
+    Format: '{pdf_basename}.{hash[:8]}.json'
+    Example: 'Smith2023.pdf' (hash 'a3f2b1c4d5e6...') →
+             'Smith2023.pdf.a3f2b1c4.json'
+
+    Single source of truth for the cache file name, the Zotero sibling
+    attachment filename, and the PaperFile.path value.
+
+    Requires `paper_file.hash` to be non-empty.
+    """
+    if not paper_file.hash:
+        raise ValueError(f'PaperFile {paper_file.id} has no hash')
+    pdf_name = os.path.basename(paper_file.path)
+    return f'{pdf_name}.{paper_file.hash[:8]}.json'
+
+
 def extract_metadata_from_pdf(filepath):
     """Extract title, author, year from PDF metadata."""
     doc = fitz.open(filepath)
@@ -62,9 +80,12 @@ def split_into_passages(text, min_length=50):
 
 
 def _save_ocr_json(paper_file, raw_result):
-    """Save raw OCR JSON to ~/.papermeister/ocr_json/{hash}.json (atomic write)."""
+    """Save raw OCR JSON to the OCR cache dir (atomic write).
+
+    Filename comes from `ocr_json_filename(paper_file)`.
+    """
     os.makedirs(OCR_JSON_DIR, exist_ok=True)
-    out_path = os.path.join(OCR_JSON_DIR, f'{paper_file.hash}.json')
+    out_path = os.path.join(OCR_JSON_DIR, ocr_json_filename(paper_file))
     tmp = tempfile.NamedTemporaryFile(
         mode='w', dir=OCR_JSON_DIR, suffix='.tmp', delete=False, encoding='utf-8',
     )
@@ -82,7 +103,9 @@ def _save_ocr_json(paper_file, raw_result):
 
 def _load_ocr_json(paper_file):
     """Load cached raw OCR JSON if it exists. Returns raw_result dict or None."""
-    path = os.path.join(OCR_JSON_DIR, f'{paper_file.hash}.json')
+    if not paper_file.hash:
+        return None
+    path = os.path.join(OCR_JSON_DIR, ocr_json_filename(paper_file))
     if not os.path.exists(path):
         return None
     with open(path, encoding='utf-8') as f:
@@ -115,7 +138,22 @@ def _record_biblio_applied_impl(biblio):
     if not pdf_hash:
         return
 
-    json_path = os.path.join(OCR_JSON_DIR, f'{pdf_hash}.json')
+    # Find the source PDF PaperFile so we know which cache file / sibling
+    # belongs to this biblio (multi-PDF parents need per-PDF disambiguation).
+    pdf_pf = (
+        PaperFile.select()
+        .where(
+            (PaperFile.paper == biblio.paper)
+            & (PaperFile.hash == pdf_hash)
+            & (~PaperFile.path.endswith('.json'))
+        )
+        .first()
+    )
+    if pdf_pf is None:
+        return
+
+    json_filename = ocr_json_filename(pdf_pf)
+    json_path = os.path.join(OCR_JSON_DIR, json_filename)
     if not os.path.exists(json_path):
         return
 
@@ -152,7 +190,7 @@ def _record_biblio_applied_impl(biblio):
         PaperFile.select()
         .where(
             (PaperFile.paper == biblio.paper)
-            & (PaperFile.path == f'{pdf_hash}.json')
+            & (PaperFile.path == json_filename)
             & (PaperFile.zotero_key.is_null(False))
         )
         .first()
@@ -180,7 +218,7 @@ def _record_biblio_applied_impl(biblio):
 
 
 def _try_fetch_sibling_json(paper_file, status_callback=None):
-    """If a sibling Zotero attachment named `{paper_file.hash}.json` exists,
+    """If a sibling Zotero attachment with this PDF's OCR JSON exists,
     download it, write to the local OCR cache, and return the parsed dict.
 
     Returns None if no sibling found or if any step fails. Caller should
@@ -189,7 +227,7 @@ def _try_fetch_sibling_json(paper_file, status_callback=None):
     if not paper_file.zotero_key or not paper_file.hash:
         return None
 
-    expected_name = f'{paper_file.hash}.json'
+    expected_name = ocr_json_filename(paper_file)
     sibling = (
         PaperFile
         .select()
@@ -448,10 +486,10 @@ def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=N
                 status_callback(f'Parent item creation failed: {e}')
 
     # Upload OCR JSON as Zotero sibling attachment (opt-in, best-effort).
-    # Match per PDF (by hash-based filename), not "any JSON on this paper" —
+    # Match per PDF (by ocr_json_filename), not "any JSON on this paper" —
     # a parent item with multiple PDF children needs one JSON per PDF.
     if is_zotero and get_pref('zotero_upload_ocr_json', False) and paper_file.hash:
-        json_filename = f'{paper_file.hash}.json'
+        json_filename = ocr_json_filename(paper_file)
         existing_json = (
             PaperFile.select()
             .where(
@@ -477,7 +515,7 @@ def _upload_ocr_json_to_zotero(paper_file):
 
     On success, creates a new PaperFile row for the JSON attachment.
     """
-    json_path = os.path.join(OCR_JSON_DIR, f'{paper_file.hash}.json')
+    json_path = os.path.join(OCR_JSON_DIR, ocr_json_filename(paper_file))
     if not os.path.exists(json_path):
         return
 

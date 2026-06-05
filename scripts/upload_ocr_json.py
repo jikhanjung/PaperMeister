@@ -26,6 +26,7 @@ from papermeister.database import init_db
 from papermeister.models import Paper, PaperFile, db
 from papermeister.preferences import get_pref
 from papermeister.ingestion import hash_file
+from papermeister.text_extract import ocr_json_filename
 from papermeister.zotero_client import ZoteroClient
 
 OCR_JSON_DIR = os.path.expanduser('~/.papermeister/ocr_json')
@@ -57,12 +58,13 @@ def backfill_manual(paperfiles_by_key):
         )
         if existing:
             continue
-        json_path = os.path.join(OCR_JSON_DIR, f'{pf.hash}.json')
+        json_name = ocr_json_filename(pf)
+        json_path = os.path.join(OCR_JSON_DIR, json_name)
         if not os.path.exists(json_path):
             continue
         PaperFile.create(
             paper=pf.paper,
-            path=os.path.basename(json_path),
+            path=json_name,
             hash=hash_file(json_path),
             status='processed',
             zotero_key=json_key,
@@ -109,20 +111,17 @@ def main():
         log(f'  → {backfilled}개 백필 완료')
 
     # 이미 매칭되는 JSON PaperFile이 있는 PDF 제외.
-    # multi-PDF paper 지원: paper 단위가 아니라 (paper_id, hash) 쌍으로 매칭해서,
-    # PDF #2/#3 처럼 JSON이 아직 안 올라간 sibling은 후보로 남게 함.
-    # JSON 파일명 패턴은 `{hash}.json` (text_extract._upload_ocr_json_to_zotero).
+    # multi-PDF paper 지원: paper 단위가 아니라 (paper_id, expected_json_name) 쌍
+    # 매칭으로 PDF #2/#3 처럼 JSON이 아직 안 올라간 sibling은 후보로 남게 함.
     existing_jsons = set()
     for jpf in PaperFile.select(PaperFile.paper, PaperFile.path).where(
         PaperFile.path.endswith('.json')
     ):
-        name = jpf.path
-        if name.endswith('.json'):
-            existing_jsons.add((jpf.paper_id, name[:-5]))
+        existing_jsons.add((jpf.paper_id, jpf.path))
 
     todo = [
         pf for pf in candidates
-        if (pf.paper_id, pf.hash) not in existing_jsons
+        if (pf.paper_id, ocr_json_filename(pf)) not in existing_jsons
     ]
     log(f'업로드 대상: {len(todo)}')
 
@@ -140,7 +139,8 @@ def main():
     failed = 0
 
     for i, pf in enumerate(todo, 1):
-        json_path = os.path.join(OCR_JSON_DIR, f'{pf.hash}.json')
+        json_name = ocr_json_filename(pf)
+        json_path = os.path.join(OCR_JSON_DIR, json_name)
         if not os.path.exists(json_path):
             skipped += 1
             continue
@@ -154,7 +154,7 @@ def main():
 
             PaperFile.create(
                 paper=pf.paper,
-                path=os.path.basename(json_path),
+                path=json_name,
                 hash=hash_file(json_path),
                 status='processed',
                 zotero_key=new_key,

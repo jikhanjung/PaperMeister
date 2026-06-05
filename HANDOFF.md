@@ -105,6 +105,7 @@
 - [ ] **PaperFile MD5 추적** — Zotero가 attachment에 대해 자체 md5를 보관. 우리는 추적 안 해서 사용자가 Zotero에서 PDF를 새 파일로 교체해도 옛 hash 기반 OCR cache를 그대로 사용. Phase 2 sync-centric 데이터 모델 개정과 함께 다루는 게 자연스러움
 - [ ] **PaperFile.content_type 컬럼 추가** — 현재 mime은 attachment dict에서 일회성 `is_derived` 판정에만 쓰임. 컬럼 추가 후 sync에서 동기화하면 mimetype 변경(corner case) 추적 가능
 - [ ] **itemType 캐시** — write-back에서 `ITEM_TYPE_JOURNAL_FIELD` 분기는 매번 fresh fetch로 itemType을 알아냄. 로컬에 캐시할지는 use case 더 봐야
+- [ ] **OCR JSON sibling attachment title 정규화** (세션 42 메모) — 마이그레이션 script가 `data.title`을 filename과 동일하게 박았는데 Zotero 7+ 정책은 attachment title을 generic label("PDF", "EPUB" 등)로 두는 것. items list에서 긴 hash-suffixed filename이 noise. 필요 시 `scripts/rename_ocr_json.py`에 `--retitle-generic "OCR JSON"` 같은 옵션 추가해서 한 번 더 일괄 PATCH. 또는 Zotero 8의 `Tools → Manage Attachments → Normalize Attachment Titles` 활용. 지금은 의도적으로 그대로 둠. 참고: https://www.zotero.org/support/kb/attachment_title_vs_filename
 
 ---
 
@@ -175,6 +176,16 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 ---
 
 ## 최근 세션 요약
+
+**2026-06-05 (세션 42)** — [devlog 046](./devlog/20260605_046_OCR_JSON_Filename_Migration.md)
+- OCR cache + Zotero sibling attachment 파일명을 hash 기반 `{hash}.json`에서 PDF-name 기반 `{pdf_basename}.{hash[:8]}.json`으로 통일
+- 결정: cache + Zotero 둘 다 적용, hash 8자 suffix (BIRTHDAY 9700편에서 2×10⁻⁹), legacy fallback 없이 일괄 마이그레이션 (사용자: OCR 거의 끝났으니 한 번에)
+- 헬퍼 함수 `ocr_json_filename(paper_file)` 신설 → 10개 hot spot 통일 (text_extract / biblio / scripts / 양쪽 UI). `biblio.load_ocr_pages` 시그니처는 hash 그대로 유지, 내부 `_find_cache_by_hash` glob 검색
+- 마이그레이션 script `scripts/rename_ocr_json.py`: 3-layer (cache rename → DB update → Zotero PATCH). 1:N cache 케이스(207개)는 `shutil.copy`로 sibling별 복제
+- 시행 착오: (1) pyzotero `update_item` payload shape — full fetched item dict 통째로 받음, (2) `data.title`도 같이 박아야 GUI 표시, (3) Zotero 7+ 정책은 title을 generic label("PDF" 등)로 두는 게 정공법 — 현재는 title=filename으로 박혀있고 향후 정규화는 TODO로 분리
+- WSL/NTFS WAL 충돌로 사용자가 Windows native Python(Anaconda)에서 script 직접 실행
+- 영향 카운트: 9,920 JSON PaperFile rename, 9,700 unique hash, 204 1:N. 전체 apply 30~60분
+- TODO 추가: "OCR JSON sibling attachment title 정규화" (Zotero 7+ 컨벤션 맞추기)
 
 **2026-06-05 (세션 41)** — [devlog 045](./devlog/20260605_045_Items_Backfill_Removal.md)
 - 세션 40 끝의 timing 로그로 Phase 2 items가 변경 0건인데 25.91s 발견. items 내부 phase별 logging 추가해서 `backfill (29 papers checked, 0 new) took 25.91s`로 hotspot 확정 — PaperFile 없는 reference-only paper 29편에 매번 `zot.children()` API call

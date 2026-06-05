@@ -12,6 +12,28 @@ logger = logging.getLogger('biblio')
 OCR_JSON_DIR = os.path.join(os.path.expanduser('~'), '.papermeister', 'ocr_json')
 
 
+def _find_cache_by_hash(file_hash: str) -> str | None:
+    """Locate the OCR cache file for a given PDF hash.
+
+    Cache filenames are `{pdf_basename}.{hash[:8]}.json` — keyed on the
+    8-char hash prefix because the same hash may have multiple PaperFile
+    rows (one PDF imported into several Zotero parents). The first match
+    is fine: same hash → identical content → any copy works.
+
+    Returns the absolute path or None.
+    """
+    if not file_hash or not os.path.isdir(OCR_JSON_DIR):
+        return None
+    suffix = f'.{file_hash[:8]}.json'
+    try:
+        for fname in os.listdir(OCR_JSON_DIR):
+            if fname.endswith(suffix):
+                return os.path.join(OCR_JSON_DIR, fname)
+    except OSError:
+        pass
+    return None
+
+
 @dataclass
 class BiblioResult:
     """Structured bibliographic info extracted from a paper's first pages."""
@@ -50,8 +72,8 @@ def load_ocr_pages(file_hash: str) -> list:
 
     Returns empty list if cache file is missing or malformed.
     """
-    path = os.path.join(OCR_JSON_DIR, f'{file_hash}.json')
-    if not os.path.exists(path):
+    path = _find_cache_by_hash(file_hash)
+    if path is None:
         return []
     try:
         with open(path, encoding='utf-8') as f:
@@ -74,8 +96,8 @@ def load_ocr_meta(file_hash: str) -> dict | None:
     Used to detect cross-machine state (e.g. biblio already applied on another
     machine) without re-running the LLM.
     """
-    path = os.path.join(OCR_JSON_DIR, f'{file_hash}.json')
-    if not os.path.exists(path):
+    path = _find_cache_by_hash(file_hash)
+    if path is None:
         return None
     try:
         with open(path, encoding='utf-8') as f:

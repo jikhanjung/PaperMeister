@@ -382,22 +382,21 @@ class MainWindow(QMainWindow):
             )
         )
 
-        # Filter: has OCR JSON on disk AND no JSON sibling yet — per PDF, not per
-        # paper. A parent item with multiple PDF children needs one JSON each;
-        # checking only "any JSON on this paper" would skip PDF #2/#3 incorrectly.
-        # JSON filename pattern is `{hash}.json`.
+        # Filter: has OCR JSON on disk AND no JSON sibling yet — per PDF, not
+        # per paper. A parent item with multiple PDF children needs one JSON
+        # each; checking only "any JSON on this paper" would skip PDF #2/#3
+        # incorrectly. JSON filename comes from ocr_json_filename().
+        from papermeister.text_extract import ocr_json_filename
         existing_jsons = set()
         for jpf in PaperFile.select(PaperFile.paper, PaperFile.path).where(
             PaperFile.path.endswith('.json')
         ):
-            name = jpf.path
-            if name.endswith('.json'):
-                existing_jsons.add((jpf.paper_id, name[:-5]))
+            existing_jsons.add((jpf.paper_id, jpf.path))
 
         todo = [
             pf for pf in pdf_files
-            if (pf.paper_id, pf.hash) not in existing_jsons
-            and os.path.exists(os.path.join(OCR_JSON_DIR, f'{pf.hash}.json'))
+            if (pf.paper_id, ocr_json_filename(pf)) not in existing_jsons
+            and os.path.exists(os.path.join(OCR_JSON_DIR, ocr_json_filename(pf)))
         ]
 
         if not todo:
@@ -431,13 +430,14 @@ class MainWindow(QMainWindow):
             success = 0
             failed = 0
             for pf in todo:
-                json_path = os.path.join(OCR_JSON_DIR, f'{pf.hash}.json')
+                json_name = ocr_json_filename(pf)
+                json_path = os.path.join(OCR_JSON_DIR, json_name)
                 try:
                     new_key = client.upload_sibling_attachment(pf.zotero_key, json_path)
                     if new_key:
                         PaperFile.create(
                             paper=pf.paper,
-                            path=os.path.basename(json_path),
+                            path=json_name,
                             hash=hash_file(json_path),
                             status='processed',
                             zotero_key=new_key,

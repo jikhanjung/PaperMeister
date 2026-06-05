@@ -483,14 +483,16 @@ class MainWindow(QMainWindow):
 
     def _reindex_from_cache(self):
         from ..models import PaperFile, Passage
-        from ..text_extract import OCR_JSON_DIR
+        from ..text_extract import OCR_JSON_DIR, ocr_json_filename
 
         targets = []
         for pf in PaperFile.select().where(~PaperFile.path.endswith('.json')):
             has_passages = Passage.select().where(Passage.paper == pf.paper).exists()
             if has_passages:
                 continue
-            json_path = os.path.join(OCR_JSON_DIR, f'{pf.hash}.json')
+            if not pf.hash:
+                continue
+            json_path = os.path.join(OCR_JSON_DIR, ocr_json_filename(pf))
             if os.path.exists(json_path):
                 targets.append(pf.id)
 
