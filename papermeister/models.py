@@ -70,6 +70,9 @@ class PaperBiblio(BaseModel):
     authors_json = peewee.TextField(default='[]')
     year = peewee.IntegerField(null=True)
     journal = peewee.TextField(default='')
+    volume = peewee.TextField(default='')      # journal volume
+    issue = peewee.TextField(default='')       # journal issue/number
+    pages = peewee.TextField(default='')       # page range, e.g. "123-145"
     doi = peewee.TextField(default='')
     abstract = peewee.TextField(default='')
     doc_type = peewee.TextField(default='unknown')

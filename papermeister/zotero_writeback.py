@@ -58,6 +58,70 @@ def _journal_field_for(item_type: str) -> str | None:
     return ITEM_TYPE_JOURNAL_FIELD.get(item_type or '')
 
 
+# biblio.doc_type → Zotero itemType. Used to upgrade a placeholder 'document'
+# (what standalone auto-promote creates) to the real type once a high-confidence
+# extraction tells us what it is. journal_issue/unknown are intentionally absent
+# (no upgrade). Mirrors scripts/promote_standalone.py.
+DOC_TYPE_TO_ITEM_TYPE: dict[str, str] = {
+    'article': 'journalArticle',
+    'book':    'book',
+    'chapter': 'bookSection',
+    'thesis':  'thesis',
+    'report':  'report',
+}
+
+
+def _build_type_upgrade_payload(
+    client: ZoteroClient, data: dict, biblio: PaperBiblio, target_type: str
+) -> dict:
+    """Build a full item payload that converts `data` to `target_type`, filled
+    from `biblio`. Template-based so only fields valid for the new type are
+    sent (Zotero rejects unknown fields). Preserves identity + placement.
+
+    Only valid fields appear in the template, so each assignment is guarded by
+    membership — that doubles as the per-type field-validity check for
+    volume/issue/pages and the journal-like container field.
+    """
+    template = client._zot.item_template(target_type)
+    payload = dict(template)
+    payload['key'] = data['key']
+    payload['version'] = data['version']
+    for f in ('collections', 'parentItem', 'tags', 'relations'):
+        if f in data:
+            payload[f] = data[f]
+
+    new_title = (biblio.title or '').strip()
+    if 'title' in payload:
+        payload['title'] = new_title or (data.get('title') or '')
+    if 'date' in payload:
+        payload['date'] = str(biblio.year) if biblio.year else (data.get('date') or '')
+    if 'DOI' in payload:
+        payload['DOI'] = (biblio.doi or data.get('DOI') or '').strip()
+    if 'abstractNote' in payload:
+        payload['abstractNote'] = (biblio.abstract or data.get('abstractNote') or '').strip()
+    if 'language' in payload:
+        payload['language'] = (biblio.language or data.get('language') or '').strip()
+
+    authors = _parse_biblio_authors(biblio.authors_json or '')
+    if authors:
+        payload['creators'] = [
+            {'creatorType': 'author', 'name': name} for name in authors
+        ]
+    elif data.get('creators'):
+        payload['creators'] = data['creators']
+
+    jfield = _journal_field_for(target_type)
+    if jfield and jfield in payload and (biblio.journal or '').strip():
+        payload[jfield] = biblio.journal.strip()
+
+    for f in ('volume', 'issue', 'pages'):
+        bv = (getattr(biblio, f, '') or '').strip()
+        if bv and f in payload:
+            payload[f] = bv
+
+    return payload
+
+
 def _update_item(client: ZoteroClient, payload: dict) -> None:
     """PATCH wrapper that translates pyzotero errors into clearer types.
 
@@ -177,6 +241,14 @@ def _compute_patch(
     if not (data.get('DOI') or '').strip() and (biblio.doi or '').strip():
         patch['DOI'] = biblio.doi.strip()
 
+    # journal-article detail fields. `f in data` doubles as the validity check:
+    # Zotero returns every field valid for the itemType, so a field absent from
+    # `data` isn't valid for this type and must not be sent (avoids 400).
+    for f in ('volume', 'issue', 'pages'):
+        bv = (getattr(biblio, f, '') or '').strip()
+        if bv and f in data and not (data.get(f) or '').strip():
+            patch[f] = bv
+
     # creators — Zotero expects a list of dicts with creatorType.
     # MVP uses single-field `name` to avoid risky first/last split.
     existing_creators = data.get('creators') or []
@@ -244,11 +316,38 @@ def writeback_biblio(
     data = item['data']
     meta = item.get('meta') or {}
 
+    # 1b. itemType upgrade — a standalone auto-promote leaves a placeholder
+    #     'document'. Once a high-confidence extraction knows the real type,
+    #     rebuild the item as journalArticle/book/bookSection/… so its
+    #     type-specific fields (publicationTitle, volume/issue/pages) become
+    #     valid. Gated on the filename-placeholder/empty title so curated
+    #     'document' items the user set deliberately are left alone.
+    current_type = data.get('itemType', '')
+    title_placeholder = _title_is_filename_placeholder(paper, data.get('title', ''))
+    upgrade_to = None
+    if current_type == 'document' and (title_placeholder or not (data.get('title') or '').strip()):
+        cand = DOC_TYPE_TO_ITEM_TYPE.get((biblio.doc_type or '').strip())
+        if cand and cand != current_type:
+            upgrade_to = cand
+
+    if upgrade_to:
+        payload = _build_type_upgrade_payload(client, data, biblio, upgrade_to)
+        if dry_run:
+            return WritebackResult(
+                action='would_write', changed=True,
+                patch={'itemType': upgrade_to, **{k: payload.get(k) for k in
+                       ('title', 'date', 'DOI', 'volume', 'issue', 'pages') if payload.get(k)}},
+            )
+        _update_item(client, payload)
+        fresh = client._zot.item(paper.zotero_key)
+        _refresh_local_paper(paper, fresh['data'], fresh.get('meta'), client)
+        return WritebackResult(action='wrote', changed=True, patch={'itemType': upgrade_to})
+
     # 2. Compute patch against Zotero state (not local). Allow the extracted
     #    title to replace a standalone filename placeholder (promote artifact).
     patch = _compute_patch(
         biblio, data, force_override=force_override,
-        title_overridable=_title_is_filename_placeholder(paper, data.get('title', '')),
+        title_overridable=title_placeholder,
     )
 
     # 3a. No-op case — Zotero is already authoritative and complete for

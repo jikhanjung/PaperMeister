@@ -46,6 +46,11 @@ def _migrate(database):
     if bib_columns and 'review_reason' not in bib_columns:
         database.execute_sql("ALTER TABLE paperbiblio ADD COLUMN review_reason TEXT DEFAULT ''")
 
+    # Journal-article detail fields: volume / issue / pages
+    for col in ('volume', 'issue', 'pages'):
+        if bib_columns and col not in bib_columns:
+            database.execute_sql(f"ALTER TABLE paperbiblio ADD COLUMN {col} TEXT DEFAULT ''")
+
     # PaperFile.failure_reason
     cursor = database.execute_sql("PRAGMA table_info('paperfile')").fetchall()
     pf_columns = {row[1] for row in cursor}

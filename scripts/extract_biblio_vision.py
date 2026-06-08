@@ -35,6 +35,8 @@ Output STRICT JSON only (no prose, no markdown code fence) with this exact schem
   "authors": [string],              // empty for journal issues
   "year": integer or null,
   "journal": string,                // publication title (or publisher for books)
+  "volume": string,                 // journal volume (plain digits)
+  "pages": string,                  // page range e.g. "123-145"
   "doi": string,
   "abstract": string,
   "doc_type": "article" | "book" | "chapter" | "thesis" | "report" | "journal_issue" | "unknown",
@@ -124,6 +126,9 @@ def save_biblio(paper, file_hash, pred, source, model):
         authors_json=json.dumps(pred.get('authors', []) or [], ensure_ascii=False),
         year=pred.get('year') if isinstance(pred.get('year'), int) else None,
         journal=pred.get('journal', '') or '',
+        volume=str(pred.get('volume', '') or ''),
+        issue=str(pred.get('issue', '') or ''),
+        pages=str(pred.get('pages', '') or ''),
         doi=pred.get('doi', '') or '',
         abstract=pred.get('abstract', '') or '',
         doc_type=pred.get('doc_type', 'unknown') or 'unknown',

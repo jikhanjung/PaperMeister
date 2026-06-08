@@ -41,6 +41,9 @@ class BiblioResult:
     authors: list = field(default_factory=list)  # ordered list of "First Last"
     year: Optional[int] = None
     journal: str = ''
+    volume: str = ''             # journal volume
+    issue: str = ''              # journal issue/number
+    pages: str = ''              # page range, e.g. "123-145"
     doi: str = ''
     abstract: str = ''
     doc_type: str = 'unknown'   # article|book|chapter|thesis|report|unknown
@@ -58,6 +61,9 @@ class BiblioResult:
             authors=list(d.get('authors', []) or []),
             year=d.get('year'),
             journal=d.get('journal', '') or '',
+            volume=str(d.get('volume', '') or ''),
+            issue=str(d.get('issue', '') or ''),
+            pages=str(d.get('pages', '') or ''),
             doi=d.get('doi', '') or '',
             abstract=d.get('abstract', '') or '',
             doc_type=d.get('doc_type', 'unknown') or 'unknown',
@@ -157,7 +163,8 @@ _BIBLIO_PROMPT = (
     "Do NOT guess or infer; if a field is not clearly stated, leave it empty/null.\n\n"
     "Output STRICT JSON only (no prose, no markdown code fence) with this exact schema:\n"
     '{"title": string, "authors": [string], "year": integer or null, '
-    '"journal": string, "doi": string, "abstract": string, '
+    '"journal": string, "volume": string, "issue": string, "pages": string, '
+    '"doi": string, "abstract": string, '
     '"doc_type": "article"|"book"|"chapter"|"thesis"|"report"|"unknown", '
     '"language": string, "confidence": "high"|"medium"|"low", '
     '"needs_visual_review": boolean, "notes": string}\n\n'
@@ -165,6 +172,9 @@ _BIBLIO_PROMPT = (
     "- Authors must be in the order shown in the document.\n"
     "- Year: the publication year, not received/accepted dates.\n"
     "- DOI: only if explicitly written.\n"
+    "- For a journal article: volume, issue (number), and pages (page range like "
+    '"123-145") if explicitly present; otherwise leave them empty. Use plain '
+    "digits/range strings, no labels like \"Vol.\" or \"pp.\".\n"
     "- Set needs_visual_review=true if the first pages look like a journal-issue cover, "
     "a table of contents, or any layout where spatial/visual structure is essential.\n"
     "- Output ONLY the JSON object.\n\n"
