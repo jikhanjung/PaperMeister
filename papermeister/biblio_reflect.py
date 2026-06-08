@@ -192,31 +192,31 @@ def evaluate(biblio: PaperBiblio, paper: Paper) -> Decision:
     doctype_ok = biblio.doc_type and biblio.doc_type not in NON_AUTOCOMMIT_DOCTYPES
     confidence_ok = (biblio.confidence or '') == 'high'
 
+    # Placeholder/stub papers carry no curated metadata to protect — a real text
+    # extraction is strictly better than a PDF-filename placeholder. For those,
+    # relax the soft gates: a missing year, a visual-review flag, and a merely
+    # 'medium' confidence no longer hold them for review. Hard gaps (no title /
+    # no authors / unknown doc_type) and 'low' confidence still do. Curated
+    # Papers keep the full gates.
+    from . import zotero_writeback
+    relaxable = (
+        _is_stub_paper(paper)
+        or zotero_writeback.title_is_filename_placeholder(paper, paper.title or '')
+    )
+
     # Field-level failures (P08 §5)
     if not title_ok:
         return Decision('needs_review', 'missing_title', biblio.id)
     if not authors:
         return Decision('needs_review', 'missing_authors', biblio.id)
-    if not year_ok:
+    if not year_ok and not relaxable:
         return Decision('needs_review', 'missing_year', biblio.id)
     if not doctype_ok:
         return Decision('needs_review', 'unknown_doctype', biblio.id)
-    if biblio.needs_visual_review:
+    if biblio.needs_visual_review and not relaxable:
         return Decision('needs_review', 'visual_review_flag', biblio.id)
-    if not confidence_ok:
-        # A stub Paper (no year, no authors) or one whose title is still the
-        # PDF-filename placeholder (a standalone auto-promote artifact) has no
-        # real metadata to protect, so a 'medium'-confidence extraction is
-        # strictly better than what's there. Let medium through for those; only
-        # 'low' is held back. Curated Papers still require high confidence.
-        from . import zotero_writeback
-        placeholder = zotero_writeback.title_is_filename_placeholder(paper, paper.title or '')
-        relax_medium = (
-            (_is_stub_paper(paper) or placeholder)
-            and (biblio.confidence or '') == 'medium'
-        )
-        if not relax_medium:
-            return Decision('needs_review', 'low_confidence', biblio.id)
+    if not confidence_ok and not (relaxable and (biblio.confidence or '') == 'medium'):
+        return Decision('needs_review', 'low_confidence', biblio.id)
 
     # Paper state (P08 §2.3, §4)
     if _is_stub_paper(paper):
