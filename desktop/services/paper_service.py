@@ -143,6 +143,19 @@ def _row_from_paper(paper: Paper, source_name: str) -> PaperRow:
     )
 
 
+def row_for_paper(paper_id: int) -> PaperRow | None:
+    """Build a fresh PaperRow for a single paper — used to refresh one list row
+    in place after a biblio apply changed its title/authors/year/status."""
+    paper = Paper.get_or_none(Paper.id == paper_id)
+    if paper is None:
+        return None
+    source_name = (
+        paper.folder.source.name
+        if (paper.folder and paper.folder.source) else ''
+    )
+    return _row_from_paper(paper, source_name)
+
+
 def list_by_library(key: str, limit: int = 500) -> list[PaperRow]:
     """Paper rows for a Library folder. Cheap-first joins; no N+1 by design.
 

@@ -198,6 +198,28 @@ class PaperListView(QTreeWidget):
                 item.setData(0, Qt.ItemDataRole.UserRole + 3, is_standalone)
                 break
 
+    def refresh_row(self, paper_id: int):
+        """Re-fetch a single paper's row and update all columns in place
+        (status / authors / year / title), e.g. after a biblio apply changed
+        the metadata. Falls back silently if the row isn't currently shown."""
+        row = paper_service.row_for_paper(paper_id)
+        if row is None:
+            return
+        for i in range(self.topLevelItemCount()):
+            item = self.topLevelItem(i)
+            if item.data(0, Qt.ItemDataRole.UserRole) == paper_id:
+                item.setText(0, row.status if row.status != 'none' else 'none')
+                item.setText(1, row.authors or '—')
+                item.setText(2, str(row.year) if row.year is not None else '—')
+                item.setText(3, row.title)
+                if row.file_id is not None:
+                    item.setData(0, Qt.ItemDataRole.UserRole + 2, row.file_id)
+                item.setData(0, Qt.ItemDataRole.UserRole + 3, row.is_standalone)
+                font = item.font(3)
+                font.setItalic(bool(row.is_stub))
+                item.setFont(3, font)
+                break
+
     def clear_rows(self):
         self.clear()
 

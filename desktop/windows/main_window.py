@@ -543,7 +543,7 @@ class MainWindow(QMainWindow):
             self.status_bar.set_task(
                 f'Biblio already {state} on Zotero ({source}) — skipped LLM for paper {paper_id}'
             )
-            self.paper_list.update_status(paper_id, 'done')
+            self.paper_list.refresh_row(paper_id)
             if self.detail_panel._current_paper_id == paper_id:
                 self.detail_panel.show_paper(paper_id)
             self._drain_biblio_queue()
@@ -566,7 +566,7 @@ class MainWindow(QMainWindow):
                     self.status_bar.set_task(f'Zotero rejected biblio patch (paper {paper_id}): {e}')
                 else:
                     self.status_bar.set_task(f'Biblio extracted & auto-applied for paper {paper_id}')
-                    self.paper_list.update_status(paper_id, 'done')
+                    self.paper_list.refresh_row(paper_id)
             else:
                 self.status_bar.set_task(
                     f'Biblio extracted for paper {paper_id} (needs review: {decision.reason})')
@@ -697,7 +697,7 @@ class MainWindow(QMainWindow):
             pass
         self.source_nav.refresh()
         if changed:
-            self.paper_list.update_status(paper_id, 'done')
+            self.paper_list.refresh_row(paper_id)
         self.status_bar.set_task(
             f'Applied paper #{paper_id} ({action})' if changed else f'No changes for paper #{paper_id}'
         )
