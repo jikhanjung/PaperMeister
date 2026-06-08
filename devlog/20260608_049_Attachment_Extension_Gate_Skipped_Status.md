@@ -71,5 +71,22 @@ dry-run 기본. bare-key PDF는 제외되어 안전.
 - old UI(`papermeister/ui/`, 동결)는 `skipped` pill을 모름 — 사용자는 desktop 사용이라 보류.
 - `_process_one` 반환이 skipped도 True(=processed 카운트)라 run() 요약 카운트만 미세 부정확.
   방어 경로 한정이라 무시.
-- linked_url 6편(파일 아닌 URL 링크)은 contentType/확장자 없어 여전히 `failed` 잔존 가능 —
-  bare key라 has_non_pdf_extension에 안 걸림. 필요 시 linkMode 기반 별도 분류 검토.
+## 후속: linked_url 첨부 보정 (같은 세션)
+
+확장자 게이트 적용 후 `failed`가 80편 남았는데, 조사하니 **75편이 `linked_url`**(URL 북마크,
+파일 없음) + 5편이 `imported_file` PDF(진짜 실패)였다. 사용자가 "failed인데 OCR된 것"으로
+인지한 것의 정체:
+
+- **표시 버그**: linked_url 첨부가 OCR된 PDF가 있는 paper에 붙어 있는데, 기존 `_primary_file`이
+  "첫 non-json"으로 이 링크를 paper 대표로 골라 `err` pill을 띄움 → 이번 `_primary_file` PDF
+  우선 수정으로 자연 해소(이제 processed PDF가 대표).
+- **status 보정**: linked_url은 bare key(확장자 없음)라 `has_non_pdf_extension`에 안 걸림 →
+  `reclassify_attachments.py`로 못 잡음. **zotero.sqlite의 linkMode**(0~3)가 authoritative라
+  `scripts/reclassify_linked_attachments.py` 신설 — linked_file(2)+linked_url(3) failed → skipped.
+  imported_file 실패는 진짜라 유지.
+
+**forward는 이미 OK**: linked_url은 filename/contentType가 없어 ingestion에서
+`attachment_status('', '')` → `skipped`로 떨어짐(게이트가 이미 처리). 기존 75편만 backfill 대상.
+
+**결과**: 75편 → skipped. 최종 분포 **processed 19,887 / skipped 110(확장자 35 + linked 75) /
+failed 5**(Segment Anything 등 서버·로컬 둘 다 파일 없는 imported_file PDF). failed 80 → 5.
