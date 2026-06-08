@@ -375,6 +375,12 @@ def main():
                     else:
                         item['data']['filename'] = new_name
                         item['data']['title'] = new_name
+                        # Zotero rejects the server-managed read-only key
+                        # `lastRead` on write ("Invalid keys present in item 1:
+                        # lastRead"). Some attachments carry it (last-opened
+                        # timestamp); strip it before echoing the dict back.
+                        # Leave other fields (e.g. numPages) intact.
+                        item['data'].pop('lastRead', None)
                         client._zot.update_item(item)
                         zotero_patches += 1
                         if args.sleep > 0:
