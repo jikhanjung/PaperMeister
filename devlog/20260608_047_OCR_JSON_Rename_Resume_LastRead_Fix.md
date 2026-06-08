@@ -65,7 +65,21 @@ Zotero PATCH도 filename+title이 이미 맞으면 round-trip 생략) **같은 �
 
 해당 PaperFile id: `3178, 3996, 4053, 4059, 4082, 4164, 4201, 7230`.
 
-cleanup(DB row + Zotero attachment + 캐시 파일 3곳 삭제)은 파괴적이라 별도 TODO로 분리.
+## 후속: orphan 8개 cleanup (같은 세션)
+
+사용자 판단 — stale 중복이니 그냥 삭제(PDF와 그 정상 JSON은 보존). 파괴적 + Zotero 서버
+수정이라 안전장치를 갖춘 전용 스크립트 `scripts/cleanup_stale_ocr_json.py` 작성.
+
+- **삭제 대상을 하드코딩하지 않고 매번 기준으로 재계산** (재실행 안전):
+  ① 레거시 `^[0-9a-f]{64}\.json$` ② 같은 논문에 그 hash의 짝 PDF 없음(=진짜 stale)
+  ③ 논문이 PDF ≥1 보유 ④ 논문이 *다른* 새-형식 JSON(`*.pdf.*.json`) 보유.
+  ③④ 가드로 **논문의 유일한 OCR은 절대 삭제 안 함** (걸리면 SKIP 보고).
+- **사전 안전 검증**(read-only): orphan 8개의 zotero_key가 PDF/정상JSON과 충돌 0건 확인 후 실행.
+- 3-layer 삭제: Zotero attachment(`_zot.delete_item`, 404는 already-gone으로 graceful) → 캐시 파일 → DB row. dry-run 기본, `--execute`로 적용. `--skip-zotero` 옵션.
+- **실행 결과**: Zotero deleted 8 / failures 0 / cache absent 8(마이그레이션 1:N copy+remove로 이미 사라짐) / DB rows deleted 8.
+- **검증**: 엄격 레거시 0, orphan row 8개 소멸, 8개 논문 모두 PDF + 정상 JSON 1개씩 무손상.
+
+→ 9,935 JSON PaperFile 중 stale 8개 제거, 나머지 **9,924개 전부 새 형식**. 마이그레이션 완전 종료.
 
 ## 시행 착오 — read-only 진척 쿼리의 false positive
 
