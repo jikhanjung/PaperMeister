@@ -335,12 +335,19 @@ class MainWindow(QMainWindow):
                 PaperFile.status == 'processed',
                 PaperFile.path.endswith('.pdf'),
             )
+            .order_by(Paper.id.desc())  # fallback order = list default
         ):
             pid = pf.paper_id
             if pid in papers_with_biblio or pid in seen_papers or pid in queued_papers:
                 continue
             seen_papers.add(pid)
             biblio_targets.append((pid, pf.id))
+
+        # Process in the same order the PaperList currently shows (honours any
+        # header-click sort). Papers not on screen (e.g. subfolders) keep the
+        # Paper.id-desc fallback at the end. Stable sort preserves both.
+        rank = {pid: i for i, pid in enumerate(self.paper_list.visible_paper_ids())}
+        biblio_targets.sort(key=lambda t: rank.get(t[0], len(rank)))
 
         if not file_ids and not biblio_targets:
             self.status_bar.set_task(

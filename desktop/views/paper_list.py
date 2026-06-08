@@ -220,6 +220,16 @@ class PaperListView(QTreeWidget):
                 item.setFont(3, font)
                 break
 
+    def visible_paper_ids(self) -> list[int]:
+        """Paper ids in current top-to-bottom display order (reflects any
+        header-click sort the user applied)."""
+        ids: list[int] = []
+        for i in range(self.topLevelItemCount()):
+            pid = self.topLevelItem(i).data(0, Qt.ItemDataRole.UserRole)
+            if isinstance(pid, int):
+                ids.append(pid)
+        return ids
+
     def clear_rows(self):
         self.clear()
 
