@@ -70,6 +70,8 @@
 
 ## 다음 할 일
 
+> **현재 우선순위**: OCR(99.9%)·파일명 마이그레이션은 마무리됨(세션 43). 다음 자연스러운 초점은 **Phase D 대량 운영**(OCR 완료분 biblio 추출 → reflect) + Phase 4 hookup 검증.
+
 ### 즉시 착수 가능 (Phase 4 hookup)
 - [ ] **48편 extracted 잔존분 재시도** — 세션 18 폴더 처리 중 bookSection 400으로 멈춘 케이스 + needs_review 정상 케이스 혼재. 같은 폴더들 다시 Process 한 번 돌려서 `ITEM_TYPE_JOURNAL_FIELD` 픽스 효과 + biblio_state 메타 cross-machine sync 확인 (세션 35의 폴더 failed retry 포함 덕분에 한 번에 처리 가능해짐)
 - [ ] **모드 라벨 status bar 영구 표시 여부 결정** (세션 34 미정) — 지금은 Process 시작 시 한 번만 출력. 항상 표시 vs 공간 절약 트레이드오프
@@ -98,15 +100,12 @@
 
 ### Zotero sync 양방향성 보강 (이번 세션에서 별도 작업으로 분리)
 - [ ] **PaperFolder remove (컬렉션 멤버십 양방향 sync)** — 현재 `sync_zotero_items`는 `PaperFolder.get_or_create`만 호출 → add-only. 사용자가 Zotero에서 컬렉션 멤버십을 빼거나 다른 컬렉션으로 옮겨도 옛 링크가 잔존. 정책 결정 필요: "Zotero source of truth로 mirror" vs "add-only 보존". 전자라면 item의 `collections` 배열 기준으로 set-difference로 제거
-- [x] ~~**Trash flag**~~ — Paper/PaperFile에 `trashed_at` 추가, sync 시 양방향 갱신(set/clear) 구현 완료 (세션 39)
-- [x] ~~**Trash 상태 UI 노출**~~ — 모든 목록(collection/library/source/search)에서 자동 숨김 + Library에 "Trash" 항목 추가 완료 (세션 39, 후속)
 - [ ] **영구 삭제 (empty-trash) 핸들링** — `zot.deleted(since=N)`로 영구 삭제된 key 목록 처리. 현재는 영구 삭제와 restore가 sync 입장에서 동일하게 보여 silently clear됨 (PaperBiblio cascade 보호 정책 같이 고민)
 - [ ] **PaperList에서 Trash 복원 UX** — Zotero에서 복원 시 다음 sync에서 자동 clear되지만, desktop 내에서 우클릭 "Restore from trash"로 즉시 Zotero PATCH(`deleted: 0`) + local clear 가능하게 할지 결정
 - [ ] **PaperFile MD5 추적** — Zotero가 attachment에 대해 자체 md5를 보관. 우리는 추적 안 해서 사용자가 Zotero에서 PDF를 새 파일로 교체해도 옛 hash 기반 OCR cache를 그대로 사용. Phase 2 sync-centric 데이터 모델 개정과 함께 다루는 게 자연스러움
 - [ ] **PaperFile.content_type 컬럼 추가** — 현재 mime은 attachment dict에서 일회성 `is_derived` 판정에만 쓰임. 컬럼 추가 후 sync에서 동기화하면 mimetype 변경(corner case) 추적 가능
 - [ ] **itemType 캐시** — write-back에서 `ITEM_TYPE_JOURNAL_FIELD` 분기는 매번 fresh fetch로 itemType을 알아냄. 로컬에 캐시할지는 use case 더 봐야
 - [ ] **OCR JSON sibling attachment title 정규화** (세션 42 메모) — 마이그레이션 script가 `data.title`을 filename과 동일하게 박았는데 Zotero 7+ 정책은 attachment title을 generic label("PDF", "EPUB" 등)로 두는 것. items list에서 긴 hash-suffixed filename이 noise. 필요 시 `scripts/rename_ocr_json.py`에 `--retitle-generic "OCR JSON"` 같은 옵션 추가해서 한 번 더 일괄 PATCH. 또는 Zotero 8의 `Tools → Manage Attachments → Normalize Attachment Titles` 활용. 지금은 의도적으로 그대로 둠. 참고: https://www.zotero.org/support/kb/attachment_title_vs_filename
-- [x] ~~**Stale 중복 OCR JSON cleanup** (세션 43)~~ — 레거시 `{hash}.json` orphan 8편(id `3178/3996/4053/4059/4082/4164/4201/7230`) 삭제 완료. `scripts/cleanup_stale_ocr_json.py`(기준 재계산 + ③④ 가드로 논문 유일 OCR 보호 + dry-run 기본)로 Zotero 첨부 8 + DB row 8 제거, PDF/정상JSON 무손상 검증
 
 ---
 
