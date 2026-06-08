@@ -20,10 +20,11 @@ additive (fill-empty-slot only).
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from typing import Literal
 
-from .models import Author, Paper, PaperBiblio, db
+from .models import Author, Paper, PaperBiblio, PaperFile, db
 from .zotero_client import ZoteroClient
 
 
@@ -113,18 +114,49 @@ def _parse_biblio_authors(authors_json: str) -> list[str]:
     return out
 
 
+def _title_is_filename_placeholder(paper: Paper, current_title: str) -> bool:
+    """True when the item title is just the PDF filename — the placeholder that
+    standalone auto-promote (session 36) sets on the new parent item.
+
+    Such a title is technically non-empty but carries no real bibliographic
+    information, so a real extracted title should replace it rather than be
+    held back by the empty-slot rule.
+    """
+    cur = (current_title or '').strip()
+    if not cur:
+        return False
+    pdf = (
+        PaperFile.select()
+        .where((PaperFile.paper == paper) & (~PaperFile.path.endswith('.json')))
+        .order_by(PaperFile.id)
+        .first()
+    )
+    if pdf is None or not pdf.path:
+        return False
+    base = os.path.basename(pdf.path)
+    stem = os.path.splitext(base)[0]
+    return cur == base or cur == stem
+
+
 def _compute_patch(
-    biblio: PaperBiblio, data: dict, *, force_override: bool
+    biblio: PaperBiblio, data: dict, *, force_override: bool,
+    title_overridable: bool = False,
 ) -> dict:
     """Build the minimal patch dict needed on top of `data` (Zotero's fresh
     state) to reflect this biblio. Empty-slot rule unless force_override.
+
+    `title_overridable` relaxes the title rule: when the current title is a
+    standalone filename placeholder, a real extracted title replaces it even
+    though the slot isn't strictly empty.
     """
     patch: dict = {}
     biblio_authors = _parse_biblio_authors(biblio.authors_json or '')
 
-    # title
-    if not (data.get('title') or '').strip() and (biblio.title or '').strip():
-        patch['title'] = biblio.title.strip()
+    # title — fill when empty, or replace a standalone filename placeholder.
+    cur_title = (data.get('title') or '').strip()
+    new_title = (biblio.title or '').strip()
+    if new_title and new_title != cur_title and (not cur_title or title_overridable):
+        patch['title'] = new_title
 
     # date ← biblio.year (only if Zotero's date is empty)
     if not (data.get('date') or '').strip() and biblio.year is not None:
@@ -212,8 +244,12 @@ def writeback_biblio(
     data = item['data']
     meta = item.get('meta') or {}
 
-    # 2. Compute patch against Zotero state (not local).
-    patch = _compute_patch(biblio, data, force_override=force_override)
+    # 2. Compute patch against Zotero state (not local). Allow the extracted
+    #    title to replace a standalone filename placeholder (promote artifact).
+    patch = _compute_patch(
+        biblio, data, force_override=force_override,
+        title_overridable=_title_is_filename_placeholder(paper, data.get('title', '')),
+    )
 
     # 3a. No-op case — Zotero is already authoritative and complete for
     #     everything this biblio would contribute. Still refresh local in
