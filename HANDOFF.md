@@ -106,6 +106,7 @@
 - [ ] **PaperFile.content_type 컬럼 추가** — 현재 mime은 attachment dict에서 일회성 `is_derived` 판정에만 쓰임. 컬럼 추가 후 sync에서 동기화하면 mimetype 변경(corner case) 추적 가능
 - [ ] **itemType 캐시** — write-back에서 `ITEM_TYPE_JOURNAL_FIELD` 분기는 매번 fresh fetch로 itemType을 알아냄. 로컬에 캐시할지는 use case 더 봐야
 - [ ] **OCR JSON sibling attachment title 정규화** (세션 42 메모) — 마이그레이션 script가 `data.title`을 filename과 동일하게 박았는데 Zotero 7+ 정책은 attachment title을 generic label("PDF", "EPUB" 등)로 두는 것. items list에서 긴 hash-suffixed filename이 noise. 필요 시 `scripts/rename_ocr_json.py`에 `--retitle-generic "OCR JSON"` 같은 옵션 추가해서 한 번 더 일괄 PATCH. 또는 Zotero 8의 `Tools → Manage Attachments → Normalize Attachment Titles` 활용. 지금은 의도적으로 그대로 둠. 참고: https://www.zotero.org/support/kb/attachment_title_vs_filename
+- [ ] **Stale 중복 OCR JSON cleanup** (세션 43) — 파일명 마이그레이션 후 처리 불가로 남은 레거시 `{hash}.json` 8편 (PaperFile id `3178/3996/4053/4059/4082/4164/4201/7230`). 모두 hash=empty + 소속 논문이 이미 현재 PDF의 올바른 새 JSON 보유 → PDF 교체로 남은 stale 중복. 기능 무해(glob fallback resolve)지만 cleanup하려면 3곳(DB PaperFile row + Zotero attachment + 캐시 파일) 삭제 필요. 파괴적이라 read-only 조사만 해두고 보류. 진행 시 dry-run script 권장
 
 ---
 
@@ -176,6 +177,14 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 ---
 
 ## 최근 세션 요약
+
+**2026-06-08 (세션 43)** — [devlog 047](./devlog/20260608_047_OCR_JSON_Rename_Resume_LastRead_Fix.md)
+- 세션 42에서 창 닫아 **중단된 OCR JSON 파일명 마이그레이션 완주** (`{hash}.json` → `{pdf_basename}.{hash[:8]}.json`)
+- idempotent 재실행으로 이어감: 1차 7,816 성공 + 6 Zotero failures, 2차 재시도로 잔여 클리어. 최종 **9,924/9,935** 마이그레이션 완료
+- **`lastRead` PATCH 버그 픽스** (`scripts/rename_ocr_json.py`, commit `3c297aa`): 일부 attachment의 서버 read-only 필드 `data.lastRead`를 fetch한 item dict 그대로 `update_item`에 echo → Zotero가 `Invalid keys present in item 1: lastRead`로 거부. PATCH 직전 `item['data'].pop('lastRead', None)`. `numPages` 등은 보존(쓰기 가능 필드일 수 있어 `lastRead`만 제거)
+- **orphan 8개 의도적 잔존**: 처리 불가 레거시 `{hash}.json` 8편 (id `3178/3996/4053/4059/4082/4164/4201/7230`). 모두 hash=empty + 소속 논문이 이미 현재 PDF의 올바른 새 JSON 보유 → PDF 교체로 남은 stale 중복 OCR JSON. 짝 PDF가 없어 새 이름 유도 불가(스크립트 "no matching PDF sibling: 8"과 일치). glob fallback으로 resolve되어 기능 무해. cleanup은 TODO로 분리
+- 실행 메모: 라이브 DB/캐시/preferences는 Windows 홈(`C:\Users\Jikhan Jung\.papermeister`), 실제 실행은 Windows native Python(Anaconda). WSL에선 `/mnt/c`의 DB를 read-only 조회만
+- 시행착오: read-only 진척 쿼리 휴리스틱 `GLOB '[0-9a-f]*' AND length=69`이 69자+hex로 시작하는 새 이름 3개를 레거시로 오탐. 점 개수(`{64hex}.json`은 점 1개) 검증으로 정정
 
 **2026-06-05 (세션 42)** — [devlog 046](./devlog/20260605_046_OCR_JSON_Filename_Migration.md)
 - OCR cache + Zotero sibling attachment 파일명을 hash 기반 `{hash}.json`에서 PDF-name 기반 `{pdf_basename}.{hash[:8]}.json`으로 통일
