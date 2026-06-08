@@ -40,9 +40,13 @@ phantom을 zotero.sqlite의 실재 key 집합으로 탐지(API로 수천 편 확
 
 ## 메모
 
-- **JSON sibling 0 reparented**: 옛 OCR-JSON 첨부(77MGXAWW / JDGQ4W6S)는 phantom 부모와 함께
-  Zotero에서 이미 삭제됨 → 재parent 대상 없음. 로컬 PaperFile은 남지만 OCR 캐시가 있어 무해
-  (필요 시 다음 JSON 업로드에서 새 부모 sibling으로 재생성). 마이너 dangling.
+- **JSON sibling 0 reparented → 별도 재업로드로 해결**: 옛 OCR-JSON 첨부(77MGXAWW / JDGQ4W6S)는
+  phantom 부모와 함께 Zotero에서 이미 삭제돼 재parent 대상이 없었음. 로컬 PaperFile 행은 dangling으로
+  남고, 이 행 때문에 `upload_ocr_json.py`/폴더 우클릭 Upload가 `(paper_id, json_name)` dedup으로
+  **SKIP**(이미 있다고 오판). → `scripts/reupload_missing_ocr_json.py` 신설: Zotero에 없는 key를 가진
+  JSON PaperFile + 로컬 캐시 존재 + PDF 부모 보유인 것을 찾아, 캐시를 `upload_sibling_attachment`으로
+  새 부모 sibling으로 재업로드하고 행의 zotero_key를 갱신(OCR 재실행 없음). 2편 적용:
+  77MGXAWW→B5FWTTJ4, JDGQ4W6S→DT555IHV. 최종 구조 = 부모 + PDF + JSON sibling 정합.
 - 새 부모는 Zotero **서버**에 생성됨 — Zotero desktop이 sync해야 zotero.sqlite에도 반영.
   PM 다음 sync에선 정합되게 보임.
 - 일반화된 사각지대: "`/deleted` 보존창보다 오래된 Zotero 삭제"는 영구삭제 미러(050)로 못 잡음.
