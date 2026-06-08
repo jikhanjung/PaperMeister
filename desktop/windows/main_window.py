@@ -542,13 +542,16 @@ class MainWindow(QMainWindow):
         if resp != QMessageBox.StandardButton.Yes:
             return
 
+        import os
         file_hash = pf.hash
+        biblio_filename = os.path.basename(pf.path)
         self.status_bar.set_task(f'Extracting biblio for paper {paper_id}…')
 
         def _do_extract():
             from papermeister.biblio import extract_biblio_llm, BiblioAlreadyApplied
             try:
-                pred, source, model_version = extract_biblio_llm(file_hash, backend=biblio_backend)
+                pred, source, model_version = extract_biblio_llm(
+                    file_hash, backend=biblio_backend, filename=biblio_filename)
             except BiblioAlreadyApplied as exc:
                 return {'skipped': True, 'meta': exc.meta}, None
             PaperBiblio.create(
@@ -697,8 +700,10 @@ class MainWindow(QMainWindow):
             self._drain_biblio_queue()
             return
 
+        import os
         biblio_backend = get_pref('biblio_backend', 'claude')
         file_hash = pf.hash
+        biblio_filename = os.path.basename(pf.path)
         self.status_bar.set_task(f'Extracting biblio for paper {paper_id}…')
         if self._biblio_window and self._biblio_window.isVisible():
             title = self._biblio_title(paper_id)
@@ -707,7 +712,8 @@ class MainWindow(QMainWindow):
         def _do_extract():
             from papermeister.biblio import extract_biblio_llm, BiblioAlreadyApplied
             try:
-                pred, source, model_version = extract_biblio_llm(file_hash, backend=biblio_backend)
+                pred, source, model_version = extract_biblio_llm(
+                    file_hash, backend=biblio_backend, filename=biblio_filename)
             except BiblioAlreadyApplied as exc:
                 return {'skipped': True, 'meta': exc.meta}, None
             PaperBiblio.create(

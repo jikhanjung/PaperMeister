@@ -233,7 +233,9 @@ def _call_qwen(prompt: str, base_url: str) -> str:
     return data['choices'][0]['message']['content'].strip()
 
 
-def extract_biblio_llm(file_hash: str, backend: str = 'claude') -> tuple[dict, str, str]:
+def extract_biblio_llm(
+    file_hash: str, backend: str = 'claude', filename: str = '',
+) -> tuple[dict, str, str]:
     """Extract biblio from OCR text using LLM.
 
     Args:
@@ -257,7 +259,18 @@ def extract_biblio_llm(file_hash: str, backend: str = 'claude') -> tuple[dict, s
     if not text:
         raise ValueError('No text in first pages')
 
-    prompt = _BIBLIO_PROMPT + f"--- DOCUMENT TEXT ---\n{text}"
+    hint = ''
+    if filename:
+        hint = (
+            f"--- SOURCE FILENAME ---\n{filename}\n"
+            "Academic PDF filenames very often encode the author surname(s) and "
+            "the publication year, e.g. 'Smith2023.pdf', 'Brock & Holmer 2004 "
+            "Ameghiniana.pdf', 'Temple1980.pdf'. Treat such an encoded year/author "
+            "as evidence (not a guess) and use it to fill `year`/`authors` when the "
+            "document text doesn't state them clearly. Explicit text always wins "
+            "over the filename.\n\n"
+        )
+    prompt = _BIBLIO_PROMPT + hint + f"--- DOCUMENT TEXT ---\n{text}"
 
     if backend == 'qwen':
         from .preferences import get_pref
