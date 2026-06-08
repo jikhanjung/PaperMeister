@@ -361,6 +361,20 @@ def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=N
     paper = paper_file.paper
     is_zotero = bool(paper_file.zotero_key)
 
+    # Extension gate: only PDFs are OCR targets. A non-PDF attachment
+    # (supplementary data, .doc/.djvu book, etc.) is parked as 'skipped' so it
+    # never loops through the failed/pending queues. Defensive — ingestion now
+    # assigns 'skipped' at creation, but stray callers land here too.
+    # Use has_non_pdf_extension (not is_pdf) so a not-yet-downloaded PDF whose
+    # path is still the bare Zotero key (no extension) isn't wrongly skipped.
+    from .file_utils import has_non_pdf_extension
+    if has_non_pdf_extension(paper_file.path):
+        if status_callback:
+            status_callback('Skipped (not a PDF — no OCR target)')
+        paper_file.status = 'skipped'
+        paper_file.save()
+        return
+
     filepath = None
     is_temp = False
 

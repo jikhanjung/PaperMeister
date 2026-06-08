@@ -93,10 +93,18 @@ def _is_stub(paper: Paper) -> bool:
 
 
 def _primary_file(paper) -> PaperFile | None:
-    """Return the best PaperFile for a paper, preferring PDFs over JSON."""
+    """Return the best PaperFile for a paper.
+
+    Prefer an actual PDF (the OCR target) so a paper's pill reflects its PDF,
+    not a skipped supplementary (.txt/.doc) or a derived JSON sibling. Falls
+    back to any non-JSON, then the first file.
+    """
     files = list(PaperFile.select().where(PaperFile.paper == paper).order_by(PaperFile.id))
     if not files:
         return None
+    for f in files:
+        if f.path.lower().endswith('.pdf'):
+            return f
     for f in files:
         if not f.path.lower().endswith('.json'):
             return f

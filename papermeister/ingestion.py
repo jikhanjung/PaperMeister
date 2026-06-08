@@ -5,6 +5,7 @@ import shutil
 import time
 from pathlib import Path
 
+from .file_utils import attachment_status, is_derived, is_pdf
 from .models import (
     db, Source, Folder, Paper, Author, PaperFile, PaperFolder,
     PaperBiblio, Passage,
@@ -201,7 +202,16 @@ def _refresh_existing_attachment(existing_pf, att):
     if not new_fname or existing_pf.path == new_fname:
         return
     existing_pf.path = new_fname
-    if existing_pf.status == 'failed' and not existing_pf.hash:
+    ct = att.get('content_type', '') or att.get('contentType', '')
+    if not is_pdf(new_fname, ct) and not is_derived(new_fname, ct):
+        # Non-PDF attachment (supplementary data, book, etc.) — never an OCR
+        # target. Park it as 'skipped' so it leaves the failed/pending queues.
+        if existing_pf.status in ('failed', 'pending'):
+            existing_pf.status = 'skipped'
+            existing_pf.failure_reason = ''
+    elif existing_pf.status == 'failed' and not existing_pf.hash:
+        # PDF that never produced a hash — the failure was likely the stale
+        # path; reset so the next Process retries it.
         existing_pf.status = 'pending'
         existing_pf.failure_reason = ''
     existing_pf.save()
@@ -386,14 +396,11 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
                 continue
             ct = att.get('content_type', '')
             fname = att['filename']
-            is_derived = (
-                ct == 'application/json' or fname.lower().endswith('.json')
-            )
             PaperFile.create(
                 paper=paper,
                 path=fname,
                 hash='',
-                status='processed' if is_derived else 'pending',
+                status=attachment_status(fname, ct),
                 zotero_key=att['key'],
             )
 
@@ -428,14 +435,11 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
                     continue
                 ct = att.get('content_type', '')
                 fname = att['filename']
-                is_derived = (
-                    ct == 'application/json' or fname.lower().endswith('.json')
-                )
                 PaperFile.create(
                     paper=paper,
                     path=fname,
                     hash='',
-                    status='processed' if is_derived else 'pending',
+                    status=attachment_status(fname, ct),
                     zotero_key=att['key'],
                 )
 
@@ -510,12 +514,11 @@ def backfill_missing_paperfiles(zotero_client, progress_callback=None, logger=No
                     continue
                 ct = cdata.get('contentType', '')
                 fname = cdata.get('filename', cdata['key'])
-                is_derived = ct == 'application/json' or fname.lower().endswith('.json')
                 PaperFile.create(
                     paper=mp,
                     path=fname,
                     hash='',
-                    status='processed' if is_derived else 'pending',
+                    status=attachment_status(fname, ct),
                     zotero_key=cdata['key'],
                 )
                 n_added += 1
@@ -685,17 +688,14 @@ def fetch_zotero_collection_items(zotero_client, source, folder, progress_callba
                 PaperFile.zotero_key == att['key'],
             ).first()
             if not existing_pf:
-                # JSON attachments are derived OCR output → already processed
+                # JSON sibling → 'processed', PDF → 'pending', else → 'skipped'
                 ct = att.get('content_type', '')
                 fname = att['filename']
-                is_derived = (
-                    ct == 'application/json' or fname.lower().endswith('.json')
-                )
                 PaperFile.create(
                     paper=paper,
                     path=fname,
                     hash='',
-                    status='processed' if is_derived else 'pending',
+                    status=attachment_status(fname, ct),
                     zotero_key=att['key'],
                 )
 

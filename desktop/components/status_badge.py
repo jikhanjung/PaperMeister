@@ -5,6 +5,7 @@ _LABELS = {
     'pending':      'Pending',
     'processed':    'Processed',
     'failed':       'Failed',
+    'skipped':      'Skipped',
     'needs_review': 'Review',
     'review':       'Review',
     'ok':           'OK',

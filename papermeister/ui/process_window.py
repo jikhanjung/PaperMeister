@@ -72,8 +72,10 @@ class ProcessWorker(QThread):
                 ocr_progress_callback=lambda c, t, msg: self.progress.emit(f'{prefix}   {msg}'),
                 status_callback=lambda msg: self.progress.emit(f'{prefix}   {msg}'),
             )
-            self.file_done.emit(pf_id, 'processed')
-            return True
+            # process_paper_file may park a non-PDF as 'skipped' instead of
+            # OCRing — emit the real status, not a hard-coded 'processed'.
+            self.file_done.emit(pf_id, pf.status)
+            return pf.status != 'failed'
         except Exception as e:
             pf.status = 'failed'
             pf.save()
@@ -200,6 +202,7 @@ class ProcessWorker(QThread):
         )
         from ..ocr import wrapper_submit, wrapper_poll, wrapper_collect, wrapper_list_jobs
         from ..ingestion import hash_file
+        from ..file_utils import has_non_pdf_extension
         from ..preferences import get_pref, get_client_id
 
         processed = 0
@@ -281,11 +284,20 @@ class ProcessWorker(QThread):
 
             name = os.path.basename(pf.path)
 
+            # Extension gate — never submit a known non-PDF to the OCR server.
+            # (has_non_pdf_extension, not is_pdf, so a bare-key PDF still runs.)
+            if has_non_pdf_extension(pf.path):
+                pf.status = 'skipped'
+                pf.save()
+                self.progress.emit(f'{prefix} {name} → skipped (not a PDF)')
+                self.file_done.emit(pf_id, 'skipped')
+                return True
+
             if has_cache:
                 self.progress.emit(f'{prefix} {name} (cached)')
                 try:
                     process_paper_file(pf)
-                    self.file_done.emit(pf_id, 'processed')
+                    self.file_done.emit(pf_id, pf.status)
                     processed += 1
                 except Exception as e:
                     self.progress.emit(f'{prefix}   FAILED: {e}')

@@ -184,6 +184,8 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 - **orphan 8개 cleanup 완료**: 처리 불가 레거시 `{hash}.json` 8편 (id `3178/3996/4053/4059/4082/4164/4201/7230`) — PDF 교체로 남은 stale 중복(hash=empty, 논문은 이미 현재 PDF의 정상 JSON 보유). `scripts/cleanup_stale_ocr_json.py` 신설(기준 재계산 + 논문 유일 OCR 보호 가드 + dry-run 기본)로 Zotero 첨부 8 + DB row 8 삭제, PDF/정상JSON 무손상 검증. 최종 9,924/9,935 새 형식, 레거시 0
 - 실행 메모: 라이브 DB/캐시/preferences는 Windows 홈(`C:\Users\Jikhan Jung\.papermeister`), 실제 실행은 Windows native Python(Anaconda). WSL에선 `/mnt/c`의 DB를 read-only 조회만
 - 시행착오: read-only 진척 쿼리 휴리스틱 `GLOB '[0-9a-f]*' AND length=69`이 69자+hex로 시작하는 새 이름 3개를 레거시로 오탐. 점 개수(`{64hex}.json`은 점 1개) 검증으로 정정
+- **404 PDF 진단 + 로컬 storage 복구** ([devlog 048](./devlog/20260608_048_Failed_PDF_Local_Storage_Recovery.md)): failed PDF 13편을 로컬 Zotero storage + zotero.sqlite linkMode로 대조. 로컬 PDF 실재 2편(WIZC6QDZ/3MK6XEI2)은 서버에 이미 있었고(`unchanged`) 원래 failed가 stale → status 리셋 재시도로 OCR 성공. `scripts/upload_missing_zotero_files.py` 신설(로컬 PDF→Zotero 업로드, PDF만)
+- **첨부 확장자 게이트 + `skipped` status** ([devlog 049](./devlog/20260608_049_Attachment_Extension_Gate_Skipped_Status.md)): 비-PDF 첨부(보충자료/책/.doc 등)가 OCR 큐에 들어가 `failed`로 쌓이던 문제. `papermeister/file_utils.py` 신설(`attachment_status`/`has_non_pdf_extension`), ingestion 4개 생성 지점이 JSON→processed/PDF→pending/그외→`skipped` 분류. process_paper_file·wrapper 방어 가드(bare-key PDF 오분류 방지 위해 `has_non_pdf_extension` 사용). desktop pill `skip` 추가 + `_primary_file` PDF 우선. `scripts/reclassify_attachments.py`로 기존 35편(.djvu15/.doc8/.txt4/...) failed→skipped 보정. 검증: failed 80편에 비-PDF 0편
 
 **2026-06-05 (세션 42)** — [devlog 046](./devlog/20260605_046_OCR_JSON_Filename_Migration.md)
 - OCR cache + Zotero sibling attachment 파일명을 hash 기반 `{hash}.json`에서 PDF-name 기반 `{pdf_basename}.{hash[:8]}.json`으로 통일

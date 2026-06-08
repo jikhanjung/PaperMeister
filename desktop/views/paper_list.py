@@ -24,6 +24,7 @@ _STATUS_STYLES: dict[str, tuple[QColor, QColor, str]] = {
     'pending':   (QColor(107, 112, 128, 46), QColor(160, 165, 180), 'wait'),
     'failed':    (QColor(248, 113, 113, 38), QColor(248, 113, 113), 'err'),
     'review':    (QColor(251, 191, 36, 38),  QColor(251, 191, 36),  'rev'),
+    'skipped':   (QColor(107, 112, 128, 30), QColor(130, 135, 150), 'skip'),
     'none':      (QColor(43, 47, 61, 0),     QColor(107, 112, 128), '—'),
 }
 
