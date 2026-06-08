@@ -62,7 +62,7 @@ class ZoteroSyncWorker(QThread):
     def _sync(self) -> dict:
         from papermeister.ingestion import (
             get_or_create_zotero_source, sync_zotero_collections, sync_zotero_items,
-            sync_trash_state,
+            sync_trash_state, apply_permanent_deletions,
         )
         from papermeister.preferences import get_pref, set_pref
         from papermeister.zotero_client import ZoteroClient
@@ -171,6 +171,23 @@ class ZoteroSyncWorker(QThread):
             logger=logger,
         )
         logger.info('sync_zotero_items: new=%d, updated=%d', new_items, updated_items)
+
+        # ── Phase 3a: permanent deletions (empty-trash) ──────
+        # Must run BEFORE trash sync: a purged item is absent from the trash
+        # snapshot, so the trash step would otherwise read it as "restored" and
+        # clear its flag. Deleting it here removes it from that ambiguity.
+        try:
+            del_result = apply_permanent_deletions(client, progress_callback=_progress_cb)
+            logger.info('apply_permanent_deletions: %s', del_result)
+            if del_result.get('deleted_papers') or del_result.get('deleted_files'):
+                self._log_progress(
+                    f"Purged {del_result['deleted_papers']} papers / "
+                    f"{del_result['deleted_files']} files (deleted in Zotero)"
+                )
+        except Exception:
+            import traceback
+            logger.warning('Permanent-deletion sync failed:\n%s', traceback.format_exc())
+            del_result = None
 
         # ── Phase 3: trash ───────────────────────────────────
         # Full snapshot (Zotero trash endpoint has no incremental form).

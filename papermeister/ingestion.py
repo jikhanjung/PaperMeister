@@ -252,6 +252,80 @@ def _merge_stale_standalone(old_paper, new_paper):
         old_paper.delete_instance()
 
 
+def purge_local_by_keys(keys, progress_callback=None):
+    """Delete local Papers/PaperFiles whose Zotero key was permanently deleted.
+
+    Mirrors Zotero (source of truth): when an item is emptied from trash it no
+    longer exists, so the local Paper + its cascade (Author/PaperFile/Passage/
+    PaperBiblio/PaperFolder) and the denormalized passage_fts rows are removed.
+    A deleted attachment whose parent still exists drops just that PaperFile.
+
+    The on-disk OCR JSON cache (content-addressed) is intentionally left so the
+    same PDF re-imported later can reuse it.
+
+    Returns (deleted_papers, deleted_files).
+    """
+    if not keys:
+        return 0, 0
+    keys = [k.upper() for k in keys]
+    deleted_papers = 0
+    deleted_files = 0
+    # Chunk to stay under SQLite's bound-variable limit (999) — the deleted
+    # list scanned from version 0 can be large.
+    CHUNK = 500
+    chunks = [keys[i:i + CHUNK] for i in range(0, len(keys), CHUNK)]
+    with db.atomic():
+        papers = []
+        for ch in chunks:
+            papers.extend(Paper.select().where(Paper.zotero_key.in_(ch)))
+        for p in papers:
+            # passage_fts is an FTS5 table with no FK — clear it explicitly
+            # (same reason _merge_stale_standalone updates it by hand).
+            db.execute_sql('DELETE FROM passage_fts WHERE paper_id = ?', [p.id])
+            p.delete_instance(recursive=True, delete_nullable=True)
+            deleted_papers += 1
+        # Attachment-only deletions: parent paper survives, drop the PaperFile.
+        pfs = []
+        for ch in chunks:
+            pfs.extend(PaperFile.select().where(PaperFile.zotero_key.in_(ch)))
+        for pf in pfs:
+            pf.delete_instance()
+            deleted_files += 1
+    if progress_callback and (deleted_papers or deleted_files):
+        progress_callback(
+            f'Purged {deleted_papers} papers / {deleted_files} files '
+            f'(permanently deleted in Zotero)'
+        )
+    return deleted_papers, deleted_files
+
+
+def apply_permanent_deletions(zotero_client, progress_callback=None):
+    """Mirror Zotero empty-trash (permanent deletions) into the local DB.
+
+    Tracks its own `zotero_deleted_version` pref (separate from items/collections
+    versions to avoid races). On the first run it only records a baseline — there
+    is no bounded "since" to scan history with, so existing backlog is handled by
+    scripts/purge_deleted_zotero.py. Thereafter each sync scans deletions since
+    the last seen version and purges them locally.
+
+    Returns dict: {deleted_papers, deleted_files, baseline}.
+    """
+    from .preferences import get_pref, set_pref
+
+    current = zotero_client.get_library_version()
+    last = get_pref('zotero_deleted_version', None)
+    if last is None:
+        set_pref('zotero_deleted_version', current)
+        return {'deleted_papers': 0, 'deleted_files': 0, 'baseline': True}
+
+    if progress_callback:
+        progress_callback('Checking Zotero permanent deletions…')
+    deleted_keys = zotero_client.get_deleted_keys(since=last)
+    dp, df = purge_local_by_keys(deleted_keys, progress_callback=progress_callback)
+    set_pref('zotero_deleted_version', current)
+    return {'deleted_papers': dp, 'deleted_files': df, 'baseline': False}
+
+
 def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=None,
                       zotero_client=None, logger=None):
     """Process items from library-wide incremental fetch.

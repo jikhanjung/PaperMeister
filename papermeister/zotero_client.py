@@ -275,6 +275,19 @@ class ZoteroClient:
                 keys.add(k.upper())
         return keys
 
+    def get_deleted_keys(self, since):
+        """Keys permanently deleted (empty-trash) since library version `since`.
+
+        Unlike the trash endpoint, `/deleted?since=N` is incremental and is the
+        only way to distinguish a permanent deletion from a restore: a restored
+        item simply leaves the trash list, while a purged item shows up here.
+
+        Returns:
+            set[str] — uppercase item keys deleted since `since`.
+        """
+        result = self._zot.deleted(since=int(since))
+        return {k.upper() for k in (result.get('items') or [])}
+
     def download_file_content(self, attachment_key):
         """Download raw file bytes for an attachment, bypassing pyzotero's
         Content-Type sniffing.
