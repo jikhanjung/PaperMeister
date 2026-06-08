@@ -204,7 +204,19 @@ def evaluate(biblio: PaperBiblio, paper: Paper) -> Decision:
     if biblio.needs_visual_review:
         return Decision('needs_review', 'visual_review_flag', biblio.id)
     if not confidence_ok:
-        return Decision('needs_review', 'low_confidence', biblio.id)
+        # A stub Paper (no year, no authors) or one whose title is still the
+        # PDF-filename placeholder (a standalone auto-promote artifact) has no
+        # real metadata to protect, so a 'medium'-confidence extraction is
+        # strictly better than what's there. Let medium through for those; only
+        # 'low' is held back. Curated Papers still require high confidence.
+        from . import zotero_writeback
+        placeholder = zotero_writeback.title_is_filename_placeholder(paper, paper.title or '')
+        relax_medium = (
+            (_is_stub_paper(paper) or placeholder)
+            and (biblio.confidence or '') == 'medium'
+        )
+        if not relax_medium:
+            return Decision('needs_review', 'low_confidence', biblio.id)
 
     # Paper state (P08 §2.3, §4)
     if _is_stub_paper(paper):

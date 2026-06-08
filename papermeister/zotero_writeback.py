@@ -176,7 +176,7 @@ def _parse_biblio_authors(authors_json: str) -> list[str]:
     return out
 
 
-def _title_is_filename_placeholder(paper: Paper, current_title: str) -> bool:
+def title_is_filename_placeholder(paper: Paper, current_title: str) -> bool:
     """True when the item title is just the PDF filename — the placeholder that
     standalone auto-promote (session 36) sets on the new parent item.
 
@@ -319,7 +319,7 @@ def writeback_biblio(
     #     valid. Gated on the filename-placeholder/empty title so curated
     #     'document' items the user set deliberately are left alone.
     current_type = data.get('itemType', '')
-    title_placeholder = _title_is_filename_placeholder(paper, data.get('title', ''))
+    title_placeholder = title_is_filename_placeholder(paper, data.get('title', ''))
     upgrade_to = None
     if current_type == 'document' and (title_placeholder or not (data.get('title') or '').strip()):
         cand = DOC_TYPE_TO_ITEM_TYPE.get((biblio.doc_type or '').strip())
