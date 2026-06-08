@@ -295,7 +295,7 @@ class MainWindow(QMainWindow):
         their status is reset to 'pending' before submission so the pill
         transitions cleanly during reprocessing.
         """
-        from papermeister.models import Paper, PaperFile, PaperFolder
+        from papermeister.models import Paper, PaperFile, PaperFolder, PaperBiblio
 
         all_folder_ids = self._collect_folder_ids(folder_id)
 
@@ -313,25 +313,46 @@ class MainWindow(QMainWindow):
         failed_ids = [r.id for r in rows if r.status == 'failed']
         file_ids = pending_ids + failed_ids
 
-        if not file_ids:
-            self.status_bar.set_task('No pending or failed PDF files in this folder')
+        # OCR-completed PDFs whose paper has no biblio yet → biblio extraction.
+        # (When OCR is already done, this is the only work left to do.)
+        papers_with_biblio = {
+            b.paper_id for b in PaperBiblio.select(PaperBiblio.paper).distinct()
+        }
+        queued_papers = {pid for pid, _ in self._auto_biblio_queue}
+        biblio_targets: list[tuple[int, int]] = []
+        seen_papers: set[int] = set()
+        for pf in (
+            PaperFile.select(PaperFile.id, PaperFile.paper)
+            .join(Paper)
+            .join(PaperFolder, on=(PaperFolder.paper == Paper.id))
+            .where(
+                PaperFolder.folder << all_folder_ids,
+                PaperFile.status == 'processed',
+                PaperFile.path.endswith('.pdf'),
+            )
+        ):
+            pid = pf.paper_id
+            if pid in papers_with_biblio or pid in seen_papers or pid in queued_papers:
+                continue
+            seen_papers.add(pid)
+            biblio_targets.append((pid, pf.id))
+
+        if not file_ids and not biblio_targets:
+            self.status_bar.set_task(
+                'Nothing to do — OCR complete and biblio already extracted for this folder'
+            )
             return
 
-        if failed_ids and pending_ids:
-            message = (
-                f'Process {len(pending_ids)} pending + retry {len(failed_ids)} failed PDF(s)?\n'
-                f'OCR will run, then biblio extraction for completed files.'
-            )
+        lines = []
+        if pending_ids and failed_ids:
+            lines.append(f'OCR: {len(pending_ids)} pending + retry {len(failed_ids)} failed PDF(s)')
+        elif pending_ids:
+            lines.append(f'OCR: {len(pending_ids)} pending PDF(s)')
         elif failed_ids:
-            message = (
-                f'Retry {len(failed_ids)} failed PDF(s)?\n'
-                f'OCR will run, then biblio extraction for completed files.'
-            )
-        else:
-            message = (
-                f'Process {len(pending_ids)} pending PDF(s)?\n'
-                f'OCR will run, then biblio extraction for completed files.'
-            )
+            lines.append(f'OCR: retry {len(failed_ids)} failed PDF(s)')
+        if biblio_targets:
+            lines.append(f'Biblio extraction: {len(biblio_targets)} OCR-completed paper(s)')
+        message = 'Process this folder?\n' + '\n'.join(lines)
 
         resp = QMessageBox.question(
             self,
@@ -351,13 +372,26 @@ class MainWindow(QMainWindow):
                 if pf:
                     self.paper_list.update_status(pf.paper_id, 'pending')
 
-        if self._process_window is None:
-            from papermeister.ui.process_window import ProcessWindow
-            self._process_window = ProcessWindow(self)
-            self._process_window.processing_updated.connect(self._on_processing_updated)
-            self._process_window.file_processed.connect(self._on_file_processed)
-        self._process_window.start(file_ids)
-        self.status_bar.set_task(f'Processing {len(file_ids)} files…')
+        if file_ids:
+            if self._process_window is None:
+                from papermeister.ui.process_window import ProcessWindow
+                self._process_window = ProcessWindow(self)
+                self._process_window.processing_updated.connect(self._on_processing_updated)
+                self._process_window.file_processed.connect(self._on_file_processed)
+            self._process_window.start(file_ids)
+
+        # Queue biblio extraction for the already-OCR'd papers (runs through the
+        # same serialized queue as the post-OCR auto-biblio path).
+        if biblio_targets:
+            self._auto_biblio_queue.extend(biblio_targets)
+            self._drain_biblio_queue()
+
+        status_parts = []
+        if file_ids:
+            status_parts.append(f'OCR {len(file_ids)} file(s)')
+        if biblio_targets:
+            status_parts.append(f'biblio {len(biblio_targets)} paper(s)')
+        self.status_bar.set_task('Processing: ' + ' + '.join(status_parts) + '…')
 
     def _upload_ocr_json(self, folder_id: int):
         """Upload OCR JSON files to Zotero for processed papers in a folder."""
