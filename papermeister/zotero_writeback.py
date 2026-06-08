@@ -104,9 +104,7 @@ def _build_type_upgrade_payload(
 
     authors = _parse_biblio_authors(biblio.authors_json or '')
     if authors:
-        payload['creators'] = [
-            {'creatorType': 'author', 'name': name} for name in authors
-        ]
+        payload['creators'] = _author_creators(authors)
     elif data.get('creators'):
         payload['creators'] = data['creators']
 
@@ -262,9 +260,7 @@ def _compute_patch(
         should_write_creators = True
 
     if should_write_creators:
-        patch['creators'] = [
-            {'creatorType': 'author', 'name': name} for name in biblio_authors
-        ]
+        patch['creators'] = _author_creators(biblio_authors)
 
     return patch
 
@@ -390,32 +386,58 @@ def writeback_biblio(
 
 # ── Override-driven writeback (desktop comparison UI) ────────────
 
-def _split_name_for_zotero(display_name: str) -> dict:
-    """Convert a single display name into a Zotero creator dict.
+def _is_cjk_char(c: str) -> bool:
+    cp = ord(c)
+    return (
+        0x3400 <= cp <= 0x9FFF       # CJK Unified Ideographs
+        or 0xAC00 <= cp <= 0xD7AF    # Hangul Syllables
+        or 0x3040 <= cp <= 0x30FF    # Hiragana/Katakana
+    )
 
-    `display_name` may be "Last, First", "First Last", or unsplit CJK.
-    Uses the same heuristics as desktop biblio_service.split_author_name.
+
+def _split_first_last(name: str) -> tuple[str, str]:
+    """(firstName, lastName) from a display name. Mirrors desktop
+    biblio_service.split_author_name: "Last, First", space-separated, and
+    unspaced CJK (Japanese 4→2/2, Korean 3→1/2). Empty first = unsplittable.
+    """
+    name = name.strip()
+    if ',' in name:
+        parts = [p.strip() for p in name.split(',', 1)]
+        if len(parts) == 2 and parts[1]:
+            return parts[1], parts[0]   # "Last, First" → (First, Last)
+        return '', parts[0]
+
+    tokens = name.split()
+    if len(tokens) == 1:
+        single = tokens[0]
+        if single and all(_is_cjk_char(c) for c in single):
+            if len(single) == 4:
+                return single[2:], single[:2]
+            if len(single) == 3:
+                return single[1:], single[:1]
+        return '', single
+    return ' '.join(tokens[:-1]), tokens[-1]
+
+
+def _split_name_for_zotero(display_name: str) -> dict:
+    """Convert a single display name into a Zotero creator dict, splitting into
+    firstName/lastName whenever possible (incl. unspaced CJK). Falls back to a
+    single-field `name` for mononyms / organisations / unsplittable input.
     """
     name = display_name.strip()
     if not name:
         return {}
-
-    if ',' in name:
-        last, _, first = name.partition(',')
-        last, first = last.strip(), first.strip()
-        if last and first:
-            return {'creatorType': 'author', 'firstName': first, 'lastName': last}
-        return {'creatorType': 'author', 'name': name}
-
-    tokens = name.split()
-    if len(tokens) >= 2:
-        first = ' '.join(tokens[:-1])
-        last = tokens[-1]
+    first, last = _split_first_last(name)
+    if first and last:
         return {'creatorType': 'author', 'firstName': first, 'lastName': last}
-
-    # Single token — fall back to single-field name (covers unsplit CJK,
-    # organisational authors, etc.).
     return {'creatorType': 'author', 'name': name}
+
+
+def _author_creators(names) -> list[dict]:
+    """Zotero author creators for a list of display names, always splitting
+    into firstName/lastName when the name allows it (falls back to single-field
+    `name` for single-token / unsplit-CJK / organisational names)."""
+    return [c for c in (_split_name_for_zotero(n) for n in names) if c]
 
 
 def _compute_override_patch(overrides: dict, data: dict) -> dict:
