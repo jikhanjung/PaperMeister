@@ -42,6 +42,7 @@ class MainWindow(QMainWindow):
         self._process_window = None  # lazy-init; reuses frozen papermeister/ui ProcessWindow
         self._biblio_task = None     # single biblio extraction background task
         self._auto_biblio_queue = []  # [(paper_id, file_id), ...] queued after OCR
+        self._biblio_window = None   # batch biblio progress window (lazy)
         self._sync_worker = None  # ZoteroSyncWorker
         self._wire_events()
         self._load_initial()
@@ -247,6 +248,10 @@ class MainWindow(QMainWindow):
             and get_pref('auto_biblio_extract', True)
         ):
             self._auto_biblio_queue.append((pf.paper_id, pf.id))
+            # If a batch biblio window is open, keep its total in sync so the
+            # post-OCR auto-biblio items don't overflow the progress count.
+            if self._biblio_window and self._biblio_window.isVisible():
+                self._biblio_window.add_total(1)
             self._drain_biblio_queue()
 
     def _on_context_action(self, action: str, paper_id: int, file_id: int):
@@ -381,8 +386,13 @@ class MainWindow(QMainWindow):
             self._process_window.start(file_ids)
 
         # Queue biblio extraction for the already-OCR'd papers (runs through the
-        # same serialized queue as the post-OCR auto-biblio path).
+        # same serialized queue as the post-OCR auto-biblio path), with a
+        # progress window so the user sees per-paper results.
         if biblio_targets:
+            if self._biblio_window is None:
+                from desktop.windows.biblio_window import BiblioWindow
+                self._biblio_window = BiblioWindow(self)
+            self._biblio_window.begin(len(biblio_targets))
             self._auto_biblio_queue.extend(biblio_targets)
             self._drain_biblio_queue()
 
@@ -562,10 +572,47 @@ class MainWindow(QMainWindow):
         self._biblio_task = task
         task.start()
 
+    def _biblio_title(self, paper_id: int) -> str:
+        from papermeister.models import Paper
+        p = Paper.get_or_none(Paper.id == paper_id)
+        return (p.title[:55] if (p and p.title) else f'paper {paper_id}')
+
+    def _biblio_pred_summary(self, pred, paper_id: int) -> str:
+        """One-line 'title · first author et al. · year' from an extraction."""
+        title = (pred.get('title') or '').strip() if isinstance(pred, dict) else ''
+        if not title:
+            title = self._biblio_title(paper_id)
+        authors = (pred.get('authors') or []) if isinstance(pred, dict) else []
+        year = pred.get('year') if isinstance(pred, dict) else None
+        parts = [f'"{title[:55]}"']
+        if authors:
+            parts.append(authors[0] + (' et al.' if len(authors) > 1 else ''))
+        if year:
+            parts.append(str(year))
+        return ' · '.join(parts)
+
+    def _after_biblio(self, paper_id: int):
+        """Shared tail: refresh detail panel, drain queue, finish window."""
+        if self.detail_panel._current_paper_id == paper_id:
+            self.detail_panel.show_paper(paper_id)
+        self._drain_biblio_queue()
+        win = self._biblio_window
+        if (
+            win and win.isVisible()
+            and not self._auto_biblio_queue
+            and not (self._biblio_task and self._biblio_task.isRunning())
+        ):
+            win.finish()
+
     def _on_biblio_extracted(self, paper_id: int, result):
         pred, err = result
+        win = self._biblio_window if (self._biblio_window and self._biblio_window.isVisible()) else None
+
         if err:
             self.status_bar.set_task(f'Biblio extraction failed: {err}')
+            if win:
+                win.record(f'{self._biblio_title(paper_id)} — extraction failed', 'error')
+            self._after_biblio(paper_id)
             return
 
         # LLM call was skipped because the OCR JSON already carries an applied
@@ -577,10 +624,10 @@ class MainWindow(QMainWindow):
             self.status_bar.set_task(
                 f'Biblio already {state} on Zotero ({source}) — skipped LLM for paper {paper_id}'
             )
+            if win:
+                win.record(f'{self._biblio_title(paper_id)} — already {state} (skipped LLM)', 'skip')
             self.paper_list.refresh_row(paper_id)
-            if self.detail_panel._current_paper_id == paper_id:
-                self.detail_panel.show_paper(paper_id)
-            self._drain_biblio_queue()
+            self._after_biblio(paper_id)
             return
 
         # Try auto-apply if biblio matches Zotero data
@@ -589,6 +636,8 @@ class MainWindow(QMainWindow):
         from papermeister.zotero_writeback import ZoteroWriteAccessDenied, ZoteroPatchRejected
         paper = Paper.get_or_none(Paper.id == paper_id)
         biblio = biblio_reflect.select_best_biblio(paper) if paper else None
+        summary = self._biblio_pred_summary(pred, paper_id)
+        kind, line = 'skip', summary
         if biblio:
             decision = biblio_reflect.evaluate(biblio, paper)
             if decision.action == 'auto_commit':
@@ -596,22 +645,29 @@ class MainWindow(QMainWindow):
                     biblio_reflect.apply_single(paper_id)
                 except ZoteroWriteAccessDenied as e:
                     self.status_bar.set_task(f'Biblio auto-apply blocked: {e}')
+                    kind, line = 'error', f'{summary} — apply blocked'
                 except ZoteroPatchRejected as e:
                     self.status_bar.set_task(f'Zotero rejected biblio patch (paper {paper_id}): {e}')
+                    kind, line = 'error', f'{summary} — Zotero rejected patch'
                 else:
                     self.status_bar.set_task(f'Biblio extracted & auto-applied for paper {paper_id}')
                     self.paper_list.refresh_row(paper_id)
-            else:
+                    kind, line = 'applied', f'applied — {summary}'
+            elif decision.action == 'needs_review':
                 self.status_bar.set_task(
                     f'Biblio extracted for paper {paper_id} (needs review: {decision.reason})')
+                kind, line = 'review', f'needs review ({decision.reason}) — {summary}'
+            else:  # skip — already complete
+                self.status_bar.set_task(
+                    f'Biblio extracted for paper {paper_id} ({decision.reason})')
+                kind, line = 'skip', f'{decision.reason} — {summary}'
         else:
             self.status_bar.set_task(f'Biblio extracted for paper {paper_id}')
+            kind, line = 'skip', f'extracted — {summary}'
 
-        if self.detail_panel._current_paper_id == paper_id:
-            self.detail_panel.show_paper(paper_id)
-
-        # Process next item in auto-biblio queue
-        self._drain_biblio_queue()
+        if win:
+            win.record(line, kind)
+        self._after_biblio(paper_id)
 
     def _drain_biblio_queue(self):
         """Start biblio extraction for the next queued item, if idle."""
@@ -637,6 +693,9 @@ class MainWindow(QMainWindow):
         biblio_backend = get_pref('biblio_backend', 'claude')
         file_hash = pf.hash
         self.status_bar.set_task(f'Extracting biblio for paper {paper_id}…')
+        if self._biblio_window and self._biblio_window.isVisible():
+            title = self._biblio_title(paper_id)
+            self._biblio_window.set_current(f'Extracting: {title}')
 
         def _do_extract():
             from papermeister.biblio import extract_biblio_llm, BiblioAlreadyApplied
