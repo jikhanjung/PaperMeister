@@ -726,10 +726,20 @@ class MainWindow(QMainWindow):
                         f'Biblio extracted for paper {paper_id} (needs review: {decision.reason})')
                     kind, line = 'review', f'needs review ({decision.reason}) — {summary}'
                     self.paper_list.refresh_row(paper_id)
-                else:  # skip — already complete
+                else:  # skip — already complete (Zotero already matches)
+                    # Terminal: stamp so the paper shows 'done' instead of
+                    # lingering on the OCR pill (mirrors reflect_all).
+                    if (
+                        decision.reason == 'already_complete'
+                        and biblio.status not in ('applied', 'auto_committed', 'rejected')
+                    ):
+                        biblio.status = 'auto_committed'
+                        biblio.review_reason = 'already_complete'
+                        biblio.save()
                     self.status_bar.set_task(
                         f'Biblio extracted for paper {paper_id} ({decision.reason})')
                     kind, line = 'skip', f'{decision.reason} — {summary}'
+                    self.paper_list.refresh_row(paper_id)
             else:
                 self.status_bar.set_task(f'Biblio extracted for paper {paper_id}')
                 kind, line = 'skip', f'extracted — {summary}'

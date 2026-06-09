@@ -507,6 +507,19 @@ def reflect_all(
             if decision.action == 'skip':
                 stats.skipped += 1
                 stats.bump_reason(decision.reason)
+                # 'already_complete' = a fresh extraction that fully matches
+                # Zotero; nothing to write, but it's terminal. Stamp it so the
+                # paper shows 'done' instead of lingering as 'extracted' (OCR
+                # pill) and being re-evaluated every run. (already_applied /
+                # already_committed are already terminal — leave them.)
+                if (
+                    decision.reason == 'already_complete'
+                    and not dry_run
+                    and biblio.status not in ('applied', 'auto_committed')
+                ):
+                    biblio.status = 'auto_committed'
+                    biblio.review_reason = 'already_complete'
+                    biblio.save()
                 continue
             if decision.action == 'needs_review':
                 stats.needs_review += 1
