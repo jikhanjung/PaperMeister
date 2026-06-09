@@ -578,7 +578,7 @@ class MainWindow(QMainWindow):
 
         task = BackgroundTask(_do_extract)
         task.done.connect(lambda result: self._on_biblio_extracted(paper_id, result))
-        task.failed.connect(lambda msg: self.status_bar.set_task(f'Biblio extraction failed: {msg}'))
+        task.failed.connect(lambda msg: self._on_biblio_failed(paper_id, msg))
         self._biblio_task = task
         task.start()
 
@@ -600,6 +600,15 @@ class MainWindow(QMainWindow):
         if year:
             parts.append(str(year))
         return ' · '.join(parts)
+
+    def _on_biblio_failed(self, paper_id: int, msg: str):
+        """task.failed handler: record the failure in the progress window and
+        advance the queue (so a failed extraction doesn't look like a stall)."""
+        self.status_bar.set_task(f'Biblio failed for paper {paper_id}: {msg}')
+        win = self._biblio_window if (self._biblio_window and self._biblio_window.isVisible()) else None
+        if win:
+            win.record(f'{self._biblio_title(paper_id)} — failed: {msg}', 'error')
+        self._after_biblio(paper_id)
 
     def _after_biblio(self, paper_id: int):
         """Shared tail: refresh detail panel, drain queue, finish window."""
@@ -754,10 +763,7 @@ class MainWindow(QMainWindow):
 
         task = BackgroundTask(_do_extract)
         task.done.connect(lambda result: self._on_biblio_extracted(paper_id, result))
-        task.failed.connect(lambda msg: (
-            self.status_bar.set_task(f'Biblio failed for paper {paper_id}: {msg}'),
-            self._drain_biblio_queue(),
-        ))
+        task.failed.connect(lambda msg: self._on_biblio_failed(paper_id, msg))
         self._biblio_task = task
         task.start()
 
