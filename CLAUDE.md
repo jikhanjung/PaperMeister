@@ -106,6 +106,8 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 
 ## Scripts (scripts/ 디렉토리)
 
+**관례**: 변경을 가하는 스크립트는 모두 **`--execute`** 플래그를 쓴다 (플래그 없으면 dry-run 미리보기가 기본). 옛 `--dry-run` 관례(=실행이 기본)는 폐기·통일됨.
+
 | 스크립트 | 용도 |
 |---------|------|
 | `resync_zotero.py` | Zotero DB 초기화 + 전체 재동기화 |

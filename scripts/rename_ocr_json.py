@@ -14,8 +14,8 @@ so each PaperFile.path resolves 1:1 — content is identical, so duplicate
 storage is harmless. The original `{hash}.json` cache file is removed
 after the last copy.
 
-Run with --dry-run first to see counts. Use --limit N to test on a small
-batch. The script is idempotent: rows already in the new form are skipped.
+Dry-run by default (preview); pass --execute to apply. Use --limit N to
+test on a small batch. The script is idempotent: rows already in the new form are skipped.
 """
 
 import argparse
@@ -201,8 +201,8 @@ def group_by_hash(pairs):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dry-run', action='store_true',
-                        help='Show what would change without doing it.')
+    parser.add_argument('--execute', action='store_true',
+                        help='Apply changes. Default is a dry-run preview.')
     parser.add_argument('--limit', type=int, default=0,
                         help='Process at most N JSON PaperFiles (0 = all).')
     parser.add_argument('--skip-zotero', action='store_true',
@@ -214,6 +214,7 @@ def main():
     parser.add_argument('--sleep', type=float, default=0.1,
                         help='Seconds to sleep between Zotero PATCH calls.')
     args = parser.parse_args()
+    args.dry_run = not args.execute
 
     init_db()
 

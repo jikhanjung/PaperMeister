@@ -1,17 +1,19 @@
 """CLI wrapper for papermeister.biblio_reflect.
 
+Dry-run by default; pass --execute to apply.
+
 Examples:
-    # Dry-run everything
-    python scripts/reflect_biblio.py --dry-run
+    # Dry-run everything (preview)
+    python scripts/reflect_biblio.py
 
     # Apply to a specific source
-    python scripts/reflect_biblio.py --source 3
+    python scripts/reflect_biblio.py --source 3 --execute
 
     # Apply to a specific folder
-    python scripts/reflect_biblio.py --folder 42
+    python scripts/reflect_biblio.py --folder 42 --execute
 
     # Single paper (mirror of GUI "Apply Biblio")
-    python scripts/reflect_biblio.py --paper 1234
+    python scripts/reflect_biblio.py --paper 1234 --execute
 """
 from __future__ import annotations
 
@@ -24,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Match the desktop app's SSL monkey-patch (institutional CAs trip pyzotero).
 # reflect_all → apply → Zotero write-back makes GET/PATCH calls (even in
-# --dry-run it fetches the item), so this is needed on the lab network.
+# a dry-run still fetches the item), so this is needed on the lab network.
 import requests
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -45,7 +47,8 @@ def _parse_args():
     scope.add_argument('--folder', type=int, help='Scope to a Folder.id')
     scope.add_argument('--paper', type=int, help='Single paper (GUI-style apply)')
     scope.add_argument('--paper-ids', type=str, help='Comma-separated paper ids')
-    p.add_argument('--dry-run', action='store_true', help='Do not write any changes')
+    p.add_argument('--execute', action='store_true',
+                   help='Apply changes. Default is a dry-run preview.')
     p.add_argument(
         '--force', action='store_true',
         help='(Single-paper only) Replace non-empty Zotero fields where biblio '
@@ -89,14 +92,15 @@ def main():
     def progress(msg: str):
         print(f'  … {msg}')
 
+    dry_run = not args.execute
     stats = biblio_reflect.reflect_all(
         source_id=args.source,
         folder_id=args.folder,
         paper_ids=paper_ids,
-        dry_run=args.dry_run,
+        dry_run=dry_run,
         progress=progress,
     )
-    _print_stats(stats, dry_run=args.dry_run)
+    _print_stats(stats, dry_run=dry_run)
     return 0
 
 

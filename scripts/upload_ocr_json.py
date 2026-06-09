@@ -77,9 +77,11 @@ def backfill_manual(paperfiles_by_key):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--limit', type=int, default=0, help='0 = 전체')
-    parser.add_argument('--dry-run', action='store_true')
+    parser.add_argument('--execute', action='store_true',
+                        help='실제 업로드. 기본은 dry-run 미리보기.')
     parser.add_argument('--sleep', type=float, default=0.1, help='업로드 간 sleep (초)')
     args = parser.parse_args()
+    args.dry_run = not args.execute
 
     init_db()
 
