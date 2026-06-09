@@ -13,7 +13,7 @@ For each candidate:
   2. Re-parent the PDF attachment under the new item.
   3. Update local Paper.zotero_key to the new parent's key.
 
-Default is dry-run; pass --apply to actually write to Zotero.
+Default is dry-run; pass --execute to actually write to Zotero.
 """
 
 import argparse
@@ -87,8 +87,8 @@ def find_candidates(folder_name_contains: str = '', filename_contains: str = '')
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        '--apply', action='store_true',
-        help='Actually create Zotero parent items (default is dry-run).',
+        '--execute', action='store_true',
+        help='Actually create Zotero parent items. Default is a dry-run preview.',
     )
     parser.add_argument(
         '--limit', type=int, default=0,
@@ -107,6 +107,7 @@ def main():
         help='Zotero itemType for the new parent (default: document).',
     )
     args = parser.parse_args()
+    args.apply = args.execute  # internal flag name
 
     init_db()
 
@@ -180,7 +181,7 @@ def main():
         print(f'  failed:   {failed}')
     else:
         print(f'  would promote: {promoted}')
-        print('\nRe-run with --apply to perform the promotions.')
+        print('\nRe-run with --execute to perform the promotions.')
     return 0
 
 

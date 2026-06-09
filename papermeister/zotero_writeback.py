@@ -352,6 +352,16 @@ def writeback_biblio(
     data = item['data']
     meta = item.get('meta') or {}
 
+    # Guard: a standalone PDF (Paper.zotero_key IS the attachment) can't hold
+    # bibliographic fields — date/creators 400 with "not a valid field for type
+    # 'attachment'". Promote it to a parent first, then re-apply.
+    if data.get('itemType') == 'attachment':
+        raise ZoteroPatchRejected(
+            f"paper {paper.id} is a standalone PDF (its Zotero item is an "
+            f"attachment); promote it to a parent item first "
+            f"(scripts/promote_processed_standalones.py --execute), then re-apply biblio."
+        )
+
     # 1b. itemType upgrade — a standalone auto-promote leaves a placeholder
     #     'document'. Once a high-confidence extraction knows the real type,
     #     rebuild the item as journalArticle/book/bookSection/… so its
