@@ -542,45 +542,15 @@ class MainWindow(QMainWindow):
         if resp != QMessageBox.StandardButton.Yes:
             return
 
-        import os
-        file_hash = pf.hash
-        biblio_filename = os.path.basename(pf.path)
-        self.status_bar.set_task(f'Extracting biblio for paper {paper_id}…')
-
-        def _do_extract():
-            from papermeister.biblio import extract_biblio_llm, BiblioAlreadyApplied
-            try:
-                pred, source, model_version = extract_biblio_llm(
-                    file_hash, backend=biblio_backend, filename=biblio_filename)
-            except BiblioAlreadyApplied as exc:
-                return {'skipped': True, 'meta': exc.meta}, None
-            PaperBiblio.create(
-                paper=paper_id,
-                file_hash=file_hash,
-                title=pred.get('title', '') or '',
-                authors_json=json.dumps(pred.get('authors', []) or [], ensure_ascii=False),
-                year=pred.get('year') if isinstance(pred.get('year'), int) else None,
-                journal=pred.get('journal', '') or '',
-                volume=str(pred.get('volume', '') or ''),
-                issue=str(pred.get('issue', '') or ''),
-                pages=str(pred.get('pages', '') or ''),
-                doi=pred.get('doi', '') or '',
-                abstract=pred.get('abstract', '') or '',
-                doc_type=pred.get('doc_type', 'unknown') or 'unknown',
-                language=pred.get('language', '') or '',
-                confidence=pred.get('confidence', '') or '',
-                needs_visual_review=bool(pred.get('needs_visual_review', False)),
-                notes=pred.get('notes', '') or '',
-                source=source,
-                model_version=model_version,
-            )
-            return pred, None
-
-        task = BackgroundTask(_do_extract)
-        task.done.connect(lambda result: self._on_biblio_extracted(paper_id, result))
-        task.failed.connect(lambda msg: self._on_biblio_failed(paper_id, msg))
-        self._biblio_task = task
-        task.start()
+        # Route through the shared serialized biblio queue (same path as the
+        # folder batch): never runs concurrently with a live batch, and reuses
+        # its extraction / apply / progress-window / row-refresh handling.
+        if (paper_id, file_id) not in self._auto_biblio_queue:
+            self._auto_biblio_queue.append((paper_id, file_id))
+            if self._biblio_window and self._biblio_window.isVisible():
+                self._biblio_window.add_total(1)
+        self.status_bar.set_task(f'Queued biblio extraction for paper {paper_id}…')
+        self._drain_biblio_queue()
 
     def _biblio_title(self, paper_id: int) -> str:
         from papermeister.models import Paper
