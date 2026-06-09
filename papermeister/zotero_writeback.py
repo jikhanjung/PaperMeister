@@ -82,7 +82,7 @@ def _build_type_upgrade_payload(
     membership — that doubles as the per-type field-validity check for
     volume/issue/pages and the journal-like container field.
     """
-    template = client._zot.item_template(target_type)
+    template = _zotero_retry(lambda: client._zot.item_template(target_type))
     payload = dict(template)
     payload['key'] = data['key']
     payload['version'] = data['version']
@@ -120,16 +120,56 @@ def _build_type_upgrade_payload(
     return payload
 
 
+# Server-side transient HTTP codes worth retrying. 429 (Too Many Requests —
+# rate/usage limit) is DELIBERATELY excluded: retrying while Zotero is throttling
+# you is counterproductive. Those are logged and left for a later batch.
+_RETRY_HTTP_CODES = ('500', '502', '503', '504')
+
+
+def _is_retryable_zotero_error(exc: Exception) -> bool:
+    """True for transient server-side failures (5xx / connection / timeout), but
+    NOT for 429 rate limits or 4xx client errors."""
+    import requests
+    if isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)):
+        return True
+    msg = str(exc)
+    return any(
+        (f'Code: {c}' in msg) or (f'{c} Server Error' in msg)
+        for c in _RETRY_HTTP_CODES
+    )
+
+
+def _zotero_retry(fn, *, attempts: int = 3, delays=(2.0, 5.0)):
+    """Call fn(); retry on transient Zotero errors with short backoff. Bounded
+    so the UI (write-back runs on the main thread) isn't frozen for long. Raises
+    the last exception once attempts are exhausted or the error isn't retryable.
+    """
+    import time
+    for i in range(attempts):
+        try:
+            return fn()
+        except Exception as exc:
+            if i >= attempts - 1 or not _is_retryable_zotero_error(exc):
+                raise
+            time.sleep(delays[min(i, len(delays) - 1)])
+
+
+def _fetch_item(client: ZoteroClient, key: str):
+    """client._zot.item(key) with transient-error retry."""
+    return _zotero_retry(lambda: client._zot.item(key))
+
+
 def _update_item(client: ZoteroClient, payload: dict) -> None:
     """PATCH wrapper that translates pyzotero errors into clearer types.
 
     Without this, pyzotero raises UserNotAuthorised / UnsupportedParams with
     wall-of-text tracebacks that hit the UI as generic background failures.
+    Transient 5xx/connection errors are retried first.
     """
     from pyzotero import zotero_errors
 
     try:
-        client._zot.update_item(payload)
+        _zotero_retry(lambda: client._zot.update_item(payload))
     except zotero_errors.UserNotAuthorised as e:
         raise ZoteroWriteAccessDenied(
             'Zotero API key lacks write access. Create a new key with '
@@ -308,7 +348,7 @@ def writeback_biblio(
         raise ValueError(f'paper {paper.id} has no zotero_key')
 
     # 1. Fresh fetch — we need current data AND version for concurrency.
-    item = client._zot.item(paper.zotero_key)
+    item = _fetch_item(client, paper.zotero_key)
     data = item['data']
     meta = item.get('meta') or {}
 
@@ -335,7 +375,7 @@ def writeback_biblio(
                        ('title', 'date', 'DOI', 'volume', 'issue', 'pages') if payload.get(k)}},
             )
         _update_item(client, payload)
-        fresh = client._zot.item(paper.zotero_key)
+        fresh = _fetch_item(client, paper.zotero_key)
         _refresh_local_paper(paper, fresh['data'], fresh.get('meta'), client)
         return WritebackResult(action='wrote', changed=True, patch={'itemType': upgrade_to})
 
@@ -376,7 +416,7 @@ def writeback_biblio(
 
     # 4. Re-fetch to get the authoritative new version + normalised fields
     #    (e.g. Zotero may rewrite 'date' → 'parsedDate' on the server).
-    fresh = client._zot.item(paper.zotero_key)
+    fresh = _fetch_item(client, paper.zotero_key)
     _refresh_local_paper(paper, fresh['data'], fresh.get('meta'), client)
 
     return WritebackResult(
@@ -538,7 +578,7 @@ def writeback_overrides(
     if not paper.zotero_key:
         raise ValueError(f'paper {paper.id} has no zotero_key')
 
-    item = client._zot.item(paper.zotero_key)
+    item = _fetch_item(client, paper.zotero_key)
     data = item['data']
     meta = item.get('meta') or {}
 
@@ -565,7 +605,7 @@ def writeback_overrides(
     payload.update(patch)
     _update_item(client, payload)
 
-    fresh = client._zot.item(paper.zotero_key)
+    fresh = _fetch_item(client, paper.zotero_key)
     _refresh_local_paper(paper, fresh['data'], fresh.get('meta'), client)
 
     return WritebackResult(
