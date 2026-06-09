@@ -615,69 +615,76 @@ class MainWindow(QMainWindow):
             win.finish()
 
     def _on_biblio_extracted(self, paper_id: int, result):
-        pred, err = result
         win = self._biblio_window if (self._biblio_window and self._biblio_window.isVisible()) else None
+        # Wrap everything: a single paper's error (apply, network, parse, …) must
+        # never break the drain chain and stall the whole batch. The finally
+        # always advances the queue.
+        try:
+            pred, err = result
 
-        if err:
-            self.status_bar.set_task(f'Biblio extraction failed: {err}')
-            if win:
-                win.record(f'{self._biblio_title(paper_id)} — extraction failed', 'error')
-            self._after_biblio(paper_id)
-            return
+            if err:
+                self.status_bar.set_task(f'Biblio extraction failed: {err}')
+                if win:
+                    win.record(f'{self._biblio_title(paper_id)} — extraction failed', 'error')
+                return
 
-        # LLM call was skipped because the OCR JSON already carries an applied
-        # papermeister_meta from another machine. Just update UI + drain queue.
-        if isinstance(pred, dict) and pred.get('skipped'):
-            meta = pred.get('meta') or {}
-            state = meta.get('biblio_state', '?')
-            source = meta.get('biblio_source', '?')
-            self.status_bar.set_task(
-                f'Biblio already {state} on Zotero ({source}) — skipped LLM for paper {paper_id}'
-            )
-            if win:
-                win.record(f'{self._biblio_title(paper_id)} — already {state} (skipped LLM)', 'skip')
-            self.paper_list.refresh_row(paper_id)
-            self._after_biblio(paper_id)
-            return
-
-        # Try auto-apply if biblio matches Zotero data
-        from papermeister import biblio_reflect
-        from papermeister.models import Paper
-        from papermeister.zotero_writeback import ZoteroWriteAccessDenied, ZoteroPatchRejected
-        paper = Paper.get_or_none(Paper.id == paper_id)
-        biblio = biblio_reflect.select_best_biblio(paper) if paper else None
-        summary = self._biblio_pred_summary(pred, paper_id)
-        kind, line = 'skip', summary
-        if biblio:
-            decision = biblio_reflect.evaluate(biblio, paper)
-            if decision.action == 'auto_commit':
-                try:
-                    biblio_reflect.apply_single(paper_id)
-                except ZoteroWriteAccessDenied as e:
-                    self.status_bar.set_task(f'Biblio auto-apply blocked: {e}')
-                    kind, line = 'error', f'{summary} — apply blocked'
-                except ZoteroPatchRejected as e:
-                    self.status_bar.set_task(f'Zotero rejected biblio patch (paper {paper_id}): {e}')
-                    kind, line = 'error', f'{summary} — Zotero rejected patch'
-                else:
-                    self.status_bar.set_task(f'Biblio extracted & auto-applied for paper {paper_id}')
-                    self.paper_list.refresh_row(paper_id)
-                    kind, line = 'applied', f'applied — {summary}'
-            elif decision.action == 'needs_review':
+            # LLM skipped because the OCR JSON already carries an applied
+            # papermeister_meta from another machine. Just update UI.
+            if isinstance(pred, dict) and pred.get('skipped'):
+                meta = pred.get('meta') or {}
+                state = meta.get('biblio_state', '?')
+                source = meta.get('biblio_source', '?')
                 self.status_bar.set_task(
-                    f'Biblio extracted for paper {paper_id} (needs review: {decision.reason})')
-                kind, line = 'review', f'needs review ({decision.reason}) — {summary}'
-            else:  # skip — already complete
-                self.status_bar.set_task(
-                    f'Biblio extracted for paper {paper_id} ({decision.reason})')
-                kind, line = 'skip', f'{decision.reason} — {summary}'
-        else:
-            self.status_bar.set_task(f'Biblio extracted for paper {paper_id}')
-            kind, line = 'skip', f'extracted — {summary}'
+                    f'Biblio already {state} on Zotero ({source}) — skipped LLM for paper {paper_id}'
+                )
+                if win:
+                    win.record(f'{self._biblio_title(paper_id)} — already {state} (skipped LLM)', 'skip')
+                self.paper_list.refresh_row(paper_id)
+                return
 
-        if win:
-            win.record(line, kind)
-        self._after_biblio(paper_id)
+            # Try auto-apply if biblio matches Zotero data
+            from papermeister import biblio_reflect
+            from papermeister.models import Paper
+            from papermeister.zotero_writeback import ZoteroWriteAccessDenied, ZoteroPatchRejected
+            paper = Paper.get_or_none(Paper.id == paper_id)
+            biblio = biblio_reflect.select_best_biblio(paper) if paper else None
+            summary = self._biblio_pred_summary(pred, paper_id)
+            kind, line = 'skip', summary
+            if biblio:
+                decision = biblio_reflect.evaluate(biblio, paper)
+                if decision.action == 'auto_commit':
+                    try:
+                        biblio_reflect.apply_single(paper_id)
+                    except ZoteroWriteAccessDenied as e:
+                        self.status_bar.set_task(f'Biblio auto-apply blocked: {e}')
+                        kind, line = 'error', f'{summary} — apply blocked'
+                    except ZoteroPatchRejected as e:
+                        self.status_bar.set_task(f'Zotero rejected biblio patch (paper {paper_id}): {e}')
+                        kind, line = 'error', f'{summary} — Zotero rejected patch'
+                    else:
+                        self.status_bar.set_task(f'Biblio extracted & auto-applied for paper {paper_id}')
+                        self.paper_list.refresh_row(paper_id)
+                        kind, line = 'applied', f'applied — {summary}'
+                elif decision.action == 'needs_review':
+                    self.status_bar.set_task(
+                        f'Biblio extracted for paper {paper_id} (needs review: {decision.reason})')
+                    kind, line = 'review', f'needs review ({decision.reason}) — {summary}'
+                else:  # skip — already complete
+                    self.status_bar.set_task(
+                        f'Biblio extracted for paper {paper_id} ({decision.reason})')
+                    kind, line = 'skip', f'{decision.reason} — {summary}'
+            else:
+                self.status_bar.set_task(f'Biblio extracted for paper {paper_id}')
+                kind, line = 'skip', f'extracted — {summary}'
+
+            if win:
+                win.record(line, kind)
+        except Exception as e:
+            self.status_bar.set_task(f'Biblio error for paper {paper_id}: {e}')
+            if win:
+                win.record(f'{self._biblio_title(paper_id)} — error: {e}', 'error')
+        finally:
+            self._after_biblio(paper_id)
 
     def _drain_biblio_queue(self):
         """Start biblio extraction for the next queued item, if idle."""
