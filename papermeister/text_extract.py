@@ -418,6 +418,20 @@ def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=N
                 _cleanup_temp(filepath)
             raise
 
+    # Empty OCR result — the server returned 0 pages / no text (unparseable or
+    # image-only PDF). Don't pass it off as 'processed': that leaves a phantom
+    # 0-page cache and biblio extraction later fails with "No OCR pages found".
+    # Mark it failed so it's visibly retryable instead of silently text-less.
+    if not any((text or '').strip() for _, text in pages):
+        if is_temp and filepath:
+            _cleanup_temp(filepath)
+        paper_file.status = 'failed'
+        paper_file.failure_reason = 'ocr_empty (0 pages / no text)'
+        paper_file.save()
+        if status_callback:
+            status_callback('OCR returned no text — marked failed')
+        return
+
     # Extract metadata from PDF if we have the file and it's not a Zotero item
     # (Zotero items already have metadata from the API)
     meta = None
