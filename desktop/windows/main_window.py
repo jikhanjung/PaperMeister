@@ -601,6 +601,45 @@ class MainWindow(QMainWindow):
             parts.append(str(year))
         return ' · '.join(parts)
 
+    def _materialize_applied_biblio(self, paper_id: int, meta: dict):
+        """The OCR JSON says biblio was applied, but there's no local PaperBiblio
+        (e.g. the DB was rebuilt while the cached/Zotero JSON kept its
+        papermeister_meta). Create a marker row from the Paper's current
+        (already-applied) metadata so the paper drops out of biblio targets and
+        shows 'done' instead of being re-listed and skipped forever."""
+        import json
+        from papermeister.models import Paper, PaperFile, PaperBiblio, Author
+        paper = Paper.get_or_none(Paper.id == paper_id)
+        if paper is None:
+            return
+        if PaperBiblio.select().where(
+            (PaperBiblio.paper == paper)
+            & (PaperBiblio.status.in_(['applied', 'auto_committed']))
+        ).exists():
+            return
+        pdf = (
+            PaperFile.select()
+            .where((PaperFile.paper == paper) & (~PaperFile.path.endswith('.json')))
+            .order_by(PaperFile.id)
+            .first()
+        )
+        authors = [
+            a.name for a in
+            Author.select(Author.name).where(Author.paper == paper).order_by(Author.order)
+        ]
+        state = meta.get('biblio_state') or 'auto_committed'
+        PaperBiblio.create(
+            paper=paper,
+            file_hash=(pdf.hash if pdf else ''),
+            title=paper.title or '',
+            authors_json=json.dumps(authors, ensure_ascii=False),
+            year=paper.year,
+            journal=paper.journal or '',
+            doi=paper.doi or '',
+            source=meta.get('biblio_source') or 'cross-machine-meta',
+            status=state if state in ('applied', 'auto_committed') else 'auto_committed',
+        )
+
     def _on_biblio_failed(self, paper_id: int, msg: str):
         """task.failed handler: record the failure in the progress window and
         advance the queue (so a failed extraction doesn't look like a stall)."""
@@ -638,11 +677,13 @@ class MainWindow(QMainWindow):
                 return
 
             # LLM skipped because the OCR JSON already carries an applied
-            # papermeister_meta from another machine. Just update UI.
+            # papermeister_meta. Materialize a local PaperBiblio so the paper
+            # stops re-appearing as a target and its pill turns 'done'.
             if isinstance(pred, dict) and pred.get('skipped'):
                 meta = pred.get('meta') or {}
                 state = meta.get('biblio_state', '?')
                 source = meta.get('biblio_source', '?')
+                self._materialize_applied_biblio(paper_id, meta)
                 self.status_bar.set_task(
                     f'Biblio already {state} on Zotero ({source}) — skipped LLM for paper {paper_id}'
                 )
