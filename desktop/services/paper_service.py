@@ -115,13 +115,18 @@ def _row_from_paper(paper: Paper, source_name: str) -> PaperRow:
     pfile = _primary_file(paper)
     file_status = pfile.status if pfile else 'none'
     if file_status == 'processed':
-        has_applied = (
-            PaperBiblio.select()
-            .where(PaperBiblio.paper == paper, PaperBiblio.status == 'applied')
-            .exists()
-        )
-        if has_applied:
+        # Derive a richer pill from the paper's biblio state: applied/committed
+        # → 'done', else a needs_review extraction → 'review' (distinct from a
+        # plain OCR'd paper). One small query per processed row (same N+1 shape
+        # as before).
+        biblio_statuses = {
+            b.status for b in
+            PaperBiblio.select(PaperBiblio.status).where(PaperBiblio.paper == paper)
+        }
+        if biblio_statuses & {'applied', 'auto_committed'}:
             file_status = 'done'
+        elif 'needs_review' in biblio_statuses:
+            file_status = 'review'
     display_title = paper.title or '(untitled)'
     is_standalone = bool(
         paper.zotero_key

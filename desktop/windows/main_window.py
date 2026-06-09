@@ -666,9 +666,16 @@ class MainWindow(QMainWindow):
                         self.paper_list.refresh_row(paper_id)
                         kind, line = 'applied', f'applied — {summary}'
                 elif decision.action == 'needs_review':
+                    # Stamp the biblio so the Library "Needs Review" filter and
+                    # the list pill both pick it up (reflect_all does the same).
+                    if biblio.status not in ('applied', 'auto_committed', 'rejected'):
+                        biblio.status = 'needs_review'
+                        biblio.review_reason = decision.reason
+                        biblio.save()
                     self.status_bar.set_task(
                         f'Biblio extracted for paper {paper_id} (needs review: {decision.reason})')
                     kind, line = 'review', f'needs review ({decision.reason}) — {summary}'
+                    self.paper_list.refresh_row(paper_id)
                 else:  # skip — already complete
                     self.status_bar.set_task(
                         f'Biblio extracted for paper {paper_id} ({decision.reason})')
