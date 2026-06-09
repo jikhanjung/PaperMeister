@@ -657,7 +657,7 @@ def promote_standalone_with_filename(
 
     # Pull the PDF attachment to read its collections (so the new parent
     # ends up in the same place) before we re-parent it.
-    pdf_item = client._zot.item(paper_file.zotero_key)
+    pdf_item = _fetch_item(client, paper_file.zotero_key)
     pdf_data = pdf_item['data']
     collections = pdf_data.get('collections', []) or []
 
@@ -692,7 +692,10 @@ def promote_standalone_with_filename(
     # so clear the attachment's collection membership to avoid duplicates.
     pdf_data['parentItem'] = new_parent_key
     pdf_data['collections'] = []
-    client._zot.update_item(pdf_data)
+    # Drop the server-managed read-only key Zotero rejects on write
+    # ("Invalid keys present in item 1: lastRead") — some attachments carry it.
+    pdf_data.pop('lastRead', None)
+    _zotero_retry(lambda: client._zot.update_item(pdf_data))
 
     # Local DB: Paper.zotero_key now points at the new parent. PaperFile.zotero_key
     # stays the same (it's still the attachment, just parented now).
