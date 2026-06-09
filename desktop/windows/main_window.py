@@ -547,12 +547,17 @@ class MainWindow(QMainWindow):
             return
 
         # Route through the shared serialized biblio queue (same path as the
-        # folder batch): never runs concurrently with a live batch, and reuses
-        # its extraction / apply / progress-window / row-refresh handling.
+        # folder batch) + show the progress window so a single extraction gets
+        # the same per-paper result display.
+        if self._biblio_window is None:
+            from desktop.windows.biblio_window import BiblioWindow
+            self._biblio_window = BiblioWindow(self)
         if (paper_id, file_id) not in self._auto_biblio_queue:
             self._auto_biblio_queue.append((paper_id, file_id))
-            if self._biblio_window and self._biblio_window.isVisible():
-                self._biblio_window.add_total(1)
+            self._biblio_window.begin(1)  # shows window; extends total if a batch is live
+        else:
+            self._biblio_window.show()
+            self._biblio_window.raise_()
         self.status_bar.set_task(f'Queued biblio extraction for paper {paper_id}…')
         self._drain_biblio_queue()
 
