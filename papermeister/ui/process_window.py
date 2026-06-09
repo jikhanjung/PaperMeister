@@ -21,10 +21,13 @@ class ProcessWorker(QThread):
     file_done = pyqtSignal(int, str)  # paper_file.id, status ('processed'/'failed')
     finished = pyqtSignal(int, int)  # processed, failed
 
-    def __init__(self, paper_file_ids):
+    def __init__(self, paper_file_ids, force_ids=None):
         super().__init__()
         import threading
         self.paper_file_ids = list(paper_file_ids)
+        # PaperFile ids to re-OCR with force=true (ignore cache + tell server to
+        # ignore its existing JSON). Used when retrying failed PDFs.
+        self.force_ids = set(force_ids or [])
         self._counter = 0
         self._counter_lock = None
         self._cancelled = False
@@ -71,6 +74,7 @@ class ProcessWorker(QThread):
                 pf,
                 ocr_progress_callback=lambda c, t, msg: self.progress.emit(f'{prefix}   {msg}'),
                 status_callback=lambda msg: self.progress.emit(f'{prefix}   {msg}'),
+                force=(pf_id in self.force_ids),
             )
             # process_paper_file may park a non-PDF as 'skipped' instead of
             # OCRing — emit the real status, not a hard-coded 'processed'.
@@ -218,19 +222,21 @@ class ProcessWorker(QThread):
             pf = PaperFile.get_by_id(pf_id)
             is_zotero = bool(pf.zotero_key)
             filepath = None
+            force = pf_id in self.force_ids
 
             if is_zotero and not pf.hash:
                 filepath, _ = _resolve_filepath(pf)
                 pf.hash = hash_file(filepath)
                 pf.save()
 
-            cached = _load_ocr_json(pf)
+            # force: ignore every cache source so the OCR actually re-runs.
+            cached = None if force else _load_ocr_json(pf)
             if cached:
                 return pf, filepath, True
 
             # Cache miss — try pulling a sibling `{hash}.json` from Zotero
             # before paying for OCR. Best-effort; falls through on any failure.
-            if is_zotero:
+            if is_zotero and not force:
                 fetched = _try_fetch_sibling_json(
                     pf, status_callback=lambda msg: self.progress.emit(msg),
                 )
@@ -310,7 +316,7 @@ class ProcessWorker(QThread):
             # Submit to wrapper
             try:
                 self.progress.emit(f'{prefix} {name} → submitting…')
-                job_id, tp, in_progress = wrapper_submit(filepath)
+                job_id, tp, in_progress = wrapper_submit(filepath, force=(pf_id in self.force_ids))
                 in_flight.append({
                     'job_id': job_id, 'pf_id': pf_id, 'pf': pf,
                     'total_pages': tp or 1, 'done_pages': 0,
@@ -543,14 +549,20 @@ class ProcessWindow(QWidget):
         bottom_layout.addWidget(self.close_btn)
         layout.addLayout(bottom_layout)
 
-    def start(self, paper_file_ids):
+    def start(self, paper_file_ids, force_ids=None):
         """Start processing the given PaperFile IDs.
 
         If a run is already active, append the new IDs to the live queue
         instead of refusing — the user can stack collections without
         waiting for the current batch to finish.
+
+        force_ids: PaperFile ids to re-OCR with force=true (ignore cache + tell
+        the wrapper server to ignore its existing JSON) — used to retry failed
+        PDFs.
         """
+        force_ids = set(force_ids or [])
         if self._worker and self._worker.isRunning():
+            self._worker.force_ids |= force_ids
             added = self._worker.enqueue(paper_file_ids)
             if added:
                 self._total += added
@@ -581,7 +593,7 @@ class ProcessWindow(QWidget):
 
         self.cancel_btn.setEnabled(True)
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.WaitCursor))
-        self._worker = ProcessWorker(paper_file_ids)
+        self._worker = ProcessWorker(paper_file_ids, force_ids=force_ids)
         self._worker.progress.connect(self._on_progress)
         self._worker.file_done.connect(self._on_file_done)
         self._worker.finished.connect(self._on_finished)

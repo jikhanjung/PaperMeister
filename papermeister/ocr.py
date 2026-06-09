@@ -369,7 +369,7 @@ def _wrapper_health_check() -> bool:
         return False
 
 
-def wrapper_submit(pdf_path: str) -> tuple[str, int, bool]:
+def wrapper_submit(pdf_path: str, *, force: bool = False) -> tuple[str, int, bool]:
     """Submit PDF to wrapper. Returns (job_id, total_pages, in_progress).
 
     Reads page count locally via PyMuPDF before submission so the caller
@@ -407,6 +407,10 @@ def wrapper_submit(pdf_path: str) -> tuple[str, int, bool]:
     logger.info('Wrapper submit: POST %s (%s, %d pages local)',
                 submit_url, os.path.basename(pdf_path), local_pages)
     form: dict = {'client_id': get_client_id()}
+    if force:
+        # Tell the server to ignore any existing OCR JSON for this hash and
+        # re-run OCR from scratch (used when retrying a failed PDF).
+        form['force'] = 'true'
     if local_pages > 0:
         # Hint to the server — it can use this for scheduling/queue depth
         # without having to parse the PDF itself. Server should treat as
@@ -511,12 +515,12 @@ def wrapper_collect(job: dict) -> tuple[dict, int]:
 
 
 def _wrapper_ocr_pdf(pdf_path: str, timeout: float = 600, poll_interval: float = 5.0,
-                     progress_callback=None) -> tuple[dict, int]:
+                     progress_callback=None, force: bool = False) -> tuple[dict, int]:
     """Submit PDF to wrapper, poll until done, return (raw_pages, total_pages).
 
     Single-file convenience wrapper around submit/poll/collect.
     """
-    job_id, total_pages, _in_progress = wrapper_submit(pdf_path)
+    job_id, total_pages, _in_progress = wrapper_submit(pdf_path, force=force)
 
     # Poll until server reports a terminal status.
     poll_errors = 0
@@ -559,6 +563,7 @@ def ocr_pdf(
     timeout: float = 600,
     max_retries: int = 3,
     progress_callback=None,
+    force: bool = False,
 ) -> list[dict]:
     """OCR an entire PDF via RunPod.
 
@@ -570,7 +575,8 @@ def ocr_pdf(
 
     if _BACKEND == 'wrapper':
         raw_pages, total_pages = _wrapper_ocr_pdf(pdf_path, timeout=timeout,
-                                                  progress_callback=progress_callback)
+                                                  progress_callback=progress_callback,
+                                                  force=force)
         results = []
         for idx in sorted(raw_pages.keys()):
             text = (raw_pages[idx].get('markdown') or '').strip()

@@ -353,10 +353,13 @@ def _resolve_filepath(paper_file):
     return paper_file.path, False
 
 
-def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=None):
+def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=None,
+                       force=False):
     """OCR a PDF via RunPod (or use cached JSON), store text in DB and FTS index.
 
     status_callback(msg): called with human-readable status at each stage.
+    force: ignore any existing local/Zotero OCR JSON and re-OCR from scratch
+        (also sends force=true to the wrapper server). Used to retry a failed PDF.
     """
     paper = paper_file.paper
     is_zotero = bool(paper_file.zotero_key)
@@ -387,9 +390,10 @@ def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=N
         paper_file.hash = hash_file(filepath)
         paper_file.save()
 
-    raw_result = _load_ocr_json(paper_file)
+    # force: skip every cache source so the OCR actually re-runs.
+    raw_result = None if force else _load_ocr_json(paper_file)
 
-    if raw_result is None and is_zotero:
+    if raw_result is None and is_zotero and not force:
         # Cross-machine / post-cache-wipe shortcut: a previous run may have
         # uploaded `{hash}.json` as a Zotero sibling attachment. Pull it down
         # instead of paying for OCR again.
@@ -410,7 +414,7 @@ def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=N
             if status_callback:
                 status_callback('Running OCR...')
             from .ocr import ocr_pdf
-            ocr_results, raw_result = ocr_pdf(filepath, progress_callback=ocr_progress_callback)
+            ocr_results, raw_result = ocr_pdf(filepath, progress_callback=ocr_progress_callback, force=force)
             _save_ocr_json(paper_file, raw_result)
             pages = [(r['page'], r['text']) for r in ocr_results]
         except Exception:

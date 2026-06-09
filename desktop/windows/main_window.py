@@ -259,14 +259,17 @@ class MainWindow(QMainWindow):
         if action in ('process', 'retry'):
             if not file_id:
                 return
+            force_ids = set()
             if action == 'retry':
+                # Retrying a failed PDF — re-OCR ignoring any cached JSON.
                 PaperFile.update(status='pending').where(PaperFile.id == file_id).execute()
+                force_ids = {file_id}
             if self._process_window is None:
                 from papermeister.ui.process_window import ProcessWindow
                 self._process_window = ProcessWindow(self)
                 self._process_window.processing_updated.connect(self._on_processing_updated)
                 self._process_window.file_processed.connect(self._on_file_processed)
-            self._process_window.start([file_id])
+            self._process_window.start([file_id], force_ids=force_ids)
             self.status_bar.set_task('Processing 1 file…')
         elif action == 'open_pdf':
             self.detail_panel.show_paper(paper_id)
@@ -390,7 +393,8 @@ class MainWindow(QMainWindow):
                 self._process_window = ProcessWindow(self)
                 self._process_window.processing_updated.connect(self._on_processing_updated)
                 self._process_window.file_processed.connect(self._on_file_processed)
-            self._process_window.start(file_ids)
+            # failed PDFs being retried → force re-OCR (ignore any cached JSON).
+            self._process_window.start(file_ids, force_ids=set(failed_ids))
 
         # Queue biblio extraction for the already-OCR'd papers (runs through the
         # same serialized queue as the post-OCR auto-biblio path), with a
