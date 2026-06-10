@@ -61,7 +61,7 @@
   - **'My Library' 우클릭 Process All** (세션 45): source 루트 우클릭 → "Process All (OCR → Biblio)" — 라이브러리 전체(uncollected 포함)의 pending/failed PDF OCR + biblio 없는 processed PDF 추출을 한 배치로. `_run_process_scope(folder_ids|None)` 리팩터, None=전체 스코프(PaperFolder join 생략 → multi-collection 중복도 자연 회피). 기존엔 루트 우클릭이 Source.id를 folder_id로 해석해 무동작이었음
 
 ### 진행 중인 것
-- **Phase D 대량 운영 — 라이브러리 전체 biblio 작업 가동 중** (2026-06-10~): desktop에서 My Library 우클릭 → Process All (OCR → Biblio). OCR은 99.9% 완료라 사실상 biblio 추출 + auto-apply가 본체. 중간에 끊겨도 Process All 재실행 = resume (biblio 있는 paper는 재수집 안 됨). 끝나면 "Needs Review" 필터 일괄 검토. [devlog 060](./devlog/20260610_060_Library_Wide_Process_All.md)
+- **Phase D 대량 운영 — 라이브러리 전체 biblio 작업 가동 중** (2026-06-10~, **완주까지 며칠 소요 예상**): desktop에서 My Library 우클릭 → Process All (OCR → Biblio). OCR은 99.9% 완료라 사실상 biblio 추출 + auto-apply가 본체. 중간에 끊겨도 Process All 재실행 = resume (biblio 있는 paper는 재수집 안 됨). 끝나면 "Needs Review" 필터 일괄 검토. [devlog 060](./devlog/20260610_060_Library_Wide_Process_All.md)
 - **Phase 4 (hookup)**:
   - **Apply Biblio Zotero write-back 라이브 검증**: 세션 18에서 write 키로 한 번 돌렸음. paper 4315 (bookSection)에서 400 → `ITEM_TYPE_JOURNAL_FIELD` map 픽스 + `ZoteroPatchRejected` 래퍼로 해결. 48편 status=extracted 잔존 (다음 Process 시 재시도 → 일부는 evaluate가 needs_review로 분류한 정상 케이스, 나머지는 bookSection 400으로 멈춘 케이스)
   - batch Reflect 트리거 UI / background worker / StatusBadge delegate — 미완
