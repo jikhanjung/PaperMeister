@@ -8,7 +8,7 @@
 
 ## 현재 단계
 
-**Phase: P07 Phase 2 완전 종료 / Phase 3 완료 + 기본 사용 가능 / Phase 4 hookup 진행 중**
+**Phase: P07 Phase 2 완전 종료 / Phase 3 완료 + 기본 사용 가능 / Phase 4 hookup 진행 중 / Phase D 대량 운영 가동 중 (라이브러리 전체 biblio, 2026-06-10~)**
 
 ### 안정적으로 돌아가는 것
 - 기존 GUI (`papermeister/ui/` — **동결**, 신규 개발 없음). Process/Preferences 다이얼로그는 새 desktop 앱에서 재사용 중
@@ -55,22 +55,27 @@
   - **Metadata 카드에 Zotero Key 행** (세션 37): `paper.zotero_key`가 있을 때만 `Source` 행 다음에 표시 (디렉토리 소스는 잡음 회피)
   - **OCR `wrapper_submit` 로컬 페이지 수 hint** (세션 37): 제출 전에 `fitz.open(path).page_count`로 페이지 수를 미리 읽어서 (a) POST form에 `total_pages` advisory hint로 동봉 (b) 서버 first-poll이 0을 주면 로컬 값을 그대로 반환. 큰 PDF가 서버 파싱 전에 0으로 응답해서 `process_window`의 `tp or 1` 폴백이 큐 깊이를 1로만 카운트 → 12개 PDF가 burst-submit되던 버그 해소. 서버 측 hint 핸들링은 별도 리포 작업
   - **Zotero attachment 다운로드 direct GET 우회** (세션 37): pyzotero `Zotero.file()`이 응답 Content-Type을 sniff해서 빈 Content-Type의 S3 attachment(`imported_url` linkMode)를 JSON으로 오인식 → 멀쩡한 PDF에 `json.loads()` 호출 → `JSONDecodeError`. `ZoteroClient.download_file_content()` 신설(raw GET, bytes 반환), `download_attachment` / `_resolve_filepath` / `_try_fetch_sibling_json` 3개 다운로드 경로 모두 라우팅. 404는 `requests.HTTPError`로 분리 → "attachment record는 있지만 file이 web storage에 없음" 명시 메시지
+  - **단건 Extract Biblio도 공유 biblio 큐 경유** (세션 44): 우클릭 단건 추출이 자체 BackgroundTask를 띄워 배치와 동시 실행/`_biblio_task` 덮어쓰기 하던 문제 → `_auto_biblio_queue` enqueue + drain으로 단일화. 단건도 `BiblioWindow.begin(1)`로 진행창 표시 (배치 live면 total 확장). 추출 `task.failed`도 `_on_biblio_failed`로 통일 — error 행 기록 + advance/finish (실패 시 창이 멈춘 듯 보이던 문제 해소)
+  - **biblio 상태 정합성** (세션 44): `already_complete` → terminal `auto_committed` stamp ('done' pill, 재평가 제외). needs_review 전용 'rev' pill. OCR JSON meta=applied인데 로컬 PaperBiblio 없는 paper(DB 재구축 케이스)는 skip 시점에 **marker PaperBiblio** 생성 → 타겟 재수집 루프 차단
+  - **write-back standalone 가드** (세션 44): promote 시 `lastRead` pop (rename_ocr_json과 동일 버그) + transient-retry 경유. un-promoted standalone(Paper.zotero_key=attachment) write-back 시도는 `ZoteroPatchRejected`로 "먼저 promote" 안내
+  - **'My Library' 우클릭 Process All** (세션 45): source 루트 우클릭 → "Process All (OCR → Biblio)" — 라이브러리 전체(uncollected 포함)의 pending/failed PDF OCR + biblio 없는 processed PDF 추출을 한 배치로. `_run_process_scope(folder_ids|None)` 리팩터, None=전체 스코프(PaperFolder join 생략 → multi-collection 중복도 자연 회피). 기존엔 루트 우클릭이 Source.id를 folder_id로 해석해 무동작이었음
 
 ### 진행 중인 것
+- **Phase D 대량 운영 — 라이브러리 전체 biblio 작업 가동 중** (2026-06-10~): desktop에서 My Library 우클릭 → Process All (OCR → Biblio). OCR은 99.9% 완료라 사실상 biblio 추출 + auto-apply가 본체. 중간에 끊겨도 Process All 재실행 = resume (biblio 있는 paper는 재수집 안 됨). 끝나면 "Needs Review" 필터 일괄 검토. [devlog 060](./devlog/20260610_060_Library_Wide_Process_All.md)
 - **Phase 4 (hookup)**:
   - **Apply Biblio Zotero write-back 라이브 검증**: 세션 18에서 write 키로 한 번 돌렸음. paper 4315 (bookSection)에서 400 → `ITEM_TYPE_JOURNAL_FIELD` map 픽스 + `ZoteroPatchRejected` 래퍼로 해결. 48편 status=extracted 잔존 (다음 Process 시 재시도 → 일부는 evaluate가 needs_review로 분류한 정상 케이스, 나머지는 bookSection 400으로 멈춘 케이스)
   - batch Reflect 트리거 UI / background worker / StatusBadge delegate — 미완
   - **PaperFolder full sync 미완**: backfill은 Paper.folder 1:1만
 
 ### 대기 중
-- **Phase D (대량 운영)**: OCR 완료분에 biblio 추출 → `reflect_biblio.py`로 일괄 반영
-- **1960s standalone OCR**: 226편. 세션 36 이후엔 OCR 완료 시 자동 promote(parent item 생성)되므로 흐름 단순화됨 — Process Folder 한 번이면 OCR + 자동 parent 생성 동시 진행
+- **Phase D 후처리**: 라이브러리 전체 biblio 완료 후 needs_review 일괄 검토 + non-dry `reflect_biblio.py` 확인 패스
+- **1960s standalone OCR**: 226편. 세션 36 이후엔 OCR 완료 시 자동 promote(parent item 생성)되므로 흐름 단순화됨 — 세션 45의 Process All 스코프에 포함되어 함께 처리 중
 
 ---
 
 ## 다음 할 일
 
-> **현재 우선순위**: OCR(99.9%)·파일명 마이그레이션은 마무리됨(세션 43). 다음 자연스러운 초점은 **Phase D 대량 운영**(OCR 완료분 biblio 추출 → reflect) + Phase 4 hookup 검증.
+> **현재 우선순위**: **Phase D 대량 운영이 가동 중** — desktop My Library 우클릭 Process All로 라이브러리 전체 biblio 추출 + auto-apply 진행 중 (2026-06-10~, 세션 45). 완료 후 needs_review 일괄 검토가 다음 초점. Phase 4 hookup 잔여 검증은 병행.
 
 ### 즉시 착수 가능 (Phase 4 hookup)
 - [ ] **48편 extracted 잔존분 재시도** — 세션 18 폴더 처리 중 bookSection 400으로 멈춘 케이스 + needs_review 정상 케이스 혼재. 같은 폴더들 다시 Process 한 번 돌려서 `ITEM_TYPE_JOURNAL_FIELD` 픽스 효과 + biblio_state 메타 cross-machine sync 확인 (세션 35의 폴더 failed retry 포함 덕분에 한 번에 처리 가능해짐)
@@ -84,12 +89,12 @@
 - [ ] desktop: PaperList 상태 셀에 StatusBadge delegate (현재는 축약 pill — done/wait/err/rev. 필요 시 풀 라벨로 복원 또는 아이콘화 검토)
 - [ ] **BM25 tie-break 개선** (Phase 5 경계): 현재 `passage_fts`는 passage 단위라 title 가중치가 document-level boost로 작동 안 함. 예: `trilobite`로 검색하면 title에 trilobite가 없는데 본문에 많이 나온 논문이 top에 올라옴. 해결안: 별도 `paper_fts` (title/authors)와 합산 or Python post-processing boost. 지금은 alerting 수준
 
-### 큰 덩어리 (Phase D 대량 운영)
-- [ ] **작은 mixed 폴더 OCR 검증** (10-30편) — 세션 36 auto-promote 흐름 end-to-end. ProcessWindow 로그에서 standalone 케이스 1-2건의 `Creating Zotero parent item...` / `→ parent created: KEY` 라인 확인 + Zotero에서 parent + child 구조 확인
-- [ ] 1960s 컬렉션 standalone PDF 226편 Process Folder — OCR + 자동 parent 생성. 세션 36 enqueue 덕에 도중 다른 폴더도 큐에 추가 가능
-- [ ] OCR 완료된 ~2,000편에 Haiku biblio 추출 (`scripts/extract_biblio.py`) — `auto_biblio_extract` OFF 권장(통제 분리)
-- [ ] 추출 직후 **반드시 non-dry `reflect_biblio.py` 한 번 돌리기** → biblio status stamp (아니면 Library "Needs Review" 폴더가 비어 보임)
-- [ ] `reflect_biblio.py` 대량 실행 — Zotero API rate limit, 412 version conflict 자동 재시도, 진행률 표시 필요 (현재는 pyzotero backoff에만 의존)
+### 큰 덩어리 (Phase D 대량 운영) — 세션 45부터 desktop Process All 경로로 가동 중
+- [x] ~~작은 mixed 폴더 OCR 검증~~ → 세션 43~44에 걸쳐 collection 단위 biblio 배치를 여러 번 돌리며 사실상 검증됨 (devlog 054~059)
+- [ ] **라이브러리 전체 Process All 완주** (진행 중, 2026-06-10~) — OCR 잔여(pending/failed) + biblio 없는 processed 전부. 1960s 226편도 이 스코프에 포함 (OCR + auto-promote)
+- [ ] 완료 후 **needs_review 일괄 검토** — Library "Needs Review" 필터에서 Biblio 탭 대조 UI로 처리
+- [ ] 완료 후 non-dry `reflect_biblio.py` 한 번 — desktop 경로 밖에서 생성된 biblio가 있다면 status stamp 누락 확인용
+- [ ] 대량 실행 중 관찰: Zotero API rate limit(429는 재시도 안 함 — devlog 056), 412 version conflict, 진행창 error 행 누적 패턴
 
 ### 저순위 백로그
 - [ ] 병렬 OCR 실 테스트 (max worker 올린 상태에서 처리 속도 확인)
@@ -176,6 +181,19 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 ---
 
 ## 최근 세션 요약
+
+**2026-06-10 (세션 45)** — [devlog 060](./devlog/20260610_060_Library_Wide_Process_All.md)
+- **'My Library' 우클릭 Process All** (commit `2bf9519`): source 루트 우클릭이 Source.id를 folder_id로 해석해 무동작이던 버그 → `_run_process_scope(folder_ids|None)` 리팩터. None=라이브러리 전체(PaperFolder join 생략, uncollected 포함). pending/failed PDF OCR + biblio 없는 processed PDF 추출을 한 배치로
+- **라이브러리 전체 biblio 작업 가동 개시** — OCR 99.9% 완료 상태라 사실상 biblio 추출 + auto-apply가 본체. 중단돼도 Process All 재실행이 곧 resume
+
+**2026-06-09 (세션 44)** — [devlog 057](./devlog/20260609_057_Single_Biblio_Queue_Unification_Status_Consistency.md) · [devlog 058](./devlog/20260609_058_OCR_Force_Retry_Empty_Failed_Legacy_Cache.md) · [devlog 059](./devlog/20260609_059_Writeback_Standalone_Guards_Execute_Flag.md)
+- **단건 Extract Biblio 큐 단일화** (`d38027b`, `4c0f632`): 우클릭 단건 추출이 자체 BackgroundTask로 배치와 동시 실행되던 문제 → 공유 `_auto_biblio_queue` enqueue + drain. 단건도 BiblioWindow 진행창 (배치 live면 total +1)
+- **추출 실패 표면화** (`1a827bf`): biblio `task.failed`가 큐만 drain하고 진행창을 안 건드려 멈춘 듯 보이던 문제 → `_on_biblio_failed`로 통일 (error 행 + advance/finish)
+- **레거시 OCR 캐시 rename** (`1a827bf`): 1970s 5편(캐시 8개)이 옛 `{sha256}.json` 이름 잔존 (세션 42 마이그레이션이 JSON sibling 없는 케이스를 스킵) → `load_ocr_pages` glob 미스매치로 "No OCR pages found". `scripts/rename_legacy_cache.py` 신설 (cache-only, idempotent)
+- **marker PaperBiblio** (`3b753d8`): OCR JSON meta=applied인데 로컬 PaperBiblio 없는 paper(DB 재구축 케이스)가 매 run마다 `BiblioAlreadyApplied` skip으로 영원히 done이 안 되던 문제 → skip 시점에 Paper의 현재 메타데이터로 marker PaperBiblio 생성
+- **write-back standalone 가드** (`d301652`, `c8a932f`): promote의 `lastRead` echo 거부(세션 43 rename_ocr_json과 동일 버그) → pop + transient-retry 경유. un-promoted standalone에 write-back 시 `'date' is not a valid field for type 'attachment'` 400 → attachment 타입이면 `ZoteroPatchRejected`로 "먼저 promote" 안내
+- **scripts `--execute` 통일** (`a781ae7`, `c8a932f`): `reflect_biblio` / `rename_ocr_json` / `upload_ocr_json`의 옛 `--dry-run` 관례 + `promote_processed_standalones`의 `--apply`를 전부 `--execute`(기본 dry-run)로. CLAUDE.md에 관례 명문화
+- (force=true 재OCR `09e233d`, 빈 OCR failed `d73f221`, already_complete done stamp `eccf754`, needs_review pill `b0920a7`은 세션 43 항목에 선반영되어 있음 — devlog 057/058에 상세 기록)
 
 **2026-06-08 (세션 43)** — [devlog 047](./devlog/20260608_047_OCR_JSON_Rename_Resume_LastRead_Fix.md)
 - 세션 42에서 창 닫아 **중단된 OCR JSON 파일명 마이그레이션 완주** (`{hash}.json` → `{pdf_basename}.{hash[:8]}.json`)
