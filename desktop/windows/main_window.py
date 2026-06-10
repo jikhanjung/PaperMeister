@@ -283,6 +283,8 @@ class MainWindow(QMainWindow):
     def _on_folder_action(self, action: str, folder_id: int):
         if action == 'process_folder':
             self._process_folder(folder_id)
+        elif action == 'process_source':
+            self._process_source(folder_id)  # value is a Source.id here
         elif action == 'upload_ocr_json':
             self._upload_ocr_json(folder_id)
 
@@ -297,49 +299,74 @@ class MainWindow(QMainWindow):
         return ids
 
     def _process_folder(self, folder_id: int):
-        """Process pending + failed files in a folder and its subfolders.
+        """Process a folder and its subfolders (OCR pending/failed + biblio)."""
+        self._run_process_scope(self._collect_folder_ids(folder_id), 'this folder')
 
-        Failed files (e.g. from a server restart mid-OCR) are retried —
-        their status is reset to 'pending' before submission so the pill
-        transitions cleanly during reprocessing.
+    def _process_source(self, source_id: int):
+        """Process the whole library/source — every remaining PDF, any collection
+        (and uncollected). Right-click 'My Library' → 'Process All'."""
+        self._run_process_scope(None, 'My Library (all)')
+
+    def _run_process_scope(self, folder_ids, scope_label: str):
+        """Shared OCR + biblio processing over a scope.
+
+        folder_ids None → whole library (no collection filter); otherwise restrict
+        to PaperFiles whose paper is in one of those folders.
+
+        Failed files (e.g. from a server restart mid-OCR) are retried — reset to
+        'pending' before submission so the pill transitions cleanly.
         """
         from papermeister.models import Paper, PaperFile, PaperFolder, PaperBiblio
 
-        all_folder_ids = self._collect_folder_ids(folder_id)
-
-        rows = list(
-            PaperFile.select(PaperFile.id, PaperFile.status)
-            .join(Paper)
-            .join(PaperFolder, on=(PaperFolder.paper == Paper.id))
-            .where(
-                PaperFolder.folder << all_folder_ids,
-                PaperFile.status.in_(['pending', 'failed']),
-                PaperFile.path.endswith('.pdf'),
+        def _ocr_rows():
+            if folder_ids is None:
+                return list(
+                    PaperFile.select(PaperFile.id, PaperFile.status).where(
+                        PaperFile.status.in_(['pending', 'failed']),
+                        PaperFile.path.endswith('.pdf'),
+                    )
+                )
+            return list(
+                PaperFile.select(PaperFile.id, PaperFile.status)
+                .join(Paper).join(PaperFolder, on=(PaperFolder.paper == Paper.id))
+                .where(
+                    PaperFolder.folder << folder_ids,
+                    PaperFile.status.in_(['pending', 'failed']),
+                    PaperFile.path.endswith('.pdf'),
+                )
             )
-        )
+
+        def _biblio_pdfs():
+            if folder_ids is None:
+                return (
+                    PaperFile.select(PaperFile.id, PaperFile.paper)
+                    .where(PaperFile.status == 'processed', PaperFile.path.endswith('.pdf'))
+                    .order_by(PaperFile.paper.desc())
+                )
+            return (
+                PaperFile.select(PaperFile.id, PaperFile.paper)
+                .join(Paper).join(PaperFolder, on=(PaperFolder.paper == Paper.id))
+                .where(
+                    PaperFolder.folder << folder_ids,
+                    PaperFile.status == 'processed',
+                    PaperFile.path.endswith('.pdf'),
+                )
+                .order_by(Paper.id.desc())
+            )
+
+        rows = _ocr_rows()
         pending_ids = [r.id for r in rows if r.status == 'pending']
         failed_ids = [r.id for r in rows if r.status == 'failed']
         file_ids = pending_ids + failed_ids
 
         # OCR-completed PDFs whose paper has no biblio yet → biblio extraction.
-        # (When OCR is already done, this is the only work left to do.)
         papers_with_biblio = {
             b.paper_id for b in PaperBiblio.select(PaperBiblio.paper).distinct()
         }
         queued_papers = {pid for pid, _ in self._auto_biblio_queue}
         biblio_targets: list[tuple[int, int]] = []
         seen_papers: set[int] = set()
-        for pf in (
-            PaperFile.select(PaperFile.id, PaperFile.paper)
-            .join(Paper)
-            .join(PaperFolder, on=(PaperFolder.paper == Paper.id))
-            .where(
-                PaperFolder.folder << all_folder_ids,
-                PaperFile.status == 'processed',
-                PaperFile.path.endswith('.pdf'),
-            )
-            .order_by(Paper.id.desc())  # fallback order = list default
-        ):
+        for pf in _biblio_pdfs():
             pid = pf.paper_id
             if pid in papers_with_biblio or pid in seen_papers or pid in queued_papers:
                 continue
@@ -347,14 +374,14 @@ class MainWindow(QMainWindow):
             biblio_targets.append((pid, pf.id))
 
         # Process in the same order the PaperList currently shows (honours any
-        # header-click sort). Papers not on screen (e.g. subfolders) keep the
-        # Paper.id-desc fallback at the end. Stable sort preserves both.
+        # header-click sort). Papers not on screen keep the Paper.id-desc
+        # fallback at the end. Stable sort preserves both.
         rank = {pid: i for i, pid in enumerate(self.paper_list.visible_paper_ids())}
         biblio_targets.sort(key=lambda t: rank.get(t[0], len(rank)))
 
         if not file_ids and not biblio_targets:
             self.status_bar.set_task(
-                'Nothing to do — OCR complete and biblio already extracted for this folder'
+                f'Nothing to do — OCR complete and biblio already extracted ({scope_label})'
             )
             return
 
@@ -367,11 +394,11 @@ class MainWindow(QMainWindow):
             lines.append(f'OCR: retry {len(failed_ids)} failed PDF(s)')
         if biblio_targets:
             lines.append(f'Biblio extraction: {len(biblio_targets)} OCR-completed paper(s)')
-        message = 'Process this folder?\n' + '\n'.join(lines)
+        message = f'Process {scope_label}?\n' + '\n'.join(lines)
 
         resp = QMessageBox.question(
             self,
-            'Process Folder',
+            'Process',
             message,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,

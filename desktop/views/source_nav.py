@@ -239,10 +239,16 @@ class SourceNav(QWidget):
             return
 
         menu = QMenu(tree)
-        menu.addAction('Process Folder (OCR → Biblio)',
-                        lambda: self.folder_action.emit('process_folder', value))
-        menu.addAction('Upload OCR JSON to Zotero',
-                        lambda: self.folder_action.emit('upload_ocr_json', value))
+        if kind == 'source':
+            # 'My Library' root → process the whole library (every remaining PDF
+            # in any collection, plus uncollected).
+            menu.addAction('Process All (OCR → Biblio)',
+                            lambda: self.folder_action.emit('process_source', value))
+        else:
+            menu.addAction('Process Folder (OCR → Biblio)',
+                            lambda: self.folder_action.emit('process_folder', value))
+            menu.addAction('Upload OCR JSON to Zotero',
+                            lambda: self.folder_action.emit('upload_ocr_json', value))
         menu.exec(tree.viewport().mapToGlobal(pos))
 
     def _on_item_clicked(self, item: QTreeWidgetItem, _col: int):
