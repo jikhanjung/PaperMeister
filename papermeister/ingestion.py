@@ -107,6 +107,76 @@ def _scan_dir(source, dir_path, parent_folder, new_files, progress_callback):
             _scan_dir(source, full_path, folder, new_files, progress_callback)
 
 
+def delete_directory_source(source_id, progress_callback=None):
+    """Delete a 'directory' Source (an imported local folder) and its folders.
+
+    Papers are unlinked from this source's folders (PaperFolder M2M). A paper
+    that belonged ONLY to this source — no Zotero key on the paper or any of its
+    files and no remaining folder membership — is fully deleted with its cascade
+    (PaperFile/Author/PaperBiblio/Passage/PaperFolder) plus the denormalized
+    passage_fts rows. Papers that also live elsewhere (e.g. a Zotero collection)
+    are kept; only the link into this folder is dropped. The content-addressed
+    OCR JSON cache is left on disk so a re-import can reuse it.
+
+    Returns (deleted_papers, unlinked_papers). Refuses non-directory sources.
+    """
+    source = Source.get_or_none(Source.id == source_id)
+    if source is None:
+        raise ValueError(f'No source with id {source_id}')
+    if source.source_type != 'directory':
+        raise ValueError('Only local-folder (directory) sources can be removed')
+
+    folder_ids = [f.id for f in Folder.select(Folder.id).where(Folder.source == source)]
+
+    paper_ids = set()
+    if folder_ids:
+        for row in (PaperFolder.select(PaperFolder.paper)
+                    .where(PaperFolder.folder.in_(folder_ids)).distinct()):
+            paper_ids.add(row.paper_id)
+        for row in Paper.select(Paper.id).where(Paper.folder.in_(folder_ids)):
+            paper_ids.add(row.id)
+
+    deleted = unlinked = 0
+    with db.atomic():
+        # Drop this source's folder links first, so "remaining membership" below
+        # reflects the post-removal state.
+        if folder_ids:
+            PaperFolder.delete().where(PaperFolder.folder.in_(folder_ids)).execute()
+
+        for pid in paper_ids:
+            p = Paper.get_or_none(Paper.id == pid)
+            if p is None:
+                continue
+            from_zotero = bool(p.zotero_key) or (
+                PaperFile.select()
+                .where((PaperFile.paper == p) & (PaperFile.zotero_key != ''))
+                .exists()
+            )
+            remaining = PaperFolder.select().where(PaperFolder.paper == p).count()
+            if not from_zotero and remaining == 0:
+                # Pure-local paper, now orphaned → delete it and its cascade.
+                db.execute_sql('DELETE FROM passage_fts WHERE paper_id = ?', [p.id])
+                p.delete_instance(recursive=True, delete_nullable=True)
+                deleted += 1
+            else:
+                # Keep it; clear a legacy FK that points into a folder we delete.
+                if p.folder_id in folder_ids:
+                    p.folder = None
+                    p.save()
+                unlinked += 1
+
+        if folder_ids:
+            Folder.delete().where(Folder.id.in_(folder_ids)).execute()
+        source.delete_instance()
+
+    if progress_callback:
+        progress_callback(
+            f'Removed source "{source.name}": deleted {deleted} local paper(s), '
+            f'unlinked {unlinked} shared'
+        )
+    return deleted, unlinked
+
+
 # ── Zotero import ───────────────────────────────────────────
 
 

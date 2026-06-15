@@ -87,8 +87,33 @@ new_files=0, 그 Paper의 folder 멤버십 2개(Zotero 컬렉션 + 로컬 폴더
 주의(향후): Zotero collection-membership 양방향 sync(현 add-only)를 set-difference 제거로
 바꾸면 **directory 소스 PaperFolder 링크는 건드리지 말 것**(Zotero 폴더로 스코프 한정).
 
+### 3. 탭 우클릭으로 directory 소스 삭제
+
+가져온 폴더를 지울 방법이 없어서 추가. **SourceNav 탭바 우클릭** → directory 소스면
+"Remove "<name>" (local folder)" 메뉴 (Zotero 'My Library' 탭은 sync 관리라 메뉴 없음).
+`source_nav.source_action(action, source_id)` 시그널 신설(탭 인덱스→`(source_id, type)`
+매핑 `_tab_sources`로 식별).
+
+삭제 서비스 `ingestion.delete_directory_source(source_id)` (기존 `purge_local_by_keys`의
+cascade idiom 재사용 — `DELETE FROM passage_fts` 수동 + `delete_instance(recursive=True)`):
+- 소스의 폴더에 걸린 PaperFolder 링크 제거
+- **순수 로컬 논문**(zotero_key 없음 + 다른 폴더 멤버십 없음)만 cascade 삭제
+  (PaperFile/Author/PaperBiblio/Passage/passage_fts). OCR 캐시·디스크 파일은 보존
+- **Zotero에도 있는 논문은 보존**, 폴더 링크만 끊음 (legacy `Paper.folder`가 삭제될 폴더를
+  가리키면 NULL 처리)
+- Folder + Source 행 삭제. directory 소스가 아니면 거부
+- 반환 `(deleted, unlinked)`
+
+main_window `_remove_directory_source`: 확인 다이얼로그("로컬 전용 PDF는 DB에서 삭제(캐시·
+디스크 파일 보존), Zotero에도 있는 건 링크만 해제") → 삭제 → DetailPanel 초기화 +
+SourceNav refresh + 선택을 library로 리셋.
+
+검증(임시 DB): Zotero 공유 PDF + 로컬 전용 PDF가 든 폴더 import 후 삭제 →
+`(deleted=1, unlinked=1)`, Zotero 논문 보존(컬렉션 멤버십 1 유지), 로컬 전용 논문/파일 삭제,
+directory Source/Folder 제거. 디스크 파일 무손상.
+
 ## 후속(저순위)
 
 - 폴더 basename이 같으면 탭 라벨 중복 → 필요 시 부모 경로 suffix로 구분
-- directory 소스 탭 우클릭에 "소스 제거/새로고침" 메뉴(현재 Process All/Folder만)
+- directory 소스 탭에 "새로고침(재스캔)" 메뉴(현재 Remove만; 재스캔은 같은 폴더 재import로 가능)
 - 대용량 폴더에서 per-file 시그널 폭주 시 진행 로그 throttle (현재 QTextEdit blockCount 3000 cap)

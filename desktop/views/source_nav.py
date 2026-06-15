@@ -98,6 +98,7 @@ class _StatusPanel(QWidget):
 class SourceNav(QWidget):
     selection_changed = pyqtSignal(str, object)
     folder_action = pyqtSignal(str, int)  # action, folder_id
+    source_action = pyqtSignal(str, int)  # action, source_id (tab-level)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -109,6 +110,10 @@ class SourceNav(QWidget):
         self.tabs = QTabWidget()
         self.tabs.setObjectName('SourceTabs')
         self.tabs.setDocumentMode(True)
+        # Right-click a tab → source-level actions (e.g. remove a local folder).
+        bar = self.tabs.tabBar()
+        bar.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        bar.customContextMenuRequested.connect(self._on_tab_context_menu)
         layout.addWidget(self.tabs, 1)
 
         # STATUS panel — always visible, pinned below the tab content.
@@ -120,6 +125,8 @@ class SourceNav(QWidget):
 
         # Map (tab index -> QTreeWidget) for reveal_folder lookups.
         self._trees: dict[int, QTreeWidget] = {}
+        # Map (tab index -> (source_id, source_type)) for tab context menu.
+        self._tab_sources: dict[int, tuple[int, str]] = {}
 
         self.refresh()
 
@@ -147,6 +154,7 @@ class SourceNav(QWidget):
         self.tabs.blockSignals(True)
         self.tabs.clear()
         self._trees.clear()
+        self._tab_sources.clear()
 
         sources = []
         try:
@@ -168,9 +176,32 @@ class SourceNav(QWidget):
             tab_label = 'My Library' if src.source_type == 'zotero' else src.name
             idx = self.tabs.addTab(tree, tab_label)
             self._trees[idx] = tree
+            self._tab_sources[idx] = (src.id, src.source_type)
 
         self.tabs.blockSignals(False)
         self._status_panel.populate()
+
+    # ── Tab context menu ─────────────────────────────────────
+
+    def _on_tab_context_menu(self, pos):
+        """Right-click on a tab. Local-folder sources can be removed; the
+        Zotero 'My Library' tab is managed by sync, so it offers nothing."""
+        idx = self.tabs.tabBar().tabAt(pos)
+        if idx < 0:
+            return
+        src = self._tab_sources.get(idx)
+        if not src:
+            return
+        source_id, source_type = src
+        if source_type != 'directory':
+            return  # don't let users delete the Zotero library here
+        label = self.tabs.tabText(idx)
+        menu = QMenu(self)
+        menu.addAction(
+            f'Remove "{label}" (local folder)',
+            lambda: self.source_action.emit('remove_source', source_id),
+        )
+        menu.exec(self.tabs.tabBar().mapToGlobal(pos))
 
     def _populate_collections(self, tree: QTreeWidget, src):
         """Source root + hierarchical collections."""

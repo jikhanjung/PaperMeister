@@ -113,6 +113,7 @@ class MainWindow(QMainWindow):
         self.rail.full_sync_triggered.connect(self._full_sync_zotero)
         self.source_nav.selection_changed.connect(self._on_nav_selection)
         self.source_nav.folder_action.connect(self._on_folder_action)
+        self.source_nav.source_action.connect(self._on_source_action)
         self.paper_list.paper_selected.connect(self.detail_panel.show_paper)
         self.paper_list.folder_reveal_requested.connect(self.source_nav.reveal_folder)
         self.paper_list.context_action.connect(self._on_context_action)
@@ -389,6 +390,56 @@ class MainWindow(QMainWindow):
             self._process_source(folder_id)  # value is a Source.id here
         elif action == 'upload_ocr_json':
             self._upload_ocr_json(folder_id)
+
+    # ── Source (tab) actions ─────────────────────────────────
+
+    def _on_source_action(self, action: str, source_id: int):
+        if action == 'remove_source':
+            self._remove_directory_source(source_id)
+
+    def _remove_directory_source(self, source_id: int):
+        """Remove an imported local-folder source. Pure-local PDFs are deleted
+        from the DB (their OCR cache + files on disk are kept); PDFs also in
+        Zotero are kept and just unlinked from this folder."""
+        from papermeister.models import Source
+        src = Source.get_or_none(Source.id == source_id)
+        if src is None or src.source_type != 'directory':
+            return
+
+        resp = QMessageBox.question(
+            self, 'Remove Local Folder',
+            f'Remove the local folder source "{src.name}"?\n\n'
+            f'• PDFs that exist only here are removed from the database '
+            f'(OCR cache and the files on disk are kept).\n'
+            f'• PDFs also in Zotero are kept — only their link to this folder '
+            f'is dropped.',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if resp != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            from papermeister.ingestion import delete_directory_source
+            deleted, unlinked = delete_directory_source(source_id)
+        except Exception as exc:
+            self.status_bar.set_task(f'Remove failed: {exc}')
+            QMessageBox.warning(self, 'Remove failed', str(exc))
+            return
+
+        # The removed source's tab (and possibly the shown paper) is gone.
+        self._current_selection = ('library', 'all')
+        self.detail_panel._empty_state()
+        self.source_nav.refresh()
+        self._apply_current_selection()
+        try:
+            total, pending, review = library_svc.corpus_counts()
+            self.status_bar.set_counts(total, pending, review)
+        except Exception:
+            pass
+        self.status_bar.set_task(
+            f'Removed "{src.name}": {deleted} deleted, {unlinked} unlinked'
+        )
 
     @staticmethod
     def _collect_folder_ids(folder_id: int) -> list[int]:
