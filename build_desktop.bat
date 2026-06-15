@@ -10,8 +10,10 @@ REM Output: dist\PaperMeister\PaperMeister.exe  (distribute the whole folder)
 REM ---------------------------------------------------------------------------
 setlocal
 
-echo [1/3] Ensuring PyInstaller is installed...
-python -m pip install --quiet pyinstaller || goto :err
+echo [1/3] Ensuring PyInstaller + hooks are up to date...
+REM --upgrade matters: a stale PyInstaller/hooks-contrib mis-bundles recent
+REM PyQt6 (6.11+), causing "DLL load failed importing QtWidgets" at runtime.
+python -m pip install --quiet --upgrade pyinstaller pyinstaller-hooks-contrib || goto :err
 
 echo [2/3] Cleaning previous build...
 if exist build\PaperMeister rmdir /s /q build\PaperMeister

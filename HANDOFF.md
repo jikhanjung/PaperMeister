@@ -8,7 +8,7 @@
 
 ## 현재 단계
 
-**Phase: P07 Phase 2 완전 종료 / Phase 3 완료 + 기본 사용 가능 / Phase 4 hookup 진행 중 / Phase D 대량 운영 — 라이브러리 전체 biblio 완료 (~2026-06-15) / P02 PyInstaller 패키징 1차 구현 (Windows 빌드 검증 대기)**
+**Phase: P07 Phase 2 완전 종료 / Phase 3 완료 + 기본 사용 가능 / Phase 4 hookup 진행 중 / Phase D 대량 운영 — 라이브러리 전체 biblio 완료 (~2026-06-15) / P02 PyInstaller 패키징 — `.exe` 빌드 성공 + 실행 검증 완료 (2026-06-15)**
 
 ### 안정적으로 돌아가는 것
 - 기존 GUI (`papermeister/ui/` — **동결**, 신규 개발 없음). Process/Preferences 다이얼로그는 새 desktop 앱에서 재사용 중
@@ -61,7 +61,7 @@
   - **'My Library' 우클릭 Process All** (세션 45): source 루트 우클릭 → "Process All (OCR → Biblio)" — 라이브러리 전체(uncollected 포함)의 pending/failed PDF OCR + biblio 없는 processed PDF 추출을 한 배치로. `_run_process_scope(folder_ids|None)` 리팩터, None=전체 스코프(PaperFolder join 생략 → multi-collection 중복도 자연 회피). 기존엔 루트 우클릭이 Source.id를 folder_id로 해석해 무동작이었음
 
 ### 진행 중인 것
-- **P02 PyInstaller 패키징 — 1차 구현 완료, Windows 빌드 검증 대기** (2026-06-15~): `python -m desktop` → 더블클릭 `.exe`. onedir 모드, `PaperMeister.spec` + `run_desktop.py` + `build_desktop.bat`. 번들 리소스는 SVG 아이콘뿐(코드 수정 없이 datas 레이아웃 유지), `claude` CLI는 외부 런타임 의존(biblio 추출만 영향), `~/.papermeister` 데이터는 그대로 재사용. **다음: 사용자가 Windows Anaconda에서 `build_desktop.bat` 실행 + devlog P02 체크리스트 검증** (아이콘/chevron 표시 = SVG 번들 확인이 핵심). [devlog P02](./devlog/20260615_P02_PyInstaller_Desktop_Packaging.md)
+- **P02 PyInstaller 패키징 — 완료** (2026-06-15): `python -m desktop` → onedir `dist\PaperMeister\PaperMeister.exe`. 빌드 성공 + 실행 검증(Qt/SQLite/SSL Zotero sync/PyMuPDF PDF/FTS5 검색 전부 동작). **빌드 방법은 conda 특유의 DLL 함정 때문에 `build_desktop_clean.bat`(플레인 cmd + conda OFF PATH인 venv)** 필수 — `build_desktop.bat`(conda 셸 직접 빌드)는 Qt DLL 오염으로 실패함. 트러블슈팅 전말·최종 레시피는 [devlog 061](./devlog/20260615_061_PyInstaller_Conda_DLL_Troubleshooting.md), 계획·설계는 [devlog P02](./devlog/20260615_P02_PyInstaller_Desktop_Packaging.md). 후속(저순위): 앱 `.ico`/버전정보/코드사이닝, 배포 자동화
 - **Phase 4 (hookup)**:
   - **Apply Biblio Zotero write-back 라이브 검증**: 세션 18에서 write 키로 한 번 돌렸음. paper 4315 (bookSection)에서 400 → `ITEM_TYPE_JOURNAL_FIELD` map 픽스 + `ZoteroPatchRejected` 래퍼로 해결. 48편 status=extracted 잔존 (다음 Process 시 재시도 → 일부는 evaluate가 needs_review로 분류한 정상 케이스, 나머지는 bookSection 400으로 멈춘 케이스)
   - batch Reflect 트리거 UI / background worker / StatusBadge delegate — 미완
@@ -75,7 +75,7 @@
 
 ## 다음 할 일
 
-> **현재 우선순위**: **P02 PyInstaller 패키징** — 1차 구현 완료(`PaperMeister.spec` 등), 다음 스텝은 사용자가 Windows Anaconda에서 `build_desktop.bat` 실행 + devlog P02 체크리스트 검증. 라이브러리 전체 biblio 작업은 완료(~2026-06-15); 잔여 needs_review 일괄 검토는 후속.
+> **현재 우선순위**: **P02 PyInstaller 패키징 완료** (`.exe` 빌드 + 실행 검증, 2026-06-15). 라이브러리 전체 biblio도 완료. 다음 자연스러운 초점은 잔여 **needs_review 일괄 검토**, 또는 패키징 후속(앱 아이콘/배포 자동화)·Phase 4 hookup 검증.
 
 ### 즉시 착수 가능 (Phase 4 hookup)
 - [ ] **48편 extracted 잔존분 재시도** — 세션 18 폴더 처리 중 bookSection 400으로 멈춘 케이스 + needs_review 정상 케이스 혼재. 같은 폴더들 다시 Process 한 번 돌려서 `ITEM_TYPE_JOURNAL_FIELD` 픽스 효과 + biblio_state 메타 cross-machine sync 확인 (세션 35의 폴더 failed retry 포함 덕분에 한 번에 처리 가능해짐)
@@ -182,13 +182,13 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 
 ## 최근 세션 요약
 
-**2026-06-15 (세션 46)** — [devlog P02](./devlog/20260615_P02_PyInstaller_Desktop_Packaging.md)
+**2026-06-15 (세션 46)** — [devlog P02](./devlog/20260615_P02_PyInstaller_Desktop_Packaging.md) · [devlog 061](./devlog/20260615_061_PyInstaller_Conda_DLL_Troubleshooting.md)
 - 라이브러리 전체 biblio 작업 완료 보고받음 (Phase D 대량 운영 마무리)
-- **PyInstaller 패키징 1차 구현**: `python -m desktop` → 더블클릭 `.exe`. 사용자 결정으로 **onedir** 모드 (onefile은 콜드 스타트 ~10초 + PyMuPDF/백신 이슈)
-- 산출물: `run_desktop.py`(entry), `PaperMeister.spec`(onedir 정의), `build_desktop.bat`(Windows 빌드 헬퍼), `.gitignore`에 `/build/`·`/dist/` 추가
-- 코드 분석으로 번들 대상 확정: **SVG 아이콘 7개가 유일한 소스-상대 리소스** (`Path(__file__).parent/'icons'` → datas 레이아웃 유지로 코드 수정 0). lazy import 2개(`papermeister.ui.process_window`/`preferences_dialog`)는 hiddenimports 명시. 나머지 `open()`/`fitz.open()`은 전부 사용자 데이터 경로
-- 외부 런타임 의존 명시: `claude -p` CLI(biblio 추출만 영향, 현 `python -m desktop`과 동일 조건), `~/.papermeister` 데이터(런타임 생성). Anaconda base의 numpy/scipy 등은 `excludes`로 차단
-- **빌드/실행 검증은 사용자 몫** (WSL에선 `.exe` 생성 불가) — devlog P02에 체크리스트. 핵심 확인: 실행 시 Rail 아이콘 + 트리 chevron 표시 = SVG 번들 정상
+- **PyInstaller 패키징 완료**: `python -m desktop` → onedir `dist\PaperMeister\PaperMeister.exe`. 빌드 성공 + 실행 검증(Qt/SQLite/SSL/PyMuPDF/FTS5 동작)
+- 산출물: `run_desktop.py`(entry), `PaperMeister.spec`(onedir, `PM_ONEFILE`/`PM_CONSOLE` 토글), `build_desktop_clean.bat`(검증된 클린 빌드), `build_desktop.bat`(conda 직접 — 권장 안 함), `.gitignore`에 build/dist/.build-venv
+- 번들 대상: **SVG 아이콘 7개가 유일한 소스-상대 리소스**(코드 수정 0). `claude` CLI는 외부 의존(biblio만 영향), `~/.papermeister`는 런타임 생성
+- **conda DLL 함정 트러블슈팅(devlog 061)**: conda 셸 직접 빌드 → 프로즌 앱이 `QtWidgets` DLL "procedure not found"로 사망. 원인은 conda의 Qt-의존 DLL이 번들에 섞임(VC런타임 셰도잉은 헛다리, onefile도 동일). **해결: conda OFF PATH인 venv에서 빌드**(플레인 cmd + conda env python을 venv base로). 그랬더니 conda가 `Library\bin`에 숨긴 `sqlite3.dll`/openssl 누락으로 "SQLite driver not installed" → spec이 `sys.base_prefix\Library\bin`에서 stdlib 지원 DLL만 콕 집어 보강. 최종 정상 동작
+- **빌드는 conda 직접(`build_desktop.bat`) 금지, `build_desktop_clean.bat` 사용** — HANDOFF/devlog에 명문화
 
 **2026-06-10 (세션 45)** — [devlog 060](./devlog/20260610_060_Library_Wide_Process_All.md)
 - **'My Library' 우클릭 Process All** (commit `2bf9519`): source 루트 우클릭이 Source.id를 folder_id로 해석해 무동작이던 버그 → `_run_process_scope(folder_ids|None)` 리팩터. None=라이브러리 전체(PaperFolder join 생략, uncollected 포함). pending/failed PDF OCR + biblio 없는 processed PDF 추출을 한 배치로

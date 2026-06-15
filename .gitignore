@@ -8,3 +8,4 @@ Trilobite Shape/
 # PyInstaller build artifacts (PaperMeister.spec is tracked; output is not)
 /build/
 /dist/
+/.build-venv/
