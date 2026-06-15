@@ -4,3 +4,7 @@ __pycache__/
 *.db
 Trilobite Shape/
 .vscode/settings.json
+
+# PyInstaller build artifacts (PaperMeister.spec is tracked; output is not)
+/build/
+/dist/
