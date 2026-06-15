@@ -82,6 +82,9 @@ class ProcessWorker(QThread):
             return pf.status != 'failed'
         except Exception as e:
             pf.status = 'failed'
+            # Record a short, diagnosable reason (corrupt/locked PDF, network,
+            # …) instead of a bare 'failed'.
+            pf.failure_reason = f'{type(e).__name__}: {str(e)[:140]}'
             pf.save()
             self.progress.emit(f'{prefix}   FAILED: {e}')
             self.file_done.emit(pf_id, 'failed')

@@ -163,7 +163,12 @@ class MainWindow(QMainWindow):
         )
         if not directory:
             return
+        self._start_scan(directory)
 
+    def _start_scan(self, directory: str):
+        """Run the background scan of `directory` with the progress window.
+        Shared by first-time import and tab right-click 'Re-scan folder'
+        (re-import is idempotent — get-or-create source + SHA256 dedup)."""
         from desktop.workers.scan import ScanWorker
         from desktop.windows.scan_window import ScanWindow
 
@@ -396,6 +401,28 @@ class MainWindow(QMainWindow):
     def _on_source_action(self, action: str, source_id: int):
         if action == 'remove_source':
             self._remove_directory_source(source_id)
+        elif action == 'rescan_source':
+            self._rescan_directory_source(source_id)
+
+    def _rescan_directory_source(self, source_id: int):
+        """Re-import a directory source's folder to pick up newly-added PDFs.
+        Idempotent: same Source (path-keyed), existing files dedup by hash."""
+        if self._scan_worker and self._scan_worker.isRunning():
+            self.status_bar.set_task('A folder import is already running…')
+            return
+        from papermeister.models import Source
+        src = Source.get_or_none(Source.id == source_id)
+        if src is None or src.source_type != 'directory':
+            return
+        import os
+        if not src.path or not os.path.isdir(src.path):
+            self.status_bar.set_task(f'Folder not found: {src.path}')
+            QMessageBox.warning(
+                self, 'Re-scan',
+                f'The folder no longer exists or is not accessible:\n{src.path}',
+            )
+            return
+        self._start_scan(src.path)
 
     def _remove_directory_source(self, source_id: int):
         """Remove an imported local-folder source. Pure-local PDFs are deleted

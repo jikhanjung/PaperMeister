@@ -52,6 +52,20 @@ def extract_metadata_from_pdf(filepath):
     return {'title': title, 'author': author, 'year': year}
 
 
+def _pdf_is_encrypted(filepath):
+    """True if the PDF is password-protected. A file that can't even be opened
+    (corrupt) returns False so the normal OCR path surfaces — and records — its
+    actual error rather than mislabelling it 'encrypted'."""
+    try:
+        doc = fitz.open(filepath)
+    except Exception:
+        return False
+    try:
+        return bool(doc.needs_pass)
+    finally:
+        doc.close()
+
+
 def split_into_passages(text, min_length=50):
     """Split page text into paragraph-level passages."""
     paragraphs = text.split('\n\n')
@@ -410,6 +424,17 @@ def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=N
                 if status_callback:
                     status_callback('Downloading PDF from Zotero...')
             filepath, is_temp = _resolve_filepath(paper_file)
+        # Encrypted PDFs yield no OCR text — fail early with a clear reason
+        # instead of paying for an OCR call that returns empty.
+        if _pdf_is_encrypted(filepath):
+            if is_temp and filepath:
+                _cleanup_temp(filepath)
+            paper_file.status = 'failed'
+            paper_file.failure_reason = 'encrypted_pdf (password-protected)'
+            paper_file.save()
+            if status_callback:
+                status_callback('PDF is encrypted — marked failed')
+            return
         try:
             if status_callback:
                 status_callback('Running OCR...')

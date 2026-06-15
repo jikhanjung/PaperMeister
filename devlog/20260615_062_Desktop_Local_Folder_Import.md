@@ -126,6 +126,23 @@ Folder(이름=basename=소스명)로 만드는데 SourceNav가 그 위에 또 so
 legacy `Paper.folder` FK라 놓쳤음). 전체 소스 처리·삭제는 root 폴더 우클릭 "Process Folder"
 (재귀)와 탭 우클릭 "Remove"로 커버. 검증: headless 트리 덤프로 중복 레벨 사라짐 확인.
 
+### 5. 마무리 폴리시 (메뉴 분기 / 재스캔 / 견고성)
+
+- **directory 폴더의 Zotero 전용 메뉴 숨김**: 트리 우클릭 "Upload OCR JSON to Zotero"는
+  Zotero 첨부가 있어야 의미 있음. `_source_type_for_tree(tree)`(tab→source 매핑 역참조)로
+  source가 'zotero'일 때만 노출. directory 폴더는 "Process Folder"만.
+- **탭 우클릭 "Re-scan folder"**: 폴더에 새로 추가된 PDF를 다시 잡기. `source_action`에
+  `rescan_source` 추가 → main_window `_rescan_directory_source`가 `Source.path`로 같은
+  스캔 흐름 재실행(get-or-create + hash dedup이라 멱등). 경로가 사라졌으면 경고.
+  `_import_folder`의 스캔 시작부를 `_start_scan(directory)`로 추출해 import/rescan 공용.
+- **암호화/파손 PDF 견고성** (로컬 폴더는 임의 PDF가 들어오니 중요):
+  - OCR 직전 `_pdf_is_encrypted(filepath)`(fitz `needs_pass`) 가드 → 암호화면 OCR 호출
+    낭비 없이 즉시 `failed` + `failure_reason='encrypted_pdf'`. 파손 파일은 helper가
+    False 반환(열기 실패) → 정규 OCR 경로가 실제 에러를 표면화.
+  - `ProcessWorker._process_one`의 generic catch가 `failure_reason`에
+    `'{ExcType}: {msg[:140]}'` 기록 → bare 'failed' 대신 진단 가능. (배치는 기존대로 계속)
+  - 검증: corrupt/plain/encrypted 3종 PDF로 `_pdf_is_encrypted` → False/False/True.
+
 ## 후속(저순위)
 
 - 폴더 basename이 같으면 탭 라벨 중복 → 필요 시 부모 경로 suffix로 구분

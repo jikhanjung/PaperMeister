@@ -198,6 +198,11 @@ class SourceNav(QWidget):
         label = self.tabs.tabText(idx)
         menu = QMenu(self)
         menu.addAction(
+            'Re-scan folder (pick up new files)',
+            lambda: self.source_action.emit('rescan_source', source_id),
+        )
+        menu.addSeparator()
+        menu.addAction(
             f'Remove "{label}" (local folder)',
             lambda: self.source_action.emit('remove_source', source_id),
         )
@@ -293,9 +298,20 @@ class SourceNav(QWidget):
         else:
             menu.addAction('Process Folder (OCR → Biblio)',
                             lambda: self.folder_action.emit('process_folder', value))
-            menu.addAction('Upload OCR JSON to Zotero',
-                            lambda: self.folder_action.emit('upload_ocr_json', value))
+            # "Upload OCR JSON to Zotero" only makes sense for Zotero-backed
+            # folders — local-directory PDFs have no Zotero attachment.
+            if self._source_type_for_tree(tree) == 'zotero':
+                menu.addAction('Upload OCR JSON to Zotero',
+                                lambda: self.folder_action.emit('upload_ocr_json', value))
         menu.exec(tree.viewport().mapToGlobal(pos))
+
+    def _source_type_for_tree(self, tree: QTreeWidget):
+        """'zotero' | 'directory' | None for the source a tree belongs to."""
+        for idx, t in self._trees.items():
+            if t is tree:
+                src = self._tab_sources.get(idx)
+                return src[1] if src else None
+        return None
 
     def _on_item_clicked(self, item: QTreeWidgetItem, _col: int):
         data = item.data(0, Qt.ItemDataRole.UserRole)
