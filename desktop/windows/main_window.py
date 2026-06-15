@@ -44,6 +44,7 @@ class MainWindow(QMainWindow):
         self._auto_biblio_queue = []  # [(paper_id, file_id), ...] queued after OCR
         self._biblio_window = None   # batch biblio progress window (lazy)
         self._sync_worker = None  # ZoteroSyncWorker
+        self._scan_task = None     # local-folder import background task
         self._wire_events()
         self._load_initial()
         self._sync_zotero()  # auto-sync on startup, like the old GUI
@@ -131,13 +132,105 @@ class MainWindow(QMainWindow):
             self.status_bar.set_task('Search')
 
     def _on_rail_action(self, action: str):
-        """One-shot action (sync | process | settings). Does not change persistent mode."""
-        if action == 'sync':
+        """One-shot action (import | sync | process | settings). Does not change persistent mode."""
+        if action == 'import':
+            self._import_folder()
+        elif action == 'sync':
             self._sync_zotero()
         elif action == 'process':
             self._open_process()
         elif action == 'settings':
             self._open_preferences()
+
+    # ── Local folder import ──────────────────────────────────
+
+    def _import_folder(self):
+        """Pick a local directory, scan it into a 'directory' Source in the
+        background (filesystem walk + SHA256 dedup, no OCR), then offer to
+        process the newly-found PDFs. Mirrors the old GUI's Import Folder flow.
+        """
+        from PyQt6.QtWidgets import QFileDialog
+
+        if self._scan_task and self._scan_task.isRunning():
+            self.status_bar.set_task('A folder import is already running…')
+            return
+
+        directory = QFileDialog.getExistingDirectory(
+            self, 'Import Local Folder of PDFs', '',
+            QFileDialog.Option.ShowDirsOnly,
+        )
+        if not directory:
+            return
+
+        from desktop.workers.background import BackgroundTask
+
+        def _scan(path):
+            # Run in the worker thread; return plain data (no ORM objects
+            # cross threads — peewee connections are thread-local).
+            from papermeister.ingestion import import_source_directory
+            source, new_files = import_source_directory(path)
+            return source.id, source.name, len(new_files)
+
+        self.status_bar.set_task(f'Importing {directory}…')
+        self._scan_task = BackgroundTask(_scan, directory)
+        self._scan_task.done.connect(self._on_import_done)
+        self._scan_task.failed.connect(self._on_import_failed)
+        self._scan_task.start()
+
+    def _on_import_done(self, result):
+        source_id, source_name, new_count = result
+        self._scan_task = None
+        self.source_nav.refresh()
+        try:
+            total, pending, review = library_svc.corpus_counts()
+            self.status_bar.set_counts(total, pending, review)
+        except Exception:
+            pass
+        self.status_bar.set_task(f'Imported "{source_name}": {new_count} new PDF(s)')
+
+        # Collect this source's pending PDFs (covers newly-added + any left
+        # unprocessed from a previous import of the same folder).
+        from papermeister.models import Folder, Paper, PaperFile
+        pending_ids = [
+            pf.id for pf in (
+                PaperFile.select(PaperFile.id)
+                .join(Paper).join(Folder, on=(Paper.folder == Folder.id))
+                .where(
+                    Folder.source == source_id,
+                    PaperFile.status == 'pending',
+                    PaperFile.path.endswith('.pdf'),
+                )
+            )
+        ]
+        if not pending_ids:
+            QMessageBox.information(
+                self, 'Import',
+                f'Imported "{source_name}".\nNo new PDFs to process.',
+            )
+            return
+
+        resp = QMessageBox.question(
+            self, 'Import',
+            f'Imported "{source_name}" — {len(pending_ids)} PDF(s) pending.\n'
+            f'Process them now via RunPod OCR?',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if resp != QMessageBox.StandardButton.Yes:
+            return
+
+        from papermeister.ui.process_window import ProcessWindow
+        if self._process_window is None:
+            self._process_window = ProcessWindow(self)
+            self._process_window.processing_updated.connect(self._on_processing_updated)
+            self._process_window.file_processed.connect(self._on_file_processed)
+        self._process_window.start(pending_ids)
+        self.status_bar.set_task(f'Processing {len(pending_ids)} file(s)…')
+
+    def _on_import_failed(self, message: str):
+        self._scan_task = None
+        self.status_bar.set_task(f'Import failed: {message}')
+        QMessageBox.warning(self, 'Import failed', message)
 
     # ── Zotero sync ──────────────────────────────────────────
 
