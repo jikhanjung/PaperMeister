@@ -112,6 +112,20 @@ SourceNav refresh + 선택을 library로 리셋.
 `(deleted=1, unlinked=1)`, Zotero 논문 보존(컬렉션 멤버십 1 유지), 로컬 전용 논문/파일 삭제,
 directory Source/Folder 제거. 디스크 파일 무손상.
 
+### 4. directory 트리 중복 레벨 제거
+
+증상: `1990-` 폴더 import 시 트리가 `탭 "1990-"` → source 노드 `"1990-"` → root 폴더
+`"1990-"` → 서브디렉토리, 로 같은 이름이 2단 겹침. 원인: import가 디렉토리 자신을 root
+Folder(이름=basename=소스명)로 만드는데 SourceNav가 그 위에 또 source 노드(이름=소스명)를
+그림. Zotero는 소스명("My Library")≠컬렉션명이라 안 겹쳤던 것.
+
+수정(`_populate_collections`): **directory 소스는 source 노드를 안 만들고 root 폴더(들)를
+최상위 노드로 직접 배치**. Zotero는 기존대로 'My Library' source 노드 유지. 결과:
+`탭 "1990-"` → `"1990-"`(root 폴더) → 서브디렉토리. 부수 효과로 최상위 클릭이
+`list_by_folder`(M2M)를 타게 되어 **linked-from-Zotero PDF도 포함**(`list_by_source`는
+legacy `Paper.folder` FK라 놓쳤음). 전체 소스 처리·삭제는 root 폴더 우클릭 "Process Folder"
+(재귀)와 탭 우클릭 "Remove"로 커버. 검증: headless 트리 덤프로 중복 레벨 사라짐 확인.
+
 ## 후속(저순위)
 
 - 폴더 basename이 같으면 탭 라벨 중복 → 필요 시 부모 경로 suffix로 구분

@@ -204,12 +204,27 @@ class SourceNav(QWidget):
         menu.exec(self.tabs.tabBar().mapToGlobal(pos))
 
     def _populate_collections(self, tree: QTreeWidget, src):
-        """Source root + hierarchical collections."""
-        root_label = 'My Library' if src.source_type == 'zotero' else src.name
-        src_item = QTreeWidgetItem([root_label])
+        """Source root + hierarchical collections.
+
+        Zotero: a 'My Library' source node holding the collection tree.
+        Directory: the import already creates a root Folder named after the
+        imported directory, so adding a source node of the same name would show
+        the folder name twice ("1990-" → "1990-" → subdirs). Use the root
+        folder(s) directly as the top node instead, and select via the folder's
+        PaperFolder membership (list_by_folder, M2M) so linked-from-Zotero PDFs
+        show too — unlike list_by_source, which only sees the legacy 1:1 FK.
+        """
+        if src.source_type == 'directory':
+            root = tree.invisibleRootItem()
+            for folder in src.roots:
+                self._attach_folder(root, folder)
+            for i in range(tree.topLevelItemCount()):
+                tree.topLevelItem(i).setExpanded(True)
+            return
+
+        src_item = QTreeWidgetItem(['My Library'])
         src_item.setData(0, Qt.ItemDataRole.UserRole, ('source', src.id))
         tree.addTopLevelItem(src_item)
-
         for folder in src.roots:
             self._attach_folder(src_item, folder)
         src_item.setExpanded(True)
