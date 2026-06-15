@@ -51,9 +51,44 @@
   `rail_icon('import')` non-null 렌더 확인
 - **실제 폴더 선택 → 스캔 → OCR end-to-end는 사용자 Windows 환경(RunPod) 검증 필요**
 
+## 후속 작업 (같은 세션) — 진행창 + M2M 링크 정합성
+
+첫 구현 후 실사용에서 두 문제가 드러나 보강:
+
+### 1. 진행 상황이 status bar 한 줄뿐 → progress 창
+
+`desktop/workers/scan.py::ScanWorker`(QThread) + `desktop/windows/scan_window.py::ScanWindow`
+신설. 사용자 제안대로 **먼저 dir walk로 PDF 총개수를 세고**(`counted` 시그널) **determinate
+X/N 진행바**로 진행. per-file 로그 + 최종 요약(new/linked/total). pre-count는 `_scan_dir`과
+동일한 선택 규칙(dotfile skip, `*.pdf` case-insensitive, 권한오류 skip)으로 세어 총계 일치.
+`BackgroundTask`(progress 없음) → 전용 `ScanWorker`로 교체.
+
+### 2. "하나도 import 안 됨" + folder 탭에 안 보임 → **PaperFolder M2M 링크**
+
+증상: 이미 Zotero에 있는 PDF들이 든 폴더를 import하니 **0건**. 원인 2겹:
+- **content hash dedup이 전역**(`ingest_pdf`이 `PaperFile.hash`를 DB 전체에서 조회) → Zotero에
+  이미 있는 동일 내용은 "기존"으로 보고 skip → new=0
+- 게다가 desktop **`list_by_folder`는 `PaperFolder`(M2M)로만 조회**(`Paper.folder`는 legacy
+  1:1, fallback 없음)인데 `ingest_pdf`은 `Paper.folder`만 세팅 → **새로 import한 directory
+  논문조차 폴더 탭에 안 뜸**
+
+해법(사용자 직관대로 — 같은 Paper가 Zotero 컬렉션 + 로컬 폴더에 동시 소속): `ingest_pdf`이
+**양쪽 브랜치에서 `PaperFolder.get_or_create(paper, folder)` 링크 생성**.
+- 신규 내용: Paper/PaperFile 생성 + 폴더 링크 (`is_new=True`)
+- 기존 내용(hash 매칭): **skip 대신** 그 기존 Paper를 폴더에 링크(`is_new=False`).
+  중복 Paper/PaperFile 안 만듦
+- 백워드 호환: 반환값 `(paper_file, is_new)` 유지 → CLI/구 GUI 무영향(오히려 M2M 링크가
+  생겨 desktop 조회와 정합)
+
+검증(임시 DB+파일): Zotero 논문과 동일 내용 PDF를 로컬 폴더로 import →
+new_files=0, 그 Paper의 folder 멤버십 2개(Zotero 컬렉션 + 로컬 폴더), Paper row 총 1개(중복 0).
+→ 같은 논문이 양쪽 탭에 표시됨. import 요약/다이얼로그도 "linked from existing" 문구로 갱신.
+
+주의(향후): Zotero collection-membership 양방향 sync(현 add-only)를 set-difference 제거로
+바꾸면 **directory 소스 PaperFolder 링크는 건드리지 말 것**(Zotero 폴더로 스코프 한정).
+
 ## 후속(저순위)
 
 - 폴더 basename이 같으면 탭 라벨 중복 → 필요 시 부모 경로 suffix로 구분
 - directory 소스 탭 우클릭에 "소스 제거/새로고침" 메뉴(현재 Process All/Folder만)
-- 가져오기 진행 중 진행률 표시(현재는 상태바 "Importing …" 한 줄; 큰 폴더면 per-file
-  progress_callback을 status_bar로 흘릴 수 있음)
+- 대용량 폴더에서 per-file 시그널 폭주 시 진행 로그 throttle (현재 QTextEdit blockCount 3000 cap)

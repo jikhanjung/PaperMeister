@@ -21,11 +21,22 @@ def hash_file(filepath):
 
 
 def ingest_pdf(filepath, folder):
-    """Register a PDF under a folder. Returns (paper_file, is_new)."""
+    """Register a PDF under a folder. Returns (paper_file, is_new).
+
+    Dedup is by content hash across the whole DB. If the same content already
+    exists (e.g. it was imported from Zotero), we do NOT create a duplicate
+    Paper — we link that existing paper into this folder via the PaperFolder
+    M2M table, so it shows up under this directory source too (a paper can
+    belong to a Zotero collection and a local folder at the same time). The
+    desktop's folder listing reads PaperFolder, so new directory papers also
+    need that link. `is_new` is True only when a brand-new Paper was created.
+    """
     file_hash = hash_file(filepath)
 
     existing = PaperFile.select().where(PaperFile.hash == file_hash).first()
     if existing:
+        if folder is not None:
+            PaperFolder.get_or_create(paper=existing.paper, folder=folder)
         return existing, False
 
     with db.atomic():
@@ -36,6 +47,8 @@ def ingest_pdf(filepath, folder):
             hash=file_hash,
             status='pending',
         )
+        if folder is not None:
+            PaperFolder.get_or_create(paper=paper, folder=folder)
     return paper_file, True
 
 

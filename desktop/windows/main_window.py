@@ -44,7 +44,8 @@ class MainWindow(QMainWindow):
         self._auto_biblio_queue = []  # [(paper_id, file_id), ...] queued after OCR
         self._biblio_window = None   # batch biblio progress window (lazy)
         self._sync_worker = None  # ZoteroSyncWorker
-        self._scan_task = None     # local-folder import background task
+        self._scan_worker = None   # local-folder import worker (ScanWorker)
+        self._scan_window = None   # import progress window (lazy)
         self._wire_events()
         self._load_initial()
         self._sync_zotero()  # auto-sync on startup, like the old GUI
@@ -151,7 +152,7 @@ class MainWindow(QMainWindow):
         """
         from PyQt6.QtWidgets import QFileDialog
 
-        if self._scan_task and self._scan_task.isRunning():
+        if self._scan_worker and self._scan_worker.isRunning():
             self.status_bar.set_task('A folder import is already running…')
             return
 
@@ -162,24 +163,26 @@ class MainWindow(QMainWindow):
         if not directory:
             return
 
-        from desktop.workers.background import BackgroundTask
+        from desktop.workers.scan import ScanWorker
+        from desktop.windows.scan_window import ScanWindow
 
-        def _scan(path):
-            # Run in the worker thread; return plain data (no ORM objects
-            # cross threads — peewee connections are thread-local).
-            from papermeister.ingestion import import_source_directory
-            source, new_files = import_source_directory(path)
-            return source.id, source.name, len(new_files)
+        if self._scan_window is None:
+            self._scan_window = ScanWindow(self)
+        self._scan_window.begin(directory)
 
         self.status_bar.set_task(f'Importing {directory}…')
-        self._scan_task = BackgroundTask(_scan, directory)
-        self._scan_task.done.connect(self._on_import_done)
-        self._scan_task.failed.connect(self._on_import_failed)
-        self._scan_task.start()
+        self._scan_worker = ScanWorker(directory)
+        self._scan_worker.counted.connect(self._scan_window.set_total)
+        self._scan_worker.progress.connect(self._scan_window.on_progress)
+        self._scan_worker.done.connect(self._on_import_done)
+        self._scan_worker.failed.connect(self._on_import_failed)
+        self._scan_worker.start()
 
     def _on_import_done(self, result):
         source_id, source_name, new_count = result
-        self._scan_task = None
+        self._scan_worker = None
+        if self._scan_window is not None:
+            self._scan_window.finish(source_name, new_count)
         self.source_nav.refresh()
         try:
             total, pending, review = library_svc.corpus_counts()
@@ -203,10 +206,14 @@ class MainWindow(QMainWindow):
             )
         ]
         if not pending_ids:
-            QMessageBox.information(
-                self, 'Import',
-                f'Imported "{source_name}".\nNo new PDFs to process.',
-            )
+            if new_count == 0:
+                msg = (f'"{source_name}" — every PDF was already in the database '
+                       f'(e.g. already in Zotero).\nThey were linked into this '
+                       f'folder (no duplicates) and now appear under its tab. '
+                       f'Nothing new to OCR.')
+            else:
+                msg = f'Imported "{source_name}".\nNo pending PDFs to process.'
+            QMessageBox.information(self, 'Import', msg)
             return
 
         resp = QMessageBox.question(
@@ -228,7 +235,9 @@ class MainWindow(QMainWindow):
         self.status_bar.set_task(f'Processing {len(pending_ids)} file(s)…')
 
     def _on_import_failed(self, message: str):
-        self._scan_task = None
+        self._scan_worker = None
+        if self._scan_window is not None:
+            self._scan_window.fail(message)
         self.status_bar.set_task(f'Import failed: {message}')
         QMessageBox.warning(self, 'Import failed', message)
 
