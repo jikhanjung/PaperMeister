@@ -197,8 +197,57 @@ class DetailPanel(QWidget):
         self._biblio_id: int | None = None
         # field_key → (QButtonGroup, 'paper'|'biblio' default)
         self._field_groups: dict[str, QButtonGroup] = {}
+        # Terms to highlight in the OCR Text tab (set from the active search).
+        self._search_terms: list[str] = []
 
         self._empty_state()
+
+    # ── Search highlighting ──────────────────────────────────
+
+    def set_search_terms(self, terms):
+        """Highlight these terms in the OCR Text tab (from the active search).
+        Pass [] to clear. Re-applies live if the Text tab is already built."""
+        self._search_terms = [t for t in (terms or []) if t]
+        if self._text_built and self._ocr_browser is not None:
+            self._apply_search_highlight(self._ocr_browser)
+
+    def _apply_search_highlight(self, browser):
+        """Background-highlight `self._search_terms` in the OCR browser and
+        scroll to the first hit. Uses extra selections (an overlay) so the
+        rendered markdown document is untouched."""
+        from PyQt6.QtGui import QColor, QTextCharFormat, QTextCursor
+        from PyQt6.QtWidgets import QTextEdit
+
+        terms = [t for t in self._search_terms if t]
+        if not terms:
+            browser.setExtraSelections([])
+            return
+        doc = browser.document()
+        fmt = QTextCharFormat()
+        hl = QColor('#fbbf24')   # amber, translucent so text stays readable
+        hl.setAlpha(96)
+        fmt.setBackground(hl)
+        selections = []
+        first_pos = None
+        for term in terms:
+            cursor = QTextCursor(doc)
+            while True:
+                cursor = doc.find(term, cursor)  # case-insensitive, forward
+                if cursor.isNull():
+                    break
+                sel = QTextEdit.ExtraSelection()
+                sel.cursor = cursor
+                sel.format = fmt
+                selections.append(sel)
+                pos = cursor.selectionStart()
+                if first_pos is None or pos < first_pos:
+                    first_pos = pos
+        browser.setExtraSelections(selections)
+        if first_pos is not None:
+            c = browser.textCursor()
+            c.setPosition(first_pos)
+            browser.setTextCursor(c)
+            browser.ensureCursorVisible()
 
     # ── Top-level state ──────────────────────────────────────
 
@@ -828,6 +877,7 @@ class DetailPanel(QWidget):
         markdown_text = self._join_pages_as_markdown(pages)
         browser.setMarkdown(markdown_text)
         self._ocr_browser = browser
+        self._apply_search_highlight(browser)
 
         layout.addWidget(browser, 1)
         return host

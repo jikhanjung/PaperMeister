@@ -88,7 +88,7 @@
 - [ ] desktop: source/folder 단위 batch Reflect 트리거 + 결과 다이얼로그
 - [ ] desktop: background worker (biblio 추출 / OCR 트리거) — QThread 기반, 기존 `papermeister/ui/` 패턴 참고
 - [ ] desktop: PaperList 상태 셀에 StatusBadge delegate (현재는 축약 pill — done/wait/err/rev. 필요 시 풀 라벨로 복원 또는 아이콘화 검토)
-- [ ] **BM25 tie-break 개선** (Phase 5 경계): 현재 `passage_fts`는 passage 단위라 title 가중치가 document-level boost로 작동 안 함. 예: `trilobite`로 검색하면 title에 trilobite가 없는데 본문에 많이 나온 논문이 top에 올라옴. 해결안: 별도 `paper_fts` (title/authors)와 합산 or Python post-processing boost. 지금은 alerting 수준
+- [x] ~~**BM25 tie-break 개선**~~ (세션 48): `search.search()`에 Python 재랭킹 추가 — `query_terms`로 토큰화 후 3-tier(모든 term 제목 매치 / 일부 / 없음) 정렬, tier 내부는 BM25. `trilobite` 제목 매치가 본문 다수 매치보다 상위. [devlog 063](./devlog/20260617_063_Search_Title_Boost_And_Highlighting.md)
 
 ### 큰 덩어리 (Phase D 대량 운영) — 세션 45부터 desktop Process All 경로로 가동 중
 - [x] ~~작은 mixed 폴더 OCR 검증~~ → 세션 43~44에 걸쳐 collection 단위 biblio 배치를 여러 번 돌리며 사실상 검증됨 (devlog 054~059)
@@ -99,7 +99,7 @@
 
 ### 저순위 백로그
 - [ ] 병렬 OCR 실 테스트 (max worker 올린 상태에서 처리 속도 확인)
-- [ ] 검색 결과 매칭 패시지 하이라이트 표시
+- [x] ~~검색 결과 매칭 패시지 하이라이트~~ (세션 48): 결과 행 툴팁(snippet, 매치어 bold) + OCR Text 탭 인라인 하이라이트(amber, 첫 매치 스크롤). [devlog 063](./devlog/20260617_063_Search_Title_Boost_And_Highlighting.md)
 - [ ] 에러 핸들링 보강 (암호화된 PDF, 파손된 파일 등)
 - [ ] 테스트 코드 작성
 - [ ] DB 삭제 후 복구 경로 실증 테스트 (Phase 1 잔여)
@@ -182,6 +182,11 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 ---
 
 ## 최근 세션 요약
+
+**2026-06-17 (세션 48)** — [devlog 063](./devlog/20260617_063_Search_Title_Boost_And_Highlighting.md)
+- **검색 품질 — document-level title boost**: `passage_fts`가 passage 단위라 title×10 가중치가 문서 전체엔 안 먹던 "trilobite 문제" 해결. `search.search()`에 Python 재랭킹(별도 paper_fts 없이) — `query_terms` 토큰화(CJK 보존) 후 3-tier(전부 제목 매치/일부/없음) 정렬, tier 내부 BM25. 검증: 본문 8회 vs 제목 1회 → 제목 매치 1위
+- **매칭 패시지 하이라이트**: (a) 검색 결과 행 툴팁 — `PaperRow.snippet`(FTS snippet→HTML, 매치어 bold) 추가, `_populate`가 툴팁 설정. (b) OCR Text 탭 인라인 하이라이트 — `DetailPanel.set_search_terms` + `_apply_search_highlight`(QTextDocument.find → ExtraSelection amber 오버레이, 문서 무손상, 첫 매치 스크롤). main_window가 검색 시 term 전달, 이탈 시 클리어
+- 검증: 토크나이저(영문/구문/boolean/CJK), snippet HTML escape+bold, 하이라이트 2매치→2 selection+클리어, search_papers snippet 부착
 
 **2026-06-15 (세션 47)** — [devlog 062](./devlog/20260615_062_Desktop_Local_Folder_Import.md)
 - **desktop 앱에 로컬 폴더 PDF 가져오기 추가** — Zotero 아닌 local directory를 DB화. 백엔드(`import_source_directory` + OCR/biblio directory 지원)는 이미 완비, 빠진 UI 트리거만 추가

@@ -1,6 +1,19 @@
+import re
+
 import peewee
 
 from .models import db, Source, Folder, Paper, PaperFile, Passage
+
+
+def query_terms(query):
+    """Lowercased word tokens from a query, stripped of FTS5 syntax.
+
+    Used for the document-level title boost (below) and for UI highlighting.
+    Keeps tokens ≥2 chars or any non-ASCII run (so CJK queries survive).
+    """
+    toks = re.findall(r'\w+', (query or '').lower(), re.UNICODE)
+    stop = {'and', 'or', 'not', 'near'}
+    return [t for t in toks if t not in stop and (len(t) >= 2 or not t.isascii())]
 
 
 def search(query, limit=50, max_passages=200_000):
@@ -67,7 +80,30 @@ def search(query, limit=50, max_passages=200_000):
                 'rank': rank,
             })
 
-    return sorted(seen_papers.values(), key=lambda x: x['matches'][0]['rank'])
+    # Document-level title boost. passage_fts weights title ×10, but that only
+    # acts inside each passage row — a paper with the query in its TITLE but a
+    # sparse body still ranks below body-heavy papers (the classic "trilobite"
+    # problem). Re-rank into three tiers by how the title matches, ordered by
+    # BM25 within each: all query terms in the title → top, some → middle,
+    # none → bottom. This is the promised document-level boost without a
+    # separate paper_fts index.
+    terms = query_terms(query)
+
+    def _title_tier(paper):
+        if not terms:
+            return 2
+        title = (paper.title or '').lower()
+        hits = sum(1 for t in terms if t in title)
+        if hits == len(terms):
+            return 0
+        if hits:
+            return 1
+        return 2
+
+    return sorted(
+        seen_papers.values(),
+        key=lambda x: (_title_tier(x['paper']), x['matches'][0]['rank']),
+    )
 
 
 def get_paper_passages(paper_id):

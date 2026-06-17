@@ -257,6 +257,11 @@ class PaperListView(QTreeWidget):
                 font = item.font(3)
                 font.setItalic(True)
                 item.setFont(3, font)
+            # Search results carry the matching passage — show it on hover.
+            snippet = getattr(row, 'snippet', '')
+            if snippet:
+                for col in range(len(COLUMNS)):
+                    item.setToolTip(col, snippet)
             self.addTopLevelItem(item)
 
     def _show_error(self, msg: str):

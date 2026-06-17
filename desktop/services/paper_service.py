@@ -24,6 +24,9 @@ class PaperRow:
     # True when the Zotero record is the attachment itself (no parent item).
     # Drives the "re-OCR to create parent" right-click action.
     is_standalone: bool = False
+    # Search-only: the best matching passage as HTML (matched terms bolded).
+    # Empty for normal folder/library listings. Shown as a row tooltip.
+    snippet: str = ''
 
 
 def _author_string(paper_id: int) -> str:

@@ -1025,6 +1025,8 @@ class MainWindow(QMainWindow):
 
     def _apply_current_selection(self):
         """Load paper_list according to `_current_selection`, defaulting to All Files."""
+        # Leaving search → drop OCR-tab highlight terms.
+        self.detail_panel.set_search_terms([])
         kind, value = self._current_selection or ('library', 'all')
         if kind == 'library':
             self.paper_list.load_library(str(value))
@@ -1042,6 +1044,8 @@ class MainWindow(QMainWindow):
             self.status_bar.set_task('Idle')
             return
         self.paper_list.load_search(query)
+        from desktop.services import search_service
+        self.detail_panel.set_search_terms(search_service.query_terms(query))
         self.status_bar.set_task(f'Search: "{query}"')
 
     def _on_search_text_changed(self, text: str):
