@@ -41,6 +41,11 @@ class Paper(BaseModel):
     # Set when the corresponding Zotero item is in trash; cleared on restore.
     # Permanent deletion (empty-trash) is a separate concern, not handled yet.
     trashed_at = peewee.DateTimeField(null=True)
+    # P11: True once references extraction has been attempted (whether or not a
+    # references section was found). Lets batch re-runs skip papers that have no
+    # bibliography instead of re-parsing them every time. Existence of Reference
+    # rows distinguishes "has refs" from "checked, none found".
+    references_checked = peewee.BooleanField(default=False)
 
 
 class Author(BaseModel):
@@ -103,3 +108,41 @@ class Passage(BaseModel):
     paper = peewee.ForeignKeyField(Paper, backref='passages', on_delete='CASCADE')
     page = peewee.IntegerField()
     text = peewee.TextField()
+
+
+class Reference(BaseModel):
+    """A single bibliography entry parsed from a citing paper's references
+    section (P11). Non-destructive derived layer — the OCR JSON remains the
+    source of truth, so a Reference set can always be regenerated.
+
+    held vs cited-only is NOT a separate flag: a reference resolved to a paper
+    we own has `resolved_paper` set; an external (cited-only) reference leaves
+    it null.
+    """
+    citing_paper = peewee.ForeignKeyField(
+        Paper, backref='references', on_delete='CASCADE')
+    order_index = peewee.IntegerField(default=0)   # position / [n] in the bibliography
+    raw_text = peewee.TextField()                   # original entry string — source of truth
+
+    # parsed fields (LLM)
+    authors_json = peewee.TextField(default='[]')   # [{"family","given"}, ...]
+    year = peewee.IntegerField(null=True)
+    title = peewee.TextField(default='')
+    container = peewee.TextField(default='')        # journal / book title
+    volume = peewee.TextField(default='')
+    issue = peewee.TextField(default='')
+    pages = peewee.TextField(default='')
+    doi = peewee.TextField(default='')
+    ref_type = peewee.TextField(default='unknown')  # article|book|chapter|thesis|report|unknown
+
+    # resolution (filled by the resolve pass)
+    resolved_paper = peewee.ForeignKeyField(
+        Paper, null=True, backref='cited_by', on_delete='SET NULL')
+    match_method = peewee.TextField(default='')     # doi|title|none
+    match_score = peewee.FloatField(null=True)
+
+    # provenance
+    source = peewee.TextField(default='')           # 'llm-qwen'
+    model_version = peewee.TextField(default='')    # 'qwen3-32b'
+    parse_confidence = peewee.TextField(default='') # high|medium|low
+    extracted_at = peewee.DateTimeField(default=datetime.datetime.now)

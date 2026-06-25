@@ -1,10 +1,10 @@
 import os
 import peewee
-from .models import db, Source, Folder, Paper, Author, PaperFile, PaperFolder, Passage, PaperBiblio
+from .models import db, Source, Folder, Paper, Author, PaperFile, PaperFolder, Passage, PaperBiblio, Reference
 
 DB_PATH = os.path.join(os.path.expanduser('~'), '.papermeister', 'papermeister.db')
 
-ALL_TABLES = [Source, Folder, Paper, Author, PaperFile, PaperFolder, Passage, PaperBiblio]
+ALL_TABLES = [Source, Folder, Paper, Author, PaperFile, PaperFolder, Passage, PaperBiblio, Reference]
 
 
 def _migrate(database):
@@ -28,6 +28,14 @@ def _migrate(database):
     # Paper.year remains as the derived int index.
     if 'date' not in columns:
         database.execute_sql("ALTER TABLE paper ADD COLUMN date TEXT DEFAULT ''")
+    # P11: references-extraction marker. Backfill papers that already have
+    # Reference rows so they aren't needlessly re-parsed on the first run.
+    if 'references_checked' not in columns:
+        database.execute_sql("ALTER TABLE paper ADD COLUMN references_checked INTEGER DEFAULT 0")
+        database.execute_sql(
+            "UPDATE paper SET references_checked = 1 WHERE id IN "
+            "(SELECT DISTINCT citing_paper_id FROM reference)"
+        )
 
     cursor = database.execute_sql("PRAGMA table_info('paperfile')").fetchall()
     columns = {row[1] for row in cursor}
