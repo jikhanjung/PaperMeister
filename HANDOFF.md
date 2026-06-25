@@ -66,8 +66,8 @@
   - **목표**: 외부(cited-only) 문헌에 canonical 노드(`CitedWork`) 부여 → 같은 외부 논문이 여러 Reference로 흩어지지 않게 dedup → co-citation / "자주 인용하지만 미보유" 발굴 가능
   - **신규 `CitedWork`** + `Reference.resolved_work` FK. resolved_paper(held) ⊻ resolved_work(외부), 둘 다 null=junk
   - **2-패스**: 패스1 = DOI/title_key **exact dedup**(deterministic, `references.canonicalize_reference`). 패스2 = `(제1저자 surname, year)` blocking으로 후보 ≥2 클러스터만 **LLM 병합 판정**(`biblio.llm_match_works`), `merge_checked`로 resumable. fuzzy는 결정 안 하고 후보 생성 전용 (사용자 결정: "exact면 OK, 아니면 LLM이 fuzzy보다 신뢰")
-  - **실행**: 추출 종료 후 Windows에서 `python scripts\normalize_works.py --execute`(패스1) → `--pass 2 --execute`(패스2). 추출 파이프라인은 이미 패스1 auto-canonicalize 연결됨. **현재 실행 중인 추출엔 무영향**(옛 코드 메모리 상주)
-  - 미착수: desktop 외부 카드 co-citation / Top-cited 화면(단계 6)
+  - **실행**: 추출 종료 후 Windows에서 `python scripts\normalize_works.py --execute`(패스1) → `--pass 2 --execute`(패스2). 추출 파이프라인(CLI+**desktop**)은 이미 패스1 auto-canonicalize 연결됨. **현재 실행 중인 추출엔 무영향**(옛 코드 메모리 상주)
+  - **단계 6 desktop UI 완료**: References 탭 외부 카드 배지(held 초록 / 공동인용 앰버 `◆ also cited by N`→클릭 시 공동인용 논문 메뉴 / 단독 회색) + **Cited Works 브라우저**(Rail `works` 아이콘 → 인용수 desc 테이블 + 인용 논문 리스트, 더블클릭 이동, 필터/≥2 토글). 임시 DB 검증 desktop 14/14·코어 16/16
 - **P11 References 추출 + 인용 네트워크 (Phase 1)** — 코드 작성 완료, 라이브 실행 대기 (2026-06-25, 세션 49). 계획서 [devlog P11](./devlog/20260625_P11_References_Extraction_Citation_Network.md)
   - **목표**: 논문 본문 맨 뒤 references 섹션을 파싱(ocrserver Qwen3 32B) → `Reference` 테이블 저장 → 보유 Paper와 매칭. held(PDF 보유) vs cited-only(외부) 구분
   - **신규 모델 `Reference`** (`models.py`): citing_paper FK + order_index + raw_text(source of truth) + 파싱 필드(authors_json/year/title/container/volume/issue/pages/doi/ref_type) + resolution(resolved_paper FK nullable/match_method/match_score) + provenance(source/model_version/parse_confidence). `database.py ALL_TABLES`에 등록(create_tables가 멱등 생성). **held vs cited는 `resolved_paper` null 여부**로 판정, 별도 플래그 없음

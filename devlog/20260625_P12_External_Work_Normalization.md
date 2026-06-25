@@ -228,14 +228,24 @@ CREATE VIEW citation_node AS
   `biblio.py` `_WORK_MERGE_PROMPT`/`llm_match_works`(워커 안전, 인덱스 누락→singleton 보정).
 - 백필: `scripts/normalize_works.py`(dry-run 기본, `--execute`, `--pass`, `--workers`,
   `--max-cluster`, `--no-reconcile`; 패스2 LLM은 워커 병렬·DB write는 메인스레드).
-- 추출 자동연결: `scripts/extract_references.py` 추출 후 auto-resolve가 `build_work_index`로
-  외부 패스1 canonicalize까지 수행.
-- **검증**: 임시 throwaway DB로 16/16 통과(held resolve / 제목·DOI exact dedup / junk /
-  cite_count / 클러스터·LLM 병합(스텁)·merge_checked 재실행 스킵 / reconcile promotion).
+- 추출 자동연결: `scripts/extract_references.py` + **desktop 추출 워커**
+  (`_run_references_extraction_silent`) 둘 다 추출 후 auto-resolve가 `build_work_index`로
+  외부 패스1 canonicalize까지 수행 (desktop은 `_refs_work_index` per-batch 캐시).
+- **단계 6 desktop UI 완료**:
+  - References 탭 외부 카드 배지 3종: held=초록 `● in library`(클릭→이동) / 공동인용=앰버
+    `◆ also cited by N`(클릭→QMenu로 공동인용 논문 나열→이동) / 단독=회색 `○ cited only`.
+    co-citation 카운트는 `load_references`에서 aggregate 1회(N+1 회피).
+  - **Cited Works 브라우저** (`desktop/windows/cited_works_window.py`): Rail 액션 `works`
+    (신규 `works.svg` 아이콘)로 오픈. 외부 work를 인용수 desc 테이블(Cites/Year/Authors/
+    Title/In/DOI)로, 좌=work 테이블·우=인용 라이브러리 논문 리스트(더블클릭→메인창에서 해당
+    논문 열기). title/author 필터 + "≥2만" 토글. cite_count는 live 집계(denormalized 미의존).
+- **검증**: 임시 DB로 코어 16/16 + desktop(offscreen Qt) 14/14 통과(co-citation 배지/
+  top_cited_works/cociters/Rail 아이콘/브라우저 테이블·선택/References 탭 빌드).
   라이브 DB·LLM 서버 미사용.
 
 **미적용/대기:**
 - 라이브 마이그레이션 + 백필 실행 → **추출 작업 종료 후 Windows Anaconda에서**
   `python scripts\normalize_works.py --execute`(패스1) → `--pass 2 --execute`(LLM).
-- 단계 6(desktop 외부 카드 co-citation, Top-cited 화면)은 미착수.
+- 패스2 LLM 병합은 desktop에서 자동 실행 안 함(배치 스크립트 전용). 브라우저는 패스1 노드로
+  동작(일부 중복 가능, 허용).
 - 현재 실행 중인 reference 추출에는 무영향(프로세스가 옛 코드를 메모리에 보유; 다음 실행부터 적용).
