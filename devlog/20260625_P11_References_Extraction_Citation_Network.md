@@ -295,6 +295,18 @@ references 섹션 제목이 저널·시대·언어마다 천차만별 → 헤딩
   240s 안에 안전, 호출당 더 많이 처리해 전체 시간 단축.
 - 진단 스크립트 `scripts/probe_qwen.py`: trivial→1ref→5ref 호출 시간 측정(콜드/웜·OCR 경합 구분).
 
+### 7i. probe 결과 → 서버가 동시요청 병렬처리 → `--workers` 추가 (2026-06-25)
+
+`probe_qwen.py` 실측: trivial **0.2s**, 1 ref **5.2s**, 5 ref **23.6s**(~14–15 tok/s).
+→ **큰 고정 오버헤드 없음**(시간 ∝ 출력 토큰). 두 창 동시 실행 시 각 요청이 **단독과 거의 동일**
+(5.2→5.4s, 23.6→24.0s, ~2%↓) → **서버(vLLM)가 동시 요청을 거의 풀스피드로 병렬 처리, GPU 여유**.
+
+- `extract_references.py`에 **`--workers N`** 추가: `ThreadPoolExecutor`로 N개 논문 동시 파싱.
+  LLM 호출(+`load_ocr_pages`)은 워커 스레드(DB 접근 없음), **save/mark/resolve는 메인 스레드**
+  (peewee thread-local 안전, extract_biblio 패턴). 공유 adaptive 배처는 스레드 간 race가 benign
+  (heuristic int) — 동시 4스레드 추출 검증 통과. 2–4 workers면 합산 throughput ~배수.
+- 데스크톱은 아직 직렬 큐(`_refs_task` 1개씩) — 필요 시 후속.
+
 ---
 
 ## 8. 운영 메모

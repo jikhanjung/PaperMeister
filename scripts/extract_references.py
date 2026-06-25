@@ -78,6 +78,9 @@ def main():
                         help='Write to the DB (default: dry-run preview)')
     parser.add_argument('--no-resolve', action='store_true',
                         help='Skip the post-extraction auto-resolve pass')
+    parser.add_argument('--workers', type=int, default=1,
+                        help='Parse N papers concurrently (the server batches '
+                        'concurrent LLM requests; 2-4 is usually a clear win)')
     args = parser.parse_args()
 
     # Show the adaptive per-batch progress ("refs N/M: K in T.Ts → next batch B").
@@ -104,10 +107,26 @@ def main():
     ok = err = total_refs = 0
     done_pids = []
     t0 = time.time()
-    for i, (pid, h) in enumerate(targets, 1):
+
+    def _extract(pid, h):
+        # LLM-only (no DB) so it's safe to run in worker threads; the server
+        # batches concurrent requests. DB writes happen in the main loop below.
         try:
-            entries, source, model_version = extract_references_llm(h, backend=args.backend)
-            n = save_references(pid, entries, source, model_version)
+            entries, source, mv = extract_references_llm(h, backend=args.backend)
+            return pid, entries, source, mv, None
+        except Exception as e:
+            return pid, None, None, None, str(e)
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
+        futures = [pool.submit(_extract, pid, h) for pid, h in targets]
+        for i, fut in enumerate(as_completed(futures), 1):
+            pid, entries, source, mv, e = fut.result()
+            if e:
+                err += 1
+                print(f'[{i}/{len(targets)}] paper={pid} ERR: {e[:100]}', flush=True)
+                continue
+            n = save_references(pid, entries, source, mv)   # main thread (DB)
             # Mark checked even when n == 0 (no references section) so re-runs skip it.
             Paper.update(references_checked=True).where(Paper.id == pid).execute()
             ok += 1
@@ -115,9 +134,6 @@ def main():
             done_pids.append(pid)
             tag = f'{n} refs' if n else 'no references section'
             print(f'[{i}/{len(targets)}] paper={pid} ok | {tag}', flush=True)
-        except Exception as e:
-            err += 1
-            print(f'[{i}/{len(targets)}] paper={pid} ERR: {str(e)[:100]}', flush=True)
 
     # Auto-resolve the just-extracted references against held papers (one shared
     # index for the whole run) so the 'in library' link is populated.
