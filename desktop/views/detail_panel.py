@@ -6,8 +6,9 @@ Tabs
 - PDF        — Rendered PDF pages via PyMuPDF
 - Text       — Rendered markdown from ~/.papermeister/ocr_json/{hash}.json
                via QTextBrowser.setMarkdown (empty state if not processed)
-- References  — Parsed bibliography entries (P11) as cards, with a held
-               (in-library, clickable) vs cited-only badge per entry
+- References  — Citation relationships (P11): "Cited by" (library papers that
+               cite this one, clickable) + this paper's own references as cards
+               with a held (in-library, clickable) vs cited-only badge
 
 Stub banner sits above the tab bar so it is visible regardless of tab.
 """
@@ -33,6 +34,11 @@ from PyQt6.QtWidgets import (
 from desktop.services import biblio_service, paper_service
 from desktop.theme.tokens import FONT, SPACING
 from desktop.workers.background import BackgroundTask
+
+
+def _html_escape(text: str) -> str:
+    """Escape text for safe inclusion in a rich-text QLabel link."""
+    return (text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
 
 
 def _field_label(text: str) -> QLabel:
@@ -839,17 +845,20 @@ class DetailPanel(QWidget):
     # ── References tab ───────────────────────────────────────
 
     def _build_references_tab(self, d) -> QWidget:
-        """List the paper's parsed references (P11) as cards.
+        """Citation relationships for the paper (P11).
 
-        Each card shows the formatted citation + title + a held/cited badge.
-        References resolved to a paper we own are clickable → open that paper.
+        - Cited by: library papers whose bibliography resolves to this one
+          (incoming), each clickable → open it.
+        - References: this paper's own bibliography entries (outgoing), with a
+          held (in-library, clickable) vs cited-only badge per entry.
         """
+        cited_by = paper_service.load_cited_by(d.paper_id)
         refs = paper_service.load_references(d.paper_id)
 
-        if not refs:
+        if not refs and not cited_by:
             return self._ocr_empty_panel(
-                'No references extracted for this paper yet.\n'
-                'Right-click the paper → "Extract References" '
+                'No references extracted for this paper yet, and no library '
+                'paper cites it.\nRight-click the paper → "Extract References" '
                 '(or a folder / My Library) to parse the bibliography.'
             )
 
@@ -858,19 +867,66 @@ class DetailPanel(QWidget):
         layout.setContentsMargins(SPACING['lg'], SPACING['lg'], SPACING['lg'], SPACING['lg'])
         layout.setSpacing(SPACING['md'])
 
-        held = sum(1 for r in refs if r.resolved_paper_id)
-        summary = QLabel(
-            f'{len(refs)} reference{"s" if len(refs) != 1 else ""}'
-            f'  ·  {held} in library  ·  {len(refs) - held} cited only'
-        )
-        summary.setProperty('class', 'FieldLabel')
-        layout.addWidget(summary)
+        # ── Cited by (incoming) ──
+        if cited_by:
+            hdr = QLabel(f'CITED BY  ·  {len(cited_by)} in library')
+            hdr.setProperty('class', 'CardTitle')
+            layout.addWidget(hdr)
+            for row in cited_by:
+                layout.addWidget(self._build_cited_by_card(row))
 
-        for r in refs:
-            layout.addWidget(self._build_reference_card(r))
+        # ── References (outgoing) ──
+        if refs:
+            held = sum(1 for r in refs if r.resolved_paper_id)
+            hdr = QLabel(
+                f'REFERENCES  ·  {len(refs)} total  ·  {held} in library  ·  '
+                f'{len(refs) - held} cited only'
+            )
+            hdr.setProperty('class', 'CardTitle')
+            if cited_by:
+                hdr.setContentsMargins(0, SPACING['md'], 0, 0)
+            layout.addWidget(hdr)
+            for r in refs:
+                layout.addWidget(self._build_reference_card(r))
+        elif cited_by:
+            note = QLabel(
+                'No references extracted for this paper yet — right-click → '
+                '"Extract References" to parse its bibliography.'
+            )
+            note.setWordWrap(True)
+            note.setProperty('class', 'FieldLabel')
+            note.setContentsMargins(0, SPACING['md'], 0, 0)
+            layout.addWidget(note)
 
         layout.addStretch(1)
         return _scroll_wrap(host)
+
+    def _build_cited_by_card(self, row) -> QFrame:
+        """A library paper that cites the current one — whole card opens it."""
+        frame = QFrame()
+        frame.setProperty('class', 'Card')
+        frame.setFrameShape(QFrame.Shape.StyledPanel)
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(SPACING['lg'], SPACING['md'], SPACING['lg'], SPACING['md'])
+        layout.setSpacing(SPACING['xs'])
+
+        title_text = row.title or f'(untitled paper #{row.paper_id})'
+        title = QLabel(f'<a href="#">{_html_escape(title_text)}</a>')
+        title.setWordWrap(True)
+        title.setOpenExternalLinks(False)
+        title.setProperty('class', 'FieldValue')
+        title.setToolTip('Open this citing paper')
+        title.setCursor(Qt.CursorShape.PointingHandCursor)
+        pid = row.paper_id
+        title.linkActivated.connect(lambda _=None, p=pid: self.reference_navigate.emit(p))
+        layout.addWidget(title)
+
+        meta_bits = [b for b in (row.authors, str(row.year) if row.year else '') if b]
+        if meta_bits:
+            sub = QLabel(' · '.join(meta_bits))
+            sub.setProperty('class', 'FieldLabel')
+            layout.addWidget(sub)
+        return frame
 
     def _build_reference_card(self, r) -> QFrame:
         frame = QFrame()

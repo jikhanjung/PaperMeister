@@ -435,6 +435,43 @@ class ReferenceRow:
         return ' '.join(parts)
 
 
+@dataclass
+class CitedByRow:
+    """A library paper whose bibliography cites the current paper (P11 reverse)."""
+    paper_id: int
+    title: str
+    year: int | None
+    authors: str  # citation-style
+
+
+def load_cited_by(paper_id: int) -> list[CitedByRow]:
+    """Library papers that cite this paper (their Reference resolved to it).
+
+    Deduped by citing paper, trashed papers excluded, newest first.
+    """
+    citing_ids = [
+        r.citing_paper_id for r in
+        Reference.select(Reference.citing_paper)
+        .where(Reference.resolved_paper == paper_id)
+        .distinct()
+    ]
+    rows: list[CitedByRow] = []
+    for pid in citing_ids:
+        if pid == paper_id:
+            continue  # ignore self-citation artifacts
+        p = Paper.get_or_none(Paper.id == pid)
+        if p is None or p.trashed_at is not None:
+            continue
+        rows.append(CitedByRow(
+            paper_id=pid,
+            title=p.title or '',
+            year=p.year,
+            authors=_author_cite(pid),
+        ))
+    rows.sort(key=lambda r: (-(r.year or 0), r.title.lower()))
+    return rows
+
+
 def load_references(paper_id: int) -> list[ReferenceRow]:
     """All parsed references for a citing paper, ordered as in the bibliography."""
     import json
