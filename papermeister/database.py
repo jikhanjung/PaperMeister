@@ -1,10 +1,12 @@
 import os
 import peewee
-from .models import db, Source, Folder, Paper, Author, PaperFile, PaperFolder, Passage, PaperBiblio, Reference
+from .models import (db, Source, Folder, Paper, Author, PaperFile, PaperFolder,
+                     Passage, PaperBiblio, Reference, CitedWork)
 
 DB_PATH = os.path.join(os.path.expanduser('~'), '.papermeister', 'papermeister.db')
 
-ALL_TABLES = [Source, Folder, Paper, Author, PaperFile, PaperFolder, Passage, PaperBiblio, Reference]
+ALL_TABLES = [Source, Folder, Paper, Author, PaperFile, PaperFolder, Passage,
+              PaperBiblio, Reference, CitedWork]
 
 
 def _migrate(database):
@@ -64,6 +66,18 @@ def _migrate(database):
     pf_columns = {row[1] for row in cursor}
     if 'failure_reason' not in pf_columns:
         database.execute_sql("ALTER TABLE paperfile ADD COLUMN failure_reason TEXT DEFAULT ''")
+
+    # P11 Phase 2: Reference.resolved_work → canonical external CitedWork.
+    # The citedwork table is created by create_tables() before _migrate runs.
+    cursor = database.execute_sql("PRAGMA table_info('reference')").fetchall()
+    ref_columns = {row[1] for row in cursor}
+    if ref_columns and 'resolved_work_id' not in ref_columns:
+        database.execute_sql(
+            "ALTER TABLE reference ADD COLUMN resolved_work_id INTEGER "
+            "REFERENCES citedwork(id)")
+        database.execute_sql(
+            "CREATE INDEX IF NOT EXISTS reference_resolved_work_id "
+            "ON reference (resolved_work_id)")
 
     # trashed_at on Paper and PaperFile (Zotero trash flag, NULL = not trashed)
     cursor = database.execute_sql("PRAGMA table_info('paper')").fetchall()

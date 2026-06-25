@@ -110,14 +110,50 @@ class Passage(BaseModel):
     text = peewee.TextField()
 
 
+class CitedWork(BaseModel):
+    """P11 Phase 2 — a canonical external work: cited by ≥1 of our papers but
+    NOT held in the library. Normalized/derived layer over Reference rows
+    (rebuildable from them), so several references to the same external paper
+    collapse into one node for the citation network.
+
+    Held papers are never CitedWorks: a reference to a paper we own sets
+    `Reference.resolved_paper` instead. `resolved_paper` and `resolved_work` are
+    mutually exclusive — held wins (authoritative).
+    """
+    doi = peewee.TextField(default='')            # normalized; indexed
+    title = peewee.TextField(default='')          # representative title
+    title_key = peewee.TextField(default='')      # normalized fingerprint; indexed
+    year = peewee.IntegerField(null=True)
+    authors_json = peewee.TextField(default='[]')
+    container = peewee.TextField(default='')
+    first_surname = peewee.TextField(default='')  # blocking key for LLM merge pass
+    cite_count = peewee.IntegerField(default=0)   # distinct citing held papers (denormalized)
+    # Set once this work has been through the pass-2 LLM merge adjudication
+    # (whether or not it was merged) so re-runs skip already-judged clusters.
+    merge_checked = peewee.BooleanField(default=False)
+    # Promotion: set when a held paper matching this work is later acquired —
+    # its citations are repointed to that Paper and this row becomes a tombstone
+    # (excluded from the active-node set, kept for traceability).
+    merged_into_paper = peewee.ForeignKeyField(
+        Paper, null=True, backref='absorbed_works', on_delete='SET NULL')
+    created_at = peewee.DateTimeField(default=datetime.datetime.now)
+
+    class Meta:
+        indexes = (
+            (('title_key',), False),
+            (('doi',), False),
+        )
+
+
 class Reference(BaseModel):
     """A single bibliography entry parsed from a citing paper's references
     section (P11). Non-destructive derived layer — the OCR JSON remains the
     source of truth, so a Reference set can always be regenerated.
 
     held vs cited-only is NOT a separate flag: a reference resolved to a paper
-    we own has `resolved_paper` set; an external (cited-only) reference leaves
-    it null.
+    we own has `resolved_paper` set; an external (cited-only) reference resolves
+    to a canonical `resolved_work` (CitedWork) instead. The two are mutually
+    exclusive; both null means junk/unparseable.
     """
     citing_paper = peewee.ForeignKeyField(
         Paper, backref='references', on_delete='CASCADE')
@@ -138,7 +174,12 @@ class Reference(BaseModel):
     # resolution (filled by the resolve pass)
     resolved_paper = peewee.ForeignKeyField(
         Paper, null=True, backref='cited_by', on_delete='SET NULL')
-    match_method = peewee.TextField(default='')     # doi|title|none
+    # external canonical node (Phase 2). Mutually exclusive with resolved_paper.
+    resolved_work = peewee.ForeignKeyField(
+        CitedWork, null=True, backref='citations', on_delete='SET NULL')
+    # doi|title (→ held Paper) | work-doi|work-title|work-new (pass-1 → CitedWork)
+    # | work-llm (pass-2 LLM merge) | none (junk)
+    match_method = peewee.TextField(default='')
     match_score = peewee.FloatField(null=True)
 
     # provenance
