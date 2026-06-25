@@ -344,43 +344,118 @@ _REF_STOP_RE = re.compile(
 )
 
 
-def extract_references_block(pages: list) -> tuple[str, str]:
-    """Locate the references section in OCR page markdown.
+# Chandra2's OCR `markdown` is heterogeneous: simple docs come out as plain
+# markdown, but complex layouts come out as HTML with bounding-box + semantic
+# labels — `<div data-bbox="..." data-label="Section-Header"><h2>References</h2>
+# </div>`, `data-label="Bibliography"` for the reference region, one `<p>` per
+# entry. Those labels are far more reliable than text heading-matching.
+_HTML_HINT_RE = re.compile(r'data-label=|<div\b|<h[1-6]>', re.IGNORECASE)
+_DIV_RE = re.compile(r'data-label="([^"]+)"[^>]*>(.*?)</div>', re.DOTALL)
+_P_RE = re.compile(r'<p>(.*?)</p>', re.DOTALL)
+# Reference entries live in divs Chandra labels 'Bibliography' (preferred) or a
+# 'List-Group' that follows the references header.
+_REF_BLOCK_LABELS = ('Bibliography', 'List-Group')
 
-    Searches backwards from the last page for a references heading. Returns
-    (block_text, confidence) where confidence is:
-      - 'high'   heading found, section delimited cleanly
-      - 'low'    no heading found → fell back to the last 2 pages
 
-    Returns ('', 'none') if there is no usable text at all.
+def _html_to_text(s: str) -> str:
+    """Strip OCR HTML tags + unescape entities, preserving inner text."""
+    s = re.sub(r'<[^>]+>', '', s)
+    for a, b in (('&amp;', '&'), ('&lt;', '<'), ('&gt;', '>'), ('&quot;', '"'),
+                 ('&#39;', "'"), ('&nbsp;', ' ')):
+        s = s.replace(a, b)
+    return re.sub(r'[ \t]+', ' ', s).strip()
+
+
+def _div_entries(inner: str) -> list:
+    """Per-`<p>` text inside a labeled div (one reference each); whole div if no <p>."""
+    found = _P_RE.findall(inner)
+    items = [_html_to_text(p) for p in found] if found else [_html_to_text(inner)]
+    return [x for x in items if x]
+
+
+def _extract_refs_html(full: str) -> tuple[str, str]:
+    """Pull the references region from HTML-flavoured OCR via semantic labels.
+
+    Returns (block, confidence) — block has one entry per paragraph (joined by
+    blank lines), or ('', '') if no references region was identified.
     """
-    if not pages:
-        return '', 'none'
+    divs = _DIV_RE.findall(full)
+    # Last Section-Header whose text is a references heading.
+    hdr = None
+    for i, (label, inner) in enumerate(divs):
+        if label == 'Section-Header' and _REF_HEADING_RE.match(_html_to_text(inner)):
+            hdr = i
 
-    # Join pages with explicit markers so we can scan line-by-line while still
-    # knowing we covered the whole tail of the document.
-    full = '\n'.join(p or '' for p in pages)
+    entries: list = []
+    if hdr is not None:
+        for label, inner in divs[hdr + 1:]:
+            if label == 'Section-Header':
+                if _REF_HEADING_RE.match(_html_to_text(inner)):
+                    continue          # a continued references header
+                break                 # a different section → references end here
+            if label in _REF_BLOCK_LABELS:
+                entries += _div_entries(inner)
+    if not entries:
+        # No header match (or it yielded nothing): trust explicit Bibliography
+        # labels anywhere in the document.
+        for label, inner in divs:
+            if label == 'Bibliography':
+                entries += _div_entries(inner)
+
+    return ('\n\n'.join(entries), 'high') if entries else ('', '')
+
+
+def _extract_refs_markdown(full: str) -> tuple[str, str]:
+    """Line-based references locator for plain-markdown OCR output."""
     lines = full.split('\n')
-
-    # Find the LAST line that looks like a references heading.
     start = None
     for i, line in enumerate(lines):
         if _REF_HEADING_RE.match(line):
             start = i
     if start is None:
-        # Fallback: last 2 non-empty pages, flagged low-confidence.
-        tail = [p for p in pages if (p or '').strip()][-2:]
-        block = '\n\n'.join(tail).strip()
-        return (block, 'low') if block else ('', 'none')
-
-    # From the heading, take lines until a stop heading (appendix/etc.) appears.
+        return '', ''
     body = []
     for line in lines[start + 1:]:
         if _REF_STOP_RE.match(line):
             break
         body.append(line)
     block = '\n'.join(body).strip()
-    return (block, 'high') if block else ('', 'low')
+    return (block, 'high') if block else ('', '')
+
+
+def extract_references_block(pages: list) -> tuple[str, str]:
+    """Locate the references section in OCR page output.
+
+    Handles both HTML-flavoured OCR (via Chandra's semantic labels) and plain
+    markdown (via heading text). Returns (block_text, confidence):
+      - 'high'   references region identified (label or heading)
+      - 'low'    nothing identified → fell back to the last 2 pages (HTML stripped)
+      - 'none'   no usable text at all
+    The returned block is plain text (HTML stripped), entries separated by
+    blank lines where known.
+    """
+    if not pages:
+        return '', 'none'
+
+    full = '\n'.join(p or '' for p in pages)
+
+    if _HTML_HINT_RE.search(full):
+        block, conf = _extract_refs_html(full)
+        if block:
+            return block, conf
+        # HTML present but no references region found → fall through to the
+        # last-2-pages fallback (stripped of tags below).
+    else:
+        block, conf = _extract_refs_markdown(full)
+        if block:
+            return block, conf
+
+    # Fallback: last 2 non-empty pages, low-confidence. Strip HTML so the LLM
+    # gets clean text either way.
+    tail = [p for p in pages if (p or '').strip()][-2:]
+    block = '\n\n'.join(_html_to_text(p) if _HTML_HINT_RE.search(p) else p
+                        for p in tail).strip()
+    return (block, 'low') if block else ('', 'none')
 
 
 # A reference entry that starts with a marker: "[12]", "12.", "12)" or
@@ -391,28 +466,34 @@ _NUMBERED_ENTRY_RE = re.compile(r'^\s*(?:\[(\d{1,4})\]|\((\d{1,4})\)|(\d{1,4})[.
 def split_reference_entries(block: str) -> list:
     """Split a references block into individual entry strings.
 
-    Numbered bibliographies ("[1] ...", "1. ...") split deterministically.
-    For unnumbered styles this returns a single-element list with the whole
-    block so the LLM can segment it itself.
+    Three strategies, in order:
+      1. Numbered ("[1] ...", "1. ...") → split on the markers.
+      2. Blank-line-separated paragraphs (e.g. HTML <p>-per-entry, joined by
+         blank lines upstream, or double-spaced OCR) → one entry per paragraph.
+      3. Otherwise → the whole block as one (the LLM segments it).
     """
     if not block.strip():
         return []
 
     lines = block.split('\n')
-    # Count how many lines begin a numbered entry; only treat as numbered if
-    # there are at least 3 such markers (avoids false positives on a stray
-    # "1. Introduction" leftover or volume numbers).
+    # (1) Numbered — at least 3 markers (avoids a stray "1. Introduction").
     starts = [i for i, ln in enumerate(lines) if _NUMBERED_ENTRY_RE.match(ln)]
-    if len(starts) < 3:
-        return [block.strip()]
+    if len(starts) >= 3:
+        entries = []
+        for j, s in enumerate(starts):
+            end = starts[j + 1] if j + 1 < len(starts) else len(lines)
+            entry = '\n'.join(lines[s:end]).strip()
+            if entry:
+                entries.append(entry)
+        return entries
 
-    entries = []
-    for j, s in enumerate(starts):
-        end = starts[j + 1] if j + 1 < len(starts) else len(lines)
-        entry = '\n'.join(lines[s:end]).strip()
-        if entry:
-            entries.append(entry)
-    return entries
+    # (2) Blank-line-separated paragraphs.
+    paras = [p.strip() for p in re.split(r'\n\s*\n', block) if p.strip()]
+    if len(paras) >= 3:
+        return paras
+
+    # (3) Single blob — let the LLM segment.
+    return [block.strip()]
 
 
 _REFS_PROMPT = (

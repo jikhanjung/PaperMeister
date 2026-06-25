@@ -224,6 +224,35 @@ references 섹션 제목이 저널·시대·언어마다 천차만별 → 헤딩
 - **이중 안전망**: 헤딩 미검출 시에도 마지막 2페이지를 LLM에 넘겨(`parse_confidence=low`)
   파싱 시도 → 헤딩 목록이 놓친 케이스도 흡수.
 
+### 7e. ⚠️ 실데이터 검증 → OCR이 HTML-flavored임을 발견 (2026-06-25)
+
+라이브 캐시(`/mnt/c/.../ocr_json`, 9,832개)로 read-only 테스트하다 **OCR `markdown`
+필드가 깨끗한 마크다운이 아니라 Chandra2의 HTML(레이아웃 bbox + 시맨틱 레이블)** 임을 발견.
+단순 문서는 plain markdown, 복잡 레이아웃은 HTML로 혼재.
+
+```
+<div data-bbox="38 273 179 285" data-label="Section-Header"><p>REFERENCES CITED</p></div>
+<div data-bbox="38 285 325 825" data-label="Bibliography">
+  <p>Balthasar, U., 2004. Shell structure...</p>     ← 레퍼런스 1개 = <p> 1개
+  <p>Paterson, J.R., and Brock, G.A., 2007...</p>
+</div>
+```
+
+→ 초기 마크다운-헤딩 정규식은 실데이터에서 **15편 중 1편만** 잡음(14편 fallback). 수정:
+- **`data-label` 시맨틱 레이블 활용**(텍스트 매칭보다 훨씬 신뢰도 높음):
+  - `Section-Header` div 텍스트가 references 헤딩 → 그 지점부터
+  - `Bibliography` / `List-Group` div = 레퍼런스 영역, **각 `<p>` = 엔트리 1개**(번호 없는
+    서지도 완벽 분할). `Bibliography` 레이블은 헤딩 없어도 단독 신뢰.
+  - 다음 (non-refs) `Section-Header`에서 종료.
+- `_html_to_text`로 태그 제거 + 엔티티 언이스케이프. plain-markdown 경로는 기존 라인 스캔 유지.
+  fallback(마지막 2p)도 HTML 제거.
+- `split_reference_entries`에 **blank-line 분할** 전략 추가(HTML `<p>`를 `\n\n`로 조인 →
+  재분할; 번호형 우선).
+- **재검증(30편 랜덤)**: high-confidence **25/30**, fallback 5(그래도 HTML 제거되어 LLM
+  투입), 총 2,937 엔트리 추출. 영·불·독·중(尹恭正、李善姬)·한·러 전부 깨끗.
+- 코드: `_HTML_HINT_RE`/`_DIV_RE`/`_P_RE`/`_html_to_text`/`_div_entries`/`_extract_refs_html`/
+  `_extract_refs_markdown` + `extract_references_block` 디스패치.
+
 ---
 
 ## 8. 운영 메모
