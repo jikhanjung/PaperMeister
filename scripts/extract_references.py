@@ -148,10 +148,14 @@ def main():
     # index for the whole run) so the 'in library' link is populated.
     resolved = 0
     if done_pids and not args.no_resolve:
-        from papermeister.references import build_resolution_index, resolve_paper_references
+        from papermeister.references import (
+            build_resolution_index, build_work_index, resolve_paper_references)
         index = build_resolution_index()
+        # Phase 2: canonicalize externals into CitedWork nodes (pass-1 exact
+        # dedup). LLM near-dup merge (pass 2) is a separate batch — normalize_works.py.
+        work_index = build_work_index()
         for pid in done_pids:
-            c = resolve_paper_references(pid, index=index)
+            c = resolve_paper_references(pid, index=index, work_index=work_index)
             resolved += c.get('doi', 0) + c.get('title', 0)
 
     elapsed = time.time() - t0
