@@ -14,7 +14,7 @@ from desktop.theme.icons import rail_icon
 
 class Rail(QWidget):
     section_changed = pyqtSignal(str)      # library | search
-    action_triggered = pyqtSignal(str)     # import | sync | process | settings
+    action_triggered = pyqtSignal(str)     # import | sync | works | process | settings
     full_sync_triggered = pyqtSignal()     # right-click → "Full Sync"
 
     MODES = [
@@ -24,6 +24,7 @@ class Rail(QWidget):
     ACTIONS = [
         ('import',   'import',   'Import Local Folder'),
         ('sync',     'sync',     'Sync Zotero'),
+        ('works',    'works',    'Cited Works (citation network)'),
         ('process',  'process',  'Process'),
         ('settings', 'settings', 'Settings'),
     ]

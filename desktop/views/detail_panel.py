@@ -979,7 +979,11 @@ class DetailPanel(QWidget):
         return frame
 
     def _reference_badge(self, r) -> QLabel:
-        """Held (in-library, clickable) vs cited-only badge for a reference."""
+        """Badge per reference:
+        - held → green '● in library' (click opens the paper)
+        - external co-cited → amber '◆ also cited by N' (click lists co-citers)
+        - external single → gray '○ cited only'
+        """
         if r.resolved_paper_id:
             lbl = QLabel('<a href="#">● in library</a>')
             lbl.setOpenExternalLinks(False)
@@ -990,12 +994,44 @@ class DetailPanel(QWidget):
             pid = r.resolved_paper_id
             lbl.linkActivated.connect(lambda _=None, p=pid: self.reference_navigate.emit(p))
             lbl.setCursor(Qt.CursorShape.PointingHandCursor)
+        elif getattr(r, 'resolved_work_id', None) and getattr(r, 'cocite_count', 0) >= 1:
+            n = r.cocite_count
+            lbl = QLabel(f'<a href="#">◆ also cited by {n}</a>')
+            lbl.setOpenExternalLinks(False)
+            lbl.setToolTip(
+                f'External work — also cited by {n} other paper(s) in your '
+                'library. Click to see them.'
+            )
+            lbl.setStyleSheet('color: #fbbf24;')  # amber
+            wid = r.resolved_work_id
+            lbl.linkActivated.connect(lambda _=None, w=wid: self._show_cocitations(w))
+            lbl.setCursor(Qt.CursorShape.PointingHandCursor)
         else:
             lbl = QLabel('○ cited only')
             lbl.setToolTip('Not in your library (external reference).')
             lbl.setStyleSheet('color: #9aa0aa;')
         lbl.setProperty('class', 'FieldLabel')
         return lbl
+
+    def _show_cocitations(self, work_id: int):
+        """Popup listing the library papers that also cite this external work."""
+        from PyQt6.QtGui import QCursor
+        from PyQt6.QtWidgets import QMenu
+
+        cociters = paper_service.load_work_cociters(
+            work_id, exclude_paper_id=self._current_paper_id)
+        if not cociters:
+            return
+        menu = QMenu(self)
+        menu.addSection('Also cited by (in your library)')
+        for row in cociters:
+            label = row.title or f'paper #{row.paper_id}'
+            if row.year:
+                label += f'  ({row.year})'
+            act = menu.addAction(label[:90])
+            act.triggered.connect(
+                lambda _=False, p=row.paper_id: self.reference_navigate.emit(p))
+        menu.exec(QCursor.pos())
 
     # ── OCR tab ──────────────────────────────────────────────
 

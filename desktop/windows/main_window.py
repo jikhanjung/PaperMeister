@@ -47,6 +47,8 @@ class MainWindow(QMainWindow):
         self._refs_queue = []         # [(paper_id, file_id), ...] for references parsing
         self._refs_window = None      # batch references progress window (lazy)
         self._refs_index = None       # held-paper resolution index (per-batch cache)
+        self._refs_work_index = None  # external CitedWork dedup index (per-batch cache)
+        self._cited_works_window = None  # Cited Works browser (lazy)
         self._sync_worker = None  # ZoteroSyncWorker
         self._scan_worker = None   # local-folder import worker (ScanWorker)
         self._scan_window = None   # import progress window (lazy)
@@ -139,15 +141,34 @@ class MainWindow(QMainWindow):
             self.status_bar.set_task('Search')
 
     def _on_rail_action(self, action: str):
-        """One-shot action (import | sync | process | settings). Does not change persistent mode."""
+        """One-shot action (import | sync | works | process | settings). Does not change persistent mode."""
         if action == 'import':
             self._import_folder()
         elif action == 'sync':
             self._sync_zotero()
+        elif action == 'works':
+            self._open_cited_works()
         elif action == 'process':
             self._open_process()
         elif action == 'settings':
             self._open_preferences()
+
+    def _open_cited_works(self):
+        """Open the Cited Works browser (external papers ranked by citations)."""
+        from desktop.windows.cited_works_window import CitedWorksWindow
+        if self._cited_works_window is None:
+            self._cited_works_window = CitedWorksWindow(self)
+            self._cited_works_window.open_paper.connect(self._on_cited_work_open_paper)
+        self._cited_works_window.load()
+        self._cited_works_window.show()
+        self._cited_works_window.raise_()
+        self._cited_works_window.activateWindow()
+
+    def _on_cited_work_open_paper(self, paper_id: int):
+        """A citing paper was activated in the Cited Works browser → reveal it."""
+        self._on_reference_navigate(paper_id)
+        self.raise_()
+        self.activateWindow()
 
     # ── Local folder import ──────────────────────────────────
 
@@ -1165,15 +1186,20 @@ class MainWindow(QMainWindow):
                 file_hash, backend=backend)
             n = refs_mod.save_references(paper_id, entries, source, model_version)
             # Auto-resolve the freshly-saved references against held papers so
-            # the 'in library' badge is populated without a separate step. The
-            # held-paper index is built once per batch and reused (refs run
+            # the 'in library' badge is populated without a separate step, and
+            # canonicalize externals into CitedWork nodes (Phase 2 pass-1 exact
+            # dedup) so the Cited Works browser / co-citation badges populate.
+            # Both indexes are built once per batch and reused (refs run
             # serialized, so no race), invalidated when the queue drains.
             resolved = 0
             if n:
                 if self._refs_index is None:
                     self._refs_index = refs_mod.build_resolution_index()
+                if self._refs_work_index is None:
+                    self._refs_work_index = refs_mod.build_work_index()
                 counts = refs_mod.resolve_paper_references(
-                    paper_id, index=self._refs_index)
+                    paper_id, index=self._refs_index,
+                    work_index=self._refs_work_index)
                 resolved = counts.get('doi', 0) + counts.get('title', 0)
             return n, resolved
 
@@ -1224,6 +1250,7 @@ class MainWindow(QMainWindow):
         self._drain_refs_queue()
         if not self._refs_queue and not (self._refs_task and self._refs_task.isRunning()):
             self._refs_index = None  # rebuild fresh next batch (paper set may change)
+            self._refs_work_index = None
             win = self._refs_window
             if win and win.isVisible():
                 win.finish()
