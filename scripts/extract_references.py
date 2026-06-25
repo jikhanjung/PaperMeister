@@ -75,6 +75,8 @@ def main():
                         help='Re-parse papers that already have references')
     parser.add_argument('--execute', action='store_true',
                         help='Write to the DB (default: dry-run preview)')
+    parser.add_argument('--no-resolve', action='store_true',
+                        help='Skip the post-extraction auto-resolve pass')
     args = parser.parse_args()
 
     init_db()
@@ -96,6 +98,7 @@ def main():
         return
 
     ok = err = total_refs = 0
+    done_pids = []
     t0 = time.time()
     for i, (pid, h) in enumerate(targets, 1):
         try:
@@ -105,18 +108,31 @@ def main():
             Paper.update(references_checked=True).where(Paper.id == pid).execute()
             ok += 1
             total_refs += n
+            done_pids.append(pid)
             tag = f'{n} refs' if n else 'no references section'
             print(f'[{i}/{len(targets)}] paper={pid} ok | {tag}', flush=True)
         except Exception as e:
             err += 1
             print(f'[{i}/{len(targets)}] paper={pid} ERR: {str(e)[:100]}', flush=True)
 
+    # Auto-resolve the just-extracted references against held papers (one shared
+    # index for the whole run) so the 'in library' link is populated.
+    resolved = 0
+    if done_pids and not args.no_resolve:
+        from papermeister.references import build_resolution_index, resolve_paper_references
+        index = build_resolution_index()
+        for pid in done_pids:
+            c = resolve_paper_references(pid, index=index)
+            resolved += c.get('doi', 0) + c.get('title', 0)
+
     elapsed = time.time() - t0
     print(f'\n=== Done ===')
-    print(f'  ok:    {ok}')
-    print(f'  err:   {err}')
-    print(f'  refs:  {total_refs}')
-    print(f'  time:  {elapsed:.1f}s ({elapsed/max(1,len(targets)):.1f}s/paper)')
+    print(f'  ok:       {ok}')
+    print(f'  err:      {err}')
+    print(f'  refs:     {total_refs}')
+    if not args.no_resolve:
+        print(f'  resolved: {resolved} (matched to library)')
+    print(f'  time:     {elapsed:.1f}s ({elapsed/max(1,len(targets)):.1f}s/paper)')
 
 
 if __name__ == '__main__':

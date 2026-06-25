@@ -23,6 +23,8 @@
 - [x] **헤딩 다양성 보강** — 다국어(EN/FR/DE/ES/IT/PT/CJK) + 번호/콜론/접미사 변형, plain 라인 매치, 줄 앵커 오탐 방지. 헤딩 미검출 시 마지막 2p LLM fallback (35종 매치/8종 거부 검증)
 - [x] 전체 self-test (compile + 임시 DB save/migration/backfill + 헤딩 35종 + headless 데스크톱 임포트)
 
+- [x] **추출 직후 자동 resolve** (사용자 요청) — `references.py`에 resolve 로직 통합(`build_resolution_index`/`resolve_one`/`resolve_paper_references`). desktop 추출 워커가 save 후 자동 resolve(배치당 인덱스 1회 빌드·캐시, 드레인 시 무효화), 진행창에 "N references, M in library" 표시 + 완료 후 References 탭 자동 갱신. CLI도 추출 후 일괄 resolve(`--no-resolve`로 opt-out). `resolve_references.py`는 공용 헬퍼 사용하도록 리팩터
+
 ### 라이브 실행 + 튜닝 (대기 — Windows + ocrserver Qwen3)
 - [ ] **소수 샘플 추출 품질 확인**: `extract_references.py --paper-ids <몇 개> --execute` → 번호형/비번호형/CJK 각각 파싱 결과 육안 검증
 - [ ] **resolve 임계값 튜닝**: `resolve_references.py`(dry-run)로 title 매치 샘플 점검 → `--threshold` 조정 → `--execute`

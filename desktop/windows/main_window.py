@@ -46,6 +46,7 @@ class MainWindow(QMainWindow):
         self._refs_task = None        # single references extraction background task
         self._refs_queue = []         # [(paper_id, file_id), ...] for references parsing
         self._refs_window = None      # batch references progress window (lazy)
+        self._refs_index = None       # held-paper resolution index (per-batch cache)
         self._sync_worker = None  # ZoteroSyncWorker
         self._scan_worker = None   # local-folder import worker (ScanWorker)
         self._scan_window = None   # import progress window (lazy)
@@ -1159,11 +1160,22 @@ class MainWindow(QMainWindow):
 
         def _do_extract():
             from papermeister.biblio import extract_references_llm
-            from papermeister.references import save_references
+            from papermeister import references as refs_mod
             entries, source, model_version = extract_references_llm(
                 file_hash, backend=backend)
-            n = save_references(paper_id, entries, source, model_version)
-            return n, None
+            n = refs_mod.save_references(paper_id, entries, source, model_version)
+            # Auto-resolve the freshly-saved references against held papers so
+            # the 'in library' badge is populated without a separate step. The
+            # held-paper index is built once per batch and reused (refs run
+            # serialized, so no race), invalidated when the queue drains.
+            resolved = 0
+            if n:
+                if self._refs_index is None:
+                    self._refs_index = refs_mod.build_resolution_index()
+                counts = refs_mod.resolve_paper_references(
+                    paper_id, index=self._refs_index)
+                resolved = counts.get('doi', 0) + counts.get('title', 0)
+            return n, resolved
 
         task = BackgroundTask(_do_extract)
         task.done.connect(lambda result: self._on_refs_extracted(paper_id, result))
@@ -1174,15 +1186,18 @@ class MainWindow(QMainWindow):
     def _on_refs_extracted(self, paper_id: int, result):
         win = self._refs_window if (self._refs_window and self._refs_window.isVisible()) else None
         try:
-            n, _err = result
+            n, resolved = result
             # Mark checked (even when n == 0) so batch re-runs skip this paper.
             from papermeister.models import Paper
             Paper.update(references_checked=True).where(Paper.id == paper_id).execute()
             title = self._biblio_title(paper_id)
             if n > 0:
-                self.status_bar.set_task(f'Parsed {n} references for paper {paper_id}')
+                self.status_bar.set_task(
+                    f'Parsed {n} references for paper {paper_id} '
+                    f'({resolved} in library)')
                 if win:
-                    win.record(f'{title} — {n} references', 'ok', refs=n)
+                    win.record(f'{title} — {n} references, {resolved} in library',
+                               'ok', refs=n)
             else:
                 self.status_bar.set_task(f'No references found for paper {paper_id}')
                 if win:
@@ -1202,15 +1217,16 @@ class MainWindow(QMainWindow):
         self._after_refs(paper_id)
 
     def _after_refs(self, paper_id: int):
-        """Shared tail: drain queue, finish window when idle."""
+        """Shared tail: refresh detail if showing this paper, drain queue,
+        finish window + drop the resolution index when the batch is idle."""
+        if self.detail_panel._current_paper_id == paper_id:
+            self.detail_panel.show_paper(paper_id)  # repopulate References tab
         self._drain_refs_queue()
-        win = self._refs_window
-        if (
-            win and win.isVisible()
-            and not self._refs_queue
-            and not (self._refs_task and self._refs_task.isRunning())
-        ):
-            win.finish()
+        if not self._refs_queue and not (self._refs_task and self._refs_task.isRunning()):
+            self._refs_index = None  # rebuild fresh next batch (paper set may change)
+            win = self._refs_window
+            if win and win.isVisible():
+                win.finish()
 
     def _open_preferences(self):
         """Open the frozen PreferencesDialog for RunPod / Zotero credentials."""
