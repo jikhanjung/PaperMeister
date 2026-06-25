@@ -763,3 +763,92 @@ def extract_references_llm(
         i += len(batch)
 
     return parsed, source, model_version
+
+
+# ===========================================================================
+# P11 Phase 2 — LLM merge adjudication for external-work dedup (pass 2).
+# Deterministic exact dedup (references.canonicalize_reference) runs first; this
+# is only asked to judge a small cluster of near-duplicate candidates that the
+# exact pass left separate. Conservative: keep entries apart unless clearly the
+# same work.
+# ===========================================================================
+
+_WORK_MERGE_PROMPT = (
+    "You are de-duplicating bibliographic references. Below is a NUMBERED list "
+    "of candidate works parsed from OCR'd reference lists, so the text may be "
+    "noisy, abbreviated, or partially garbled. Some entries may be the SAME "
+    "underlying work; others are different works that merely share an author or "
+    "year.\n\n"
+    "Group together ONLY entries that refer to the SAME work (same authors + "
+    "same title + same year; a journal/volume/page or initials difference is OK "
+    "if the identity is clearly the same). Be CONSERVATIVE: if you are not "
+    "confident two entries are the same work, keep them in separate groups.\n\n"
+    "Output STRICT JSON only (no prose, no markdown fence): an array of groups, "
+    "each group an array of the integer indices that refer to the same work. "
+    "Include EVERY index exactly once; an entry that matches nothing is its own "
+    "group of one. Example: [[0,2],[1],[3]]\n\n"
+    "--- CANDIDATES ---\n"
+)
+
+
+def _work_candidate_line(idx: int, w) -> str:
+    """One compact descriptor line for a CitedWork in the merge prompt."""
+    try:
+        authors = json.loads(w.authors_json or '[]')
+    except (json.JSONDecodeError, TypeError):
+        authors = []
+    names = []
+    for a in authors[:3]:
+        if isinstance(a, dict):
+            fam, giv = a.get('family', ''), a.get('given', '')
+            names.append(f'{fam}, {giv}'.strip(', ') if fam else giv)
+        else:
+            names.append(str(a))
+    parts = [f'[{idx}]']
+    if names:
+        parts.append('authors: ' + '; '.join(n for n in names if n))
+    if w.year:
+        parts.append(f'year: {w.year}')
+    if w.title:
+        parts.append(f'title: {w.title}')
+    if w.container:
+        parts.append(f'in: {w.container}')
+    if w.doi:
+        parts.append(f'doi: {w.doi}')
+    return ' | '.join(parts)
+
+
+def llm_match_works(works, backend: str = 'qwen', base_url: str = '',
+                    read_timeout: int = 120) -> list:
+    """Ask the LLM which of `works` (a small cluster of CitedWork rows) are the
+    same work. Returns a list of groups (lists of indices into `works`); every
+    index appears exactly once. Pure LLM call (no DB) — safe in worker threads.
+    """
+    prompt = _WORK_MERGE_PROMPT + '\n'.join(
+        _work_candidate_line(i, w) for i, w in enumerate(works))
+    if backend == 'qwen':
+        from .preferences import get_pref
+        url = base_url or get_pref('ocr_pod_url', '')
+        if not url:
+            raise RuntimeError('Server URL not configured in Preferences')
+        raw = _call_qwen(prompt, url, max_tokens=1024,
+                         read_timeout=read_timeout, retries=1)
+    else:
+        raw = _call_claude(prompt)
+
+    groups = _parse_llm_json_array(raw)
+    seen, clean = set(), []
+    for g in groups:
+        if not isinstance(g, list):
+            continue
+        gg = [i for i in g if isinstance(i, int) and 0 <= i < len(works)
+              and i not in seen]
+        for i in gg:
+            seen.add(i)
+        if gg:
+            clean.append(gg)
+    # any index the model dropped becomes its own singleton (don't lose nodes)
+    for i in range(len(works)):
+        if i not in seen:
+            clean.append([i])
+    return clean

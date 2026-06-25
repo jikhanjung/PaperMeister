@@ -8,7 +8,7 @@ import json
 import re
 from collections import defaultdict
 
-from .models import Author, Paper, PaperBiblio, Reference, db
+from .models import Author, CitedWork, Paper, PaperBiblio, Reference, db
 
 
 def save_references(paper_id: int, entries: list, source: str, model_version: str) -> int:
@@ -185,24 +185,202 @@ def resolve_one(doi, title, year, authors_json, index,
     return None, 'none', None
 
 
-def resolve_paper_references(paper_id, index=None,
+def resolve_paper_references(paper_id, index=None, work_index=None,
                             threshold=0.7, min_tokens=2) -> dict:
     """Resolve all of a citing paper's references and write the result.
 
-    Builds the index if not supplied (pass a shared one for batch efficiency).
-    Returns {'doi': n, 'title': n, 'none': n}.
+    Builds the held-paper index if not supplied (pass a shared one for batch
+    efficiency). If `work_index` is given (see build_work_index), references that
+    don't resolve to a held paper are canonicalized to a CitedWork (Phase 2
+    pass-1 exact dedup); otherwise they're left unresolved (Phase 1 behaviour).
+
+    Returns a dict keyed by match_method ('doi'/'title'/'work-*'/'none').
     """
     if index is None:
         index = build_resolution_index()
-    counts = {'doi': 0, 'title': 0, 'none': 0}
+    counts = {}
     rows = list(Reference.select().where(Reference.citing_paper == paper_id))
     with db.atomic():
         for r in rows:
             pid, method, score = resolve_one(
                 r.doi, r.title, r.year, r.authors_json, index,
                 threshold=threshold, min_tokens=min_tokens)
+            if pid is not None:
+                Reference.update(
+                    resolved_paper=pid, resolved_work=None,
+                    match_method=method, match_score=score
+                ).where(Reference.id == r.id).execute()
+            elif work_index is not None:
+                wid, method = canonicalize_reference(r, work_index)
+                Reference.update(
+                    resolved_paper=None, resolved_work=wid,
+                    match_method=method, match_score=None
+                ).where(Reference.id == r.id).execute()
+            else:
+                Reference.update(
+                    resolved_paper=None, match_method=method, match_score=score
+                ).where(Reference.id == r.id).execute()
             counts[method] = counts.get(method, 0) + 1
-            Reference.update(
-                resolved_paper=pid, match_method=method, match_score=score
-            ).where(Reference.id == r.id).execute()
     return counts
+
+
+# ===========================================================================
+# Phase 2 — external work canonicalization.
+# Pass 1 (here): exact dedup (DOI / title_key) into CitedWork nodes.
+# Pass 2 (here): cluster + LLM merge of near-duplicates the exact pass missed.
+# ===========================================================================
+
+_DOI_RE = re.compile(r'^10\.\d{4,9}/\S+$')
+
+
+def well_formed_doi(doi: str) -> bool:
+    """Trust a DOI for matching only if it looks structurally valid (OCR often
+    mangles them). Conservative: better to miss a match than merge wrongly."""
+    return bool(_DOI_RE.match(normalize_doi(doi)))
+
+
+def work_title_key(title: str) -> str:
+    """Normalized title fingerprint for exact dedup — sorted unique content
+    tokens. Same normalization as resolution (lowercase, stopwords, CJK kept)."""
+    return ' '.join(sorted(set(title_tokens(title))))
+
+
+def build_work_index() -> dict:
+    """In-memory index of active CitedWorks for pass-1 exact dedup.
+
+    Returns {'doi_map': {doi: wid}, 'key_map': {(title_key, year): wid}}.
+    Mutated in place by canonicalize_reference so a batch dedupes against works
+    it just created. Excludes promoted (merged_into_paper) tombstones.
+    """
+    doi_map, key_map = {}, {}
+    for w in CitedWork.select(
+            CitedWork.id, CitedWork.doi, CitedWork.title_key, CitedWork.year
+    ).where(CitedWork.merged_into_paper.is_null(True)):
+        nd = normalize_doi(w.doi)
+        if nd:
+            doi_map.setdefault(nd, w.id)
+        if w.title_key:
+            key_map.setdefault((w.title_key, w.year), w.id)
+    return {'doi_map': doi_map, 'key_map': key_map}
+
+
+def canonicalize_reference(ref, work_index) -> tuple:
+    """Pass-1 exact dedup of an unresolved (external) reference into a CitedWork.
+
+    Links to an existing work by exact well-formed DOI or (title_key, year),
+    else creates a new CitedWork. Mutates work_index so later refs in the same
+    run dedupe against it. Caller must have already failed held-paper matching.
+
+    Returns (work_id|None, method) — 'work-doi'|'work-title'|'work-new'|'none'.
+    """
+    has_doi = well_formed_doi(ref.doi)
+    nd = normalize_doi(ref.doi) if has_doi else ''
+    if nd and nd in work_index['doi_map']:
+        return work_index['doi_map'][nd], 'work-doi'
+
+    key = work_title_key(ref.title or '')
+    if not key and not nd:
+        return None, 'none'   # nothing to identify this entry by → junk
+
+    if key:
+        hit = work_index['key_map'].get((key, ref.year))
+        if hit:
+            return hit, 'work-title'
+
+    w = CitedWork.create(
+        doi=nd,
+        title=ref.title or '',
+        title_key=key,
+        year=ref.year,
+        authors_json=ref.authors_json or '[]',
+        container=ref.container or '',
+        first_surname=ref_surname(ref.authors_json),
+    )
+    if nd:
+        work_index['doi_map'][nd] = w.id
+    if key:
+        work_index['key_map'].setdefault((key, ref.year), w.id)
+    return w.id, 'work-new'
+
+
+def recompute_cite_counts() -> int:
+    """Recompute CitedWork.cite_count = # distinct citing papers. Returns the
+    number of works with at least one citation."""
+    rows = db.execute_sql(
+        "SELECT resolved_work_id, COUNT(DISTINCT citing_paper_id) "
+        "FROM reference WHERE resolved_work_id IS NOT NULL "
+        "GROUP BY resolved_work_id"
+    ).fetchall()
+    with db.atomic():
+        CitedWork.update(cite_count=0).where(CitedWork.cite_count != 0).execute()
+        for wid, c in rows:
+            CitedWork.update(cite_count=c).where(CitedWork.id == wid).execute()
+    return len(rows)
+
+
+def cluster_works_by_block(max_cluster: int = 25) -> list:
+    """Group active CitedWorks by blocking key (first_surname, year) into
+    candidate clusters for pass-2 LLM merge.
+
+    Returns clusters (lists of CitedWork) with ≥2 members where at least one is
+    not yet merge_checked. Works without a surname are skipped (no reliable
+    block key). Oversized blocks (> max_cluster) are dropped here and reported
+    by the caller via cluster_overflow().
+    """
+    blocks = defaultdict(list)
+    for w in CitedWork.select().where(CitedWork.merged_into_paper.is_null(True)):
+        if not w.first_surname:
+            continue
+        blocks[(w.first_surname, w.year)].append(w)
+    out = []
+    for ws in blocks.values():
+        if len(ws) < 2 or len(ws) > max_cluster:
+            continue
+        if all(w.merge_checked for w in ws):
+            continue
+        out.append(ws)
+    return out
+
+
+def merge_works(keep_id: int, ids: list) -> int:
+    """Merge duplicate CitedWorks into keep_id: repoint their citations and
+    delete the duplicate rows (works are rebuildable, so no tombstone needed).
+    Returns the number of works removed."""
+    dups = [i for i in ids if i != keep_id]
+    if not dups:
+        return 0
+    with db.atomic():
+        Reference.update(resolved_work=keep_id, match_method='work-llm').where(
+            Reference.resolved_work.in_(dups)).execute()
+        CitedWork.delete().where(CitedWork.id.in_(dups)).execute()
+    return len(dups)
+
+
+def mark_merge_checked(work_ids: list) -> None:
+    """Flag works as adjudicated by the pass-2 LLM merge (so re-runs skip them)."""
+    if work_ids:
+        CitedWork.update(merge_checked=True).where(
+            CitedWork.id.in_(list(work_ids))).execute()
+
+
+def reconcile_works_with_papers(index=None) -> int:
+    """Promote any CitedWork that now matches a held paper: repoint its
+    citations to that Paper (resolved_paper) and mark the work as a tombstone
+    (merged_into_paper). Run after importing new papers. Returns # promoted."""
+    if index is None:
+        index = build_resolution_index()
+    promoted = 0
+    works = list(CitedWork.select().where(CitedWork.merged_into_paper.is_null(True)))
+    with db.atomic():
+        for w in works:
+            pid, method, score = resolve_one(
+                w.doi, w.title, w.year, w.authors_json, index)
+            if pid is not None:
+                Reference.update(
+                    resolved_paper=pid, resolved_work=None,
+                    match_method=method, match_score=score
+                ).where(Reference.resolved_work == w.id).execute()
+                CitedWork.update(merged_into_paper=pid).where(
+                    CitedWork.id == w.id).execute()
+                promoted += 1
+    return promoted
