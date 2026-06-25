@@ -62,6 +62,12 @@
   - **로컬 폴더 가져오기** (세션 47): Rail 'import' 액션(아이콘 `import.svg`) → `QFileDialog`로 폴더 선택 → **`ScanWorker`(QThread, dir-walk 사전 카운트 → determinate 진행)** + **`ScanWindow` 진행창**(per-file 로그 + new/linked/total 요약) → `ingestion.import_source_directory`(재귀 스캔 + SHA256 dedup) → SourceNav refresh(폴더명 탭) → 그 소스 pending PDF "지금 OCR?" 확인 → `ProcessWindow` 재사용. 멀티탭(Zotero + 폴더1/2…)은 SourceNav가 소스마다 탭이라 공짜. **핵심: `ingest_pdf`이 `PaperFolder` M2M 링크 생성** — desktop `list_by_folder`가 M2M로만 조회하므로 필수. 이미 Zotero에 있는(hash 동일) PDF는 skip 대신 **그 기존 Paper를 폴더에 링크**(중복 0, 같은 논문이 Zotero 컬렉션+로컬 폴더 양쪽 탭에 표시). 로컬 PDF는 다운로드 없이 PyMuPDF 메타 추출. **탭 우클릭 → "Remove (local folder)"** 로 directory 소스 삭제 가능(`delete_directory_source`: 순수 로컬 논문만 cascade 삭제, Zotero 공유 논문은 링크만 해제, 디스크 파일·OCR 캐시 보존). **end-to-end는 사용자 Windows 검증 대기**. [devlog 062](./devlog/20260615_062_Desktop_Local_Folder_Import.md)
 
 ### 진행 중인 것
+- **P11 Phase 2 — 외부 문헌 정규화 (CitedWork 노드)** — 코드 작성 완료 + 임시 DB 검증(16/16), 라이브 마이그레이션·백필 대기 (2026-06-25, 세션 49). 계획·구현상태 [devlog P12](./devlog/20260625_P12_External_Work_Normalization.md)
+  - **목표**: 외부(cited-only) 문헌에 canonical 노드(`CitedWork`) 부여 → 같은 외부 논문이 여러 Reference로 흩어지지 않게 dedup → co-citation / "자주 인용하지만 미보유" 발굴 가능
+  - **신규 `CitedWork`** + `Reference.resolved_work` FK. resolved_paper(held) ⊻ resolved_work(외부), 둘 다 null=junk
+  - **2-패스**: 패스1 = DOI/title_key **exact dedup**(deterministic, `references.canonicalize_reference`). 패스2 = `(제1저자 surname, year)` blocking으로 후보 ≥2 클러스터만 **LLM 병합 판정**(`biblio.llm_match_works`), `merge_checked`로 resumable. fuzzy는 결정 안 하고 후보 생성 전용 (사용자 결정: "exact면 OK, 아니면 LLM이 fuzzy보다 신뢰")
+  - **실행**: 추출 종료 후 Windows에서 `python scripts\normalize_works.py --execute`(패스1) → `--pass 2 --execute`(패스2). 추출 파이프라인은 이미 패스1 auto-canonicalize 연결됨. **현재 실행 중인 추출엔 무영향**(옛 코드 메모리 상주)
+  - 미착수: desktop 외부 카드 co-citation / Top-cited 화면(단계 6)
 - **P11 References 추출 + 인용 네트워크 (Phase 1)** — 코드 작성 완료, 라이브 실행 대기 (2026-06-25, 세션 49). 계획서 [devlog P11](./devlog/20260625_P11_References_Extraction_Citation_Network.md)
   - **목표**: 논문 본문 맨 뒤 references 섹션을 파싱(ocrserver Qwen3 32B) → `Reference` 테이블 저장 → 보유 Paper와 매칭. held(PDF 보유) vs cited-only(외부) 구분
   - **신규 모델 `Reference`** (`models.py`): citing_paper FK + order_index + raw_text(source of truth) + 파싱 필드(authors_json/year/title/container/volume/issue/pages/doi/ref_type) + resolution(resolved_paper FK nullable/match_method/match_score) + provenance(source/model_version/parse_confidence). `database.py ALL_TABLES`에 등록(create_tables가 멱등 생성). **held vs cited는 `resolved_paper` null 여부**로 판정, 별도 플래그 없음
