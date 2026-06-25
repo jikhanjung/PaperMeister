@@ -648,7 +648,7 @@ def _chunk_entries(entries: list, max_chars: int = 4500,
 
 
 def extract_references_llm(
-    file_hash: str, backend: str = 'qwen', base_url: str = '',
+    file_hash: str, backend: str = 'qwen', base_url: str = '', label: str = '',
 ) -> tuple[list, str, str]:
     """Parse a paper's references section into structured entries via LLM.
 
@@ -716,8 +716,9 @@ def extract_references_llm(
                 raise
             dt = time.monotonic() - t0
             _refs_batcher.update(dt)
-            logger.info('refs %d/%d: %d in %.1fs → next batch %d',
-                        i + len(batch), total, len(batch), dt, _refs_batcher.size)
+            tag = f'{label} ' if label else ''
+            logger.info('%srefs %d/%d: %d in %.1fs → next batch %d',
+                        tag, i + len(batch), total, len(batch), dt, _refs_batcher.size)
         else:
             raw = _call_claude(prompt)
 

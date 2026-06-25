@@ -25,8 +25,14 @@ from papermeister.biblio import extract_references_llm
 from papermeister.references import save_references
 
 
+def _short(title, n=28):
+    """Collapse whitespace and truncate a title from the front for log lines."""
+    t = ' '.join((title or '').split())
+    return (t[:n] + '…') if len(t) > n else (t or '(untitled)')
+
+
 def fetch_targets(args):
-    """Return list of (paper_id, file_hash) for processed PDFs in scope."""
+    """Return list of (paper_id, file_hash, title) for processed PDFs in scope."""
     query = (
         PaperFile.select(PaperFile, Paper)
         .join(Paper)
@@ -51,7 +57,7 @@ def fetch_targets(args):
         if pf.paper.id in seen:
             continue
         seen.add(pf.paper.id)
-        targets.append((pf.paper.id, pf.hash))
+        targets.append((pf.paper.id, pf.hash, pf.paper.title or ''))
 
     if args.skip_existing and not args.paper_ids:
         # Skip papers already checked (have refs OR confirmed none). --reextract
@@ -98,8 +104,8 @@ def main():
         return
     if not args.execute:
         print('DRY-RUN (no --execute). Would parse references for these papers:')
-        for pid, h in targets[:20]:
-            print(f'  paper={pid} hash={h[:8]}')
+        for pid, h, title in targets[:20]:
+            print(f'  paper={pid} hash={h[:8]} | {_short(title, 50)}')
         if len(targets) > 20:
             print(f'  ... and {len(targets) - 20} more')
         return
@@ -108,23 +114,26 @@ def main():
     done_pids = []
     t0 = time.time()
 
-    def _extract(pid, h):
+    def _extract(pid, h, title):
         # LLM-only (no DB) so it's safe to run in worker threads; the server
         # batches concurrent requests. DB writes happen in the main loop below.
+        label = f'[{pid} {_short(title)}]'
         try:
-            entries, source, mv = extract_references_llm(h, backend=args.backend)
-            return pid, entries, source, mv, None
+            entries, source, mv = extract_references_llm(
+                h, backend=args.backend, label=label)
+            return pid, title, entries, source, mv, None
         except Exception as e:
-            return pid, None, None, None, str(e)
+            return pid, title, None, None, None, str(e)
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
     with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
-        futures = [pool.submit(_extract, pid, h) for pid, h in targets]
+        futures = [pool.submit(_extract, pid, h, title) for pid, h, title in targets]
         for i, fut in enumerate(as_completed(futures), 1):
-            pid, entries, source, mv, e = fut.result()
+            pid, title, entries, source, mv, e = fut.result()
+            short = _short(title)
             if e:
                 err += 1
-                print(f'[{i}/{len(targets)}] paper={pid} ERR: {e[:100]}', flush=True)
+                print(f'[{i}/{len(targets)}] {pid} {short} ERR: {e[:80]}', flush=True)
                 continue
             n = save_references(pid, entries, source, mv)   # main thread (DB)
             # Mark checked even when n == 0 (no references section) so re-runs skip it.
@@ -133,7 +142,7 @@ def main():
             total_refs += n
             done_pids.append(pid)
             tag = f'{n} refs' if n else 'no references section'
-            print(f'[{i}/{len(targets)}] paper={pid} ok | {tag}', flush=True)
+            print(f'[{i}/{len(targets)}] {pid} {short} ok | {tag}', flush=True)
 
     # Auto-resolve the just-extracted references against held papers (one shared
     # index for the whole run) so the 'in library' link is populated.
