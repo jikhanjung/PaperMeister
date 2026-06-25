@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 from peewee import JOIN, fn
 
 from papermeister.models import (
-    Author, Folder, Paper, PaperBiblio, PaperFile, PaperFolder, Reference, Source,
+    Author, CitedWork, Folder, Paper, PaperBiblio, PaperFile, PaperFolder,
+    Reference, Source, db,
 )
 
 
@@ -404,7 +405,11 @@ class ReferenceRow:
     doi: str
     ref_type: str
     resolved_paper_id: int | None   # set → we own this cited work (held)
-    match_method: str               # doi|title|'' (unresolved)
+    match_method: str               # doi|title|work-*|'' (unresolved)
+    # P11 Phase 2: external canonical node + how many OTHER library papers
+    # cite the same external work (co-citation).
+    resolved_work_id: int | None = None
+    cocite_count: int = 0
 
     def citation(self) -> str:
         """A compact author · year · container line for the card subtitle."""
@@ -501,5 +506,129 @@ def load_references(paper_id: int) -> list[ReferenceRow]:
             ref_type=r.ref_type or 'unknown',
             resolved_paper_id=r.resolved_paper_id,
             match_method=r.match_method or '',
+            resolved_work_id=r.resolved_work_id,
         ))
+
+    # Co-citation: for the external works these references point to, how many
+    # distinct library papers cite each one. One aggregate query (not N+1).
+    # cocite_count excludes this paper itself (it always cites its own refs).
+    work_ids = {r.resolved_work_id for r in rows if r.resolved_work_id}
+    if work_ids:
+        counts: dict[int, int] = {}
+        cur = db.execute_sql(
+            "SELECT resolved_work_id, COUNT(DISTINCT citing_paper_id) "
+            "FROM reference WHERE resolved_work_id IN (%s) "
+            "GROUP BY resolved_work_id"
+            % ','.join('?' * len(work_ids)),
+            tuple(work_ids),
+        )
+        for wid, c in cur.fetchall():
+            counts[wid] = c
+        for r in rows:
+            if r.resolved_work_id:
+                r.cocite_count = max(0, counts.get(r.resolved_work_id, 1) - 1)
+    return rows
+
+
+# ── Cited works (P11 Phase 2) ────────────────────────────────
+
+
+@dataclass
+class CitedWorkRow:
+    """A canonical external work for the Cited Works browser."""
+    work_id: int
+    title: str
+    authors: str
+    year: int | None
+    container: str
+    doi: str
+    cite_count: int  # distinct library papers citing it
+
+
+def _work_authors(authors_json: str) -> str:
+    """Compact author string for a CitedWork (first author surname-style)."""
+    import json
+    try:
+        authors = json.loads(authors_json or '[]')
+    except (json.JSONDecodeError, TypeError):
+        authors = []
+    names = []
+    for a in authors[:3]:
+        if isinstance(a, dict):
+            fam = (a.get('family') or '').strip()
+            names.append(fam or (a.get('given') or '').strip())
+        elif a:
+            names.append(str(a))
+    who = ', '.join(n for n in names if n)
+    if len([a for a in authors if a]) > 3:
+        who += ' et al.'
+    return who
+
+
+def top_cited_works(limit: int = 300, min_cites: int = 2, query: str = '') -> list[CitedWorkRow]:
+    """External works ranked by how many library papers cite them.
+
+    cite_count is computed live (distinct citing papers) so it's correct even
+    if the denormalized CitedWork.cite_count hasn't been recomputed. Tombstoned
+    (promoted) works are excluded. `query` filters on title/author substring.
+    """
+    cur = db.execute_sql(
+        "SELECT resolved_work_id, COUNT(DISTINCT citing_paper_id) c "
+        "FROM reference WHERE resolved_work_id IS NOT NULL "
+        "GROUP BY resolved_work_id HAVING c >= ?",
+        (min_cites,),
+    )
+    counts = {wid: c for wid, c in cur.fetchall()}
+    if not counts:
+        return []
+    ranked = sorted(counts, key=lambda w: -counts[w])
+    head = ranked[: max(limit * 3, limit)]  # headroom for filter/tombstone drops
+    works = {
+        w.id: w for w in
+        CitedWork.select().where(
+            CitedWork.id.in_(head) & CitedWork.merged_into_paper.is_null(True)
+        )
+    }
+    ql = query.lower().strip()
+    out: list[CitedWorkRow] = []
+    for wid in ranked:
+        w = works.get(wid)
+        if w is None:
+            continue
+        authors = _work_authors(w.authors_json)
+        if ql and ql not in (w.title or '').lower() and ql not in authors.lower():
+            continue
+        out.append(CitedWorkRow(
+            work_id=wid,
+            title=w.title or '',
+            authors=authors,
+            year=w.year,
+            container=w.container or '',
+            doi=w.doi or '',
+            cite_count=counts[wid],
+        ))
+        if len(out) >= limit:
+            break
+    return out
+
+
+def load_work_cociters(work_id: int, exclude_paper_id: int | None = None) -> list[CitedByRow]:
+    """Library papers that cite a given external work (resolved_work)."""
+    citing_ids = [
+        r.citing_paper_id for r in
+        Reference.select(Reference.citing_paper)
+        .where(Reference.resolved_work == work_id)
+        .distinct()
+    ]
+    rows: list[CitedByRow] = []
+    for pid in citing_ids:
+        if pid == exclude_paper_id:
+            continue
+        p = Paper.get_or_none(Paper.id == pid)
+        if p is None or p.trashed_at is not None:
+            continue
+        rows.append(CitedByRow(
+            paper_id=pid, title=p.title or '', year=p.year, authors=_author_cite(pid),
+        ))
+    rows.sort(key=lambda r: (-(r.year or 0), r.title.lower()))
     return rows
