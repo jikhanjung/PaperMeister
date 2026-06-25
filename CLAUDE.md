@@ -123,6 +123,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 | `preview_standalone_biblio.py` | Standalone PDF 추출 결과 미리보기 (read-only) |
 | `extract_references.py` | (P11) references 섹션 파싱 → `Reference` 테이블 (Qwen3, `--execute`) |
 | `resolve_references.py` | (P11) `Reference` → 보유 Paper 매칭 (DOI + 제목 스코어, `--execute`) |
+| `probe_qwen.py` | (P11) ocrserver LLM 응답시간 진단 (trivial/1ref/5ref 계측) |
 
 ## Future Phases
 

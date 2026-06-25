@@ -517,21 +517,22 @@ _REFS_PROMPT = (
     "Split the text into individual reference entries and extract structured "
     "fields for each. Extract only what is EXPLICITLY present — do NOT guess. "
     "Leave a field empty/null if it is not clearly stated.\n\n"
-    "Output STRICT JSON only: a single JSON ARRAY (no prose, no markdown fence). "
-    "Each element has this exact schema:\n"
-    '{"raw": string, "authors": [{"family": string, "given": string}], '
+    "The entries are separated by blank lines. Output STRICT JSON only: a "
+    "single JSON ARRAY (no prose, no markdown fence), ONE object per entry in "
+    "the SAME ORDER as the input. Each element has this exact schema:\n"
+    '{"authors": [{"family": string, "given": string}], '
     '"year": integer or null, "title": string, "container": string, '
     '"volume": string, "issue": string, "pages": string, "doi": string, '
     '"type": "article"|"book"|"chapter"|"thesis"|"report"|"unknown"}\n\n'
     "Rules:\n"
-    "- `raw` MUST be the original reference text exactly as it appears (your "
-    "evidence; keep it verbatim including the leading number if any).\n"
+    "- Do NOT echo the original text — only the structured fields above.\n"
     "- `container` is the journal name, book title, or proceedings title.\n"
     "- `authors` in the order shown; split family/given names. For an "
     "organization or a single-token name, put it in `family` and leave `given` empty.\n"
     "- `pages` as a plain range like \"123-145\", no \"pp.\".\n"
     "- `year`: the publication year only.\n"
-    "- If a line is clearly NOT a reference (a stray heading, page number), skip it.\n"
+    "- Return one object per input entry; if an entry is not a real reference, "
+    "use type \"unknown\" with empty fields (do not drop it).\n"
     "- Output ONLY the JSON array.\n\n"
 )
 
@@ -559,10 +560,14 @@ class _AdaptiveBatcher:
     maximizing throughput. State persists across papers within a run, so after
     a short warm-up the batch size settles at what the server can handle.
     """
+    # Tuned for a ~20 tok/s server with a large fixed per-call overhead, so
+    # bigger batches amortize better. With `raw` no longer echoed, output is
+    # ~80-130 tok/entry; a 20-entry call ≈ 2-3k tok ≈ 100-150s, safely under
+    # the 240s references read timeout. The controller still self-corrects.
     MIN = 1
-    MAX = 24
-    TARGET_LO = 20.0   # under this → server is fast, grow
-    TARGET_HI = 75.0   # over this → getting close to the timeout, shrink
+    MAX = 20
+    TARGET_LO = 25.0   # under this → fast, double (slow-start)
+    TARGET_HI = 130.0  # over this → close to timeout, halve
     MAX_CHARS = 7000   # hard input cap regardless of count (long entries)
 
     def __init__(self, size: int = 1):
@@ -574,7 +579,7 @@ class _AdaptiveBatcher:
         elif elapsed > self.TARGET_HI:
             self.size = max(self.MIN, self.size // 2)
         else:
-            self.size = min(self.size + 1, self.MAX)          # gentle in-band creep
+            self.size = min(self.size + 2, self.MAX)          # amortize fixed overhead
 
     def shrink(self):
         """Hard shrink after a timeout, so we retry the same refs smaller."""
@@ -663,10 +668,10 @@ def extract_references_llm(
 
         prompt = _REFS_PROMPT + '--- REFERENCES TEXT ---\n' + '\n\n'.join(batch)
         if backend == 'qwen':
-            mt = min(8192, len(batch) * 256 + 512)
+            mt = min(8192, len(batch) * 200 + 512)
             t0 = time.monotonic()
             try:
-                raw = _call_qwen(prompt, url, max_tokens=mt, retries=0)
+                raw = _call_qwen(prompt, url, max_tokens=mt, read_timeout=240, retries=0)
             except (_req.exceptions.Timeout, _req.exceptions.ConnectionError):
                 # Too slow at this size — shrink and retry the SAME refs, unless
                 # already at the floor (then it's a real failure).
@@ -683,10 +688,16 @@ def extract_references_llm(
         else:
             raw = _call_claude(prompt)
 
-        for item in _parse_llm_json_array(raw):
-            if isinstance(item, dict):
-                item.setdefault('parse_confidence', confidence)
-                parsed.append(item)
+        items = [it for it in _parse_llm_json_array(raw) if isinstance(it, dict)]
+        # We split the entries ourselves, so attach the original text as `raw`
+        # by position (store-first) instead of paying the LLM to echo it. Only
+        # when counts line up; otherwise leave raw empty (fields are still valid).
+        aligned = len(items) == len(batch)
+        for k, item in enumerate(items):
+            if aligned:
+                item['raw'] = batch[k]
+            item.setdefault('parse_confidence', confidence)
+            parsed.append(item)
         i += len(batch)
 
     return parsed, source, model_version
