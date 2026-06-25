@@ -186,17 +186,17 @@ def _parse_llm_json(text: str) -> dict:
     """Extract a JSON object from LLM output, handling markdown fences and thinking tags."""
     # Strip <think>...</think> blocks (Qwen3 thinking mode)
     text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
-    # Try markdown code fence
+    # Try markdown code fence (strict=False tolerates raw control chars in strings)
     m = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
     if m:
-        return json.loads(m.group(1))
+        return json.loads(m.group(1), strict=False)
     # Try bare JSON
     if text.startswith('{'):
-        return json.loads(text)
+        return json.loads(text, strict=False)
     # Find first {...}
     m = re.search(r'\{.*\}', text, re.DOTALL)
     if m:
-        return json.loads(m.group(0))
+        return json.loads(m.group(0), strict=False)
     raise ValueError(f'No JSON found in LLM output: {text[:200]}')
 
 
@@ -595,27 +595,42 @@ _REFS_PROMPT = (
 
 
 def _parse_llm_json_array(text: str) -> list:
-    """Extract a JSON array from LLM output, handling fences and <think> tags."""
+    """Extract a JSON array from LLM output, handling fences and <think> tags.
+
+    strict=False so a raw control character inside a string (the LLM sometimes
+    emits a literal newline/tab in a title) doesn't blow up the whole batch
+    ('Invalid control character at …').
+    """
     text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
     m = re.search(r'```(?:json)?\s*(\[.*\])\s*```', text, re.DOTALL)
     if m:
-        return json.loads(m.group(1))
+        return json.loads(m.group(1), strict=False)
     if text.startswith('['):
-        return json.loads(text)
+        return json.loads(text, strict=False)
     m = re.search(r'\[.*\]', text, re.DOTALL)
     if m:
-        return json.loads(m.group(0))
+        return json.loads(m.group(0), strict=False)
     raise ValueError(f'No JSON array found in LLM output: {text[:200]}')
 
 
 class _AdaptiveBatcher:
-    """Slow-start controller for references-per-LLM-call.
+    """Adaptive controller for references-per-LLM-call, with a moving ceiling.
 
-    Starts by sending ONE reference (prove it works + measure latency), then
-    grows the batch multiplicatively while responses are fast and shrinks when
-    they're slow — keeping each call comfortably under the read timeout while
-    maximizing throughput. State persists across papers within a run, so after
-    a short warm-up the batch size settles at what the server can handle.
+    Starts by sending ONE reference (prove it works + measure latency), then:
+      - **warms up fast** (exponential) toward the ceiling while responses are
+        quick — cheap initial ramp from 1;
+      - on a timeout / near-timeout, **lowers the ceiling a little** (−BACKOFF_STEP,
+        not a halving) and keeps going just under it. Backing off hard wastes
+        throughput when the wall is only a couple of entries away; nibbling down
+        finds the edge.
+      - the lowered ceiling is a *hard cap* on the batch, so we don't climb
+        straight back into the same wall and re-incur an (expensive) 240s
+        timeout. It **recovers slowly** — +1 only after RECOVER_AFTER consecutive
+        fast batches at the ceiling — in case the slowdown was transient
+        (e.g. another paper hammering the shared server at the same time).
+
+    State persists across papers within a run (refs extraction is serialized in
+    both the CLI and the desktop, so no locking needed).
     """
     # Tuned for a ~20 tok/s server with a large fixed per-call overhead, so
     # bigger batches amortize better. With `raw` no longer echoed, output is
@@ -623,24 +638,43 @@ class _AdaptiveBatcher:
     # the 240s references read timeout. The controller still self-corrects.
     MIN = 1
     MAX = 20
-    TARGET_LO = 25.0   # under this → fast, double (slow-start)
-    TARGET_HI = 130.0  # over this → close to timeout, halve
-    MAX_CHARS = 5000   # hard input cap per call (keeps output under the timeout)
+    TARGET_LO = 25.0    # under this → fast: warm up (exp) toward the ceiling
+    TARGET_HI = 130.0   # over this → close to timeout, lower the ceiling
+    MAX_CHARS = 5000    # hard input cap per call (keeps output under the timeout)
+    BACKOFF_STEP = 3    # how much to drop the ceiling on a timeout / near-timeout
+    RECOVER_AFTER = 6   # fast batches at the ceiling before nudging it up by 1
 
     def __init__(self, size: int = 1):
         self.size = size
+        self.ceiling = self.MAX   # hard cap on size; lowered on backoff, recovers slowly
+        self._good = 0            # consecutive fast batches while pinned at the ceiling
 
     def update(self, elapsed: float):
-        if elapsed < self.TARGET_LO:
-            self.size = min(self.size * 2, self.MAX)          # slow-start ramp
-        elif elapsed > self.TARGET_HI:
-            self.size = max(self.MIN, self.size // 2)
-        else:
-            self.size = min(self.size + 2, self.MAX)          # amortize fixed overhead
+        if elapsed > self.TARGET_HI:
+            self._backoff()                                   # near timeout → ease down
+        elif elapsed < self.TARGET_LO:
+            if self.size < self.ceiling:
+                self.size = min(self.size * 2, self.ceiling)  # warm-up ramp toward ceiling
+                self._good = 0
+            else:
+                # Pinned at the ceiling and still fast → maybe the wall moved up.
+                self._good += 1
+                if self._good >= self.RECOVER_AFTER:
+                    self._good = 0
+                    self.ceiling = min(self.MAX, self.ceiling + 1)
+                    self.size = self.ceiling
+        # in-band (TARGET_LO..TARGET_HI): a healthy size — hold steady.
 
     def shrink(self):
-        """Hard shrink after a timeout, so we retry the same refs smaller."""
-        self.size = max(self.MIN, self.size // 2)
+        """Ease down after a timeout, so we retry the same refs a bit smaller."""
+        self._backoff()
+
+    def _backoff(self):
+        # Lower the ceiling a little (not a halving) and sit just under it; cap
+        # regrowth here so we don't slam back into the same wall.
+        self.ceiling = max(self.MIN, self.size - self.BACKOFF_STEP)
+        self.size = self.ceiling
+        self._good = 0
 
 
 # Process-wide controller: warms up once, reused across papers (refs extraction
