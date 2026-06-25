@@ -348,13 +348,18 @@ _REF_HEADING_RE = re.compile(
     r')' + _REF_HEADING_SUFFIX + r'\s*[:：.]?\s*$',
     re.IGNORECASE,
 )
-# Headings that, if they appear AFTER the references heading, end the section
-# (appendix / acknowledgments / supplementary material that some papers place
-# after the bibliography).
+# Back-matter section headings that END the references section when they appear
+# after it (appendix / acknowledgments / supplementary material). `#{0,6}` so a
+# PLAIN (un-hashed) OCR line like "Appendix. Descriptions of landmarks…" also
+# stops — these words essentially never start an actual reference line, so the
+# no-hash match is safe. (Risky bare words like "Tables"/"Plates" are omitted
+# on purpose — they overlap with reference titles.)
 _REF_STOP_RE = re.compile(
-    r'^\s{0,3}#{1,6}\s*(?:[0-9]+\s*[.)]\s*)?'
-    r'(appendix|appendices|acknowledg|supplement|supporting information|'
-    r'author contributions|figure legends|tables?\b|plates?\b|부록|보충)',
+    r'^\s{0,3}#{0,6}\s*(?:[0-9]+\s*[.)]\s*)?'
+    r'(appendix|appendices|acknowledg|supplement|supporting\s+information|'
+    r'author\s+contributions|data\s+availability|competing\s+interest|'
+    r'conflict.{0,15}interest|declaration\s+of|funding|'
+    r'부록|보충자료|감사의?\s*글|附录|謝辞|致谢)',
     re.IGNORECASE,
 )
 
@@ -493,7 +498,13 @@ def split_reference_entries(block: str) -> list:
     lines = block.split('\n')
     # (1) Numbered — at least 3 markers (avoids a stray "1. Introduction").
     starts = [i for i, ln in enumerate(lines) if _NUMBERED_ENTRY_RE.match(ln)]
-    if len(starts) >= 3:
+    # Guard: the markers must begin NEAR THE TOP of the block. If there's a lot
+    # of un-numbered text before the first "1." it isn't a numbered bibliography
+    # — it's e.g. unnumbered references followed by a numbered appendix that
+    # leaked in. Numbered-splitting there would silently drop the real
+    # references (everything before starts[0]). Fall through to blank-line.
+    nonempty_before = sum(1 for ln in lines[:starts[0]] if ln.strip()) if starts else 0
+    if len(starts) >= 3 and nonempty_before <= 2:
         entries = []
         for j, s in enumerate(starts):
             end = starts[j + 1] if j + 1 < len(starts) else len(lines)
@@ -502,13 +513,35 @@ def split_reference_entries(block: str) -> list:
                 entries.append(entry)
         return entries
 
-    # (2) Blank-line-separated paragraphs.
+    # (2) Blank-line-separated paragraphs, minus page furniture (running
+    # headers/footers, bare DOIs/URLs/page numbers leak into plain-markdown OCR
+    # between references at page breaks).
     paras = [p.strip() for p in re.split(r'\n\s*\n', block) if p.strip()]
+    paras = [p for p in paras if not _is_page_furniture(p)]
     if len(paras) >= 3:
         return paras
 
     # (3) Single blob — let the LLM segment.
     return [block.strip()]
+
+
+# A line that is ONLY a URL / DOI / page number / punctuation, or that STARTS
+# with a known footer/header phrase — i.e. page furniture, not a reference.
+_FURNITURE_RE = re.compile(
+    r'^(?:https?://\S+\s*$|doi:\s*\S+\s*$|\d{1,4}\s*$|[.,;:\-–—]+\s*$|'
+    r'(?:published\s+online|downloaded\s+from|this\s+content\s+downloaded|'
+    r'all\s+use\s+subject|for\s+personal\s+use|copyright\b|©))',
+    re.IGNORECASE,
+)
+
+
+def _is_page_furniture(paragraph: str) -> bool:
+    """True if a blank-line paragraph is a running header/footer, not a ref.
+
+    Conservative: real references start with an author surname, so they never
+    match these URL-only / page-number / footer-phrase patterns."""
+    first = paragraph.strip().splitlines()[0].strip() if paragraph.strip() else ''
+    return bool(_FURNITURE_RE.match(first))
 
 
 _REFS_PROMPT = (

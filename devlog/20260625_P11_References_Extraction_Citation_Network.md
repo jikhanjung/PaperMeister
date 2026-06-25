@@ -307,6 +307,23 @@ references 섹션 제목이 저널·시대·언어마다 천차만별 → 헤딩
   (heuristic int) — 동시 4스레드 추출 검증 통과. 2–4 workers면 합산 throughput ~배수.
 - 데스크톱은 아직 직렬 큐(`_refs_task` 1개씩) — 필요 시 후속.
 
+### 7j. Appendix를 References로 오인 (paper 2293 버그) (2026-06-25, 사용자 제보)
+
+Jung et al. 2024(paper 2293, plain-markdown OCR)에서 References 뒤 Appendix(번호 매긴
+landmark 목록)를 references로 추출. 두 버그 중첩:
+- **`_REF_STOP_RE`가 `#{1,6}` 필수** → `#` 없는 plain 헤딩 `Appendix. Descriptions of
+  landmark locations…`를 못 잡아 블록이 EOF까지(=Appendix 포함) 확장. → `#{0,6}`로 완화
+  (back-matter 단어는 reference 시작에 안 나오므로 no-hash 안전). 위험한 `tables`/`plates`
+  제거, `data availability`/`competing interest`/`declaration of`/`funding`/CJK(附录·謝辞·
+  致谢·부록) 추가. **트레일링 `\b` 빼야 함**(`acknowledg`+`ments` 사이 boundary 없어 매칭 깨짐).
+- **번호 split이 첫 번호 앞 내용을 버림**: 블록 = [번호없는 진짜 refs] + [번호 매긴 appendix]
+  → 번호 27개 보고 split하며 앞의 refs 전부 폐기. → **첫 번호 마커가 블록 상단(비어있지 않은
+  2줄 이내)일 때만** 번호 split, 아니면 blank-line으로 폴백.
+- **+ 페이지 furniture 필터**(`_is_page_furniture`): plain-markdown은 페이지 경계의 running
+  header/footer(순수 URL/DOI·페이지번호·"Published online by…"·구두점만)가 ref 사이에 섞임.
+  blank-line 단락 중 그런 것 제거(refs는 저자명으로 시작하므로 안전). 2293: 97→68 클린 엔트리,
+  Anderson 2017부터 시작, appendix·footer 제거.
+
 ---
 
 ## 8. 운영 메모
