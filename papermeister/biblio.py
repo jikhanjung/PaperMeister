@@ -214,23 +214,37 @@ def _call_claude(prompt: str) -> str:
     return envelope.get('result', '').strip()
 
 
-def _call_qwen(prompt: str, base_url: str, max_tokens: int = 2048) -> str:
-    """Call Qwen3 via OpenAI-compatible API. Returns raw text output."""
+def _call_qwen(prompt: str, base_url: str, max_tokens: int = 2048,
+               read_timeout: int = 180, retries: int = 0) -> str:
+    """Call Qwen3 via OpenAI-compatible API. Returns raw text output.
+
+    `read_timeout` is the per-attempt read timeout (connect is fixed at 10s).
+    `retries` extra attempts on a timeout / connection drop (the server may be
+    momentarily busy with OCR) — the request itself is idempotent.
+    """
     import requests as req
     url = f'{base_url.rstrip("/")}/llm/v1/chat/completions'
     logger.debug('Qwen request: POST %s', url)
-    resp = req.post(url, json={
-        'model': 'qwen',
-        'messages': [{'role': 'user', 'content': prompt}],
-        'max_tokens': max_tokens,
-        'temperature': 0.1,
-        'chat_template_kwargs': {'enable_thinking': False},
-    }, timeout=180)
-    if resp.status_code != 200:
-        logger.error('Qwen %d: %s', resp.status_code, resp.text[:500])
-    resp.raise_for_status()
-    data = resp.json()
-    return data['choices'][0]['message']['content'].strip()
+    last_exc = None
+    for attempt in range(retries + 1):
+        try:
+            resp = req.post(url, json={
+                'model': 'qwen',
+                'messages': [{'role': 'user', 'content': prompt}],
+                'max_tokens': max_tokens,
+                'temperature': 0.1,
+                'chat_template_kwargs': {'enable_thinking': False},
+            }, timeout=(10, read_timeout))
+        except (req.exceptions.Timeout, req.exceptions.ConnectionError) as exc:
+            last_exc = exc
+            logger.warning('Qwen attempt %d/%d failed: %s', attempt + 1, retries + 1, exc)
+            continue
+        if resp.status_code != 200:
+            logger.error('Qwen %d: %s', resp.status_code, resp.text[:500])
+        resp.raise_for_status()
+        data = resp.json()
+        return data['choices'][0]['message']['content'].strip()
+    raise last_exc
 
 
 def extract_biblio_llm(
@@ -535,15 +549,20 @@ def _parse_llm_json_array(text: str) -> list:
     raise ValueError(f'No JSON array found in LLM output: {text[:200]}')
 
 
-def _chunk_entries(entries: list, max_chars: int = 9000) -> list:
-    """Group entry strings into chunks under max_chars (for batched LLM calls).
+def _chunk_entries(entries: list, max_chars: int = 4500,
+                   max_entries: int = 15) -> list:
+    """Group entry strings into batches for the LLM.
 
-    A single oversized entry becomes its own chunk.
+    A batch ends at whichever comes first: `max_entries` entries or `max_chars`
+    of input. Capping the *count* (not just input size) bounds the JSON the
+    model has to generate per call — a single call producing dozens of entries
+    can exceed the request read-timeout (the model generates near max_tokens).
+    A single oversized entry still becomes its own chunk.
     """
     chunks = []
     cur, cur_len = [], 0
     for e in entries:
-        if cur and cur_len + len(e) > max_chars:
+        if cur and (len(cur) >= max_entries or cur_len + len(e) > max_chars):
             chunks.append(cur)
             cur, cur_len = [], 0
         cur.append(e)
@@ -596,7 +615,9 @@ def extract_references_llm(
     for chunk in chunks:
         prompt = _REFS_PROMPT + '--- REFERENCES TEXT ---\n' + '\n\n'.join(chunk)
         if backend == 'qwen':
-            raw = _call_qwen(prompt, url, max_tokens=8192)
+            # ~15 entries/chunk → a few thousand output tokens; 4096 is ample
+            # and keeps generation well under the read timeout.
+            raw = _call_qwen(prompt, url, max_tokens=4096, retries=1)
         else:
             raw = _call_claude(prompt)
         for item in _parse_llm_json_array(raw):

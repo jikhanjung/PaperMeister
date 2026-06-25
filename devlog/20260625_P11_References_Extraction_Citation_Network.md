@@ -253,6 +253,17 @@ references 섹션 제목이 저널·시대·언어마다 천차만별 → 헤딩
 - 코드: `_HTML_HINT_RE`/`_DIV_RE`/`_P_RE`/`_html_to_text`/`_div_entries`/`_extract_refs_html`/
   `_extract_refs_markdown` + `extract_references_block` 디스패치.
 
+### 7f. 라이브 타임아웃 수정 — 청크를 엔트리 개수로 (2026-06-25)
+
+라이브 첫 실행에서 paper 4595(refs 175개)가 `Read timed out (180s)`. 원인: `_chunk_entries`가
+**입력 9000자 기준**이라 한 청크에 ~50+ 레퍼런스 → 한 번의 Qwen 호출이 max_tokens(8192)에
+가깝게 생성하며 180초 초과.
+
+- `_chunk_entries`에 **`max_entries=15` 추가**(+ max_chars 4500). 호출당 출력 JSON을 ~15개로
+  제한 → 175 refs면 12개 청크, 각 호출은 수천 토큰만 생성해 빠르게 반환.
+- refs 호출 `max_tokens` 8192→**4096**(15개엔 충분), `_call_qwen`에 connect/read 타임아웃 분리
+  `(10, 180)` + **timeout/connection 1회 재시도**(OCR로 서버가 잠깐 바쁠 때 대비).
+
 ---
 
 ## 8. 운영 메모
