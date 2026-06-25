@@ -216,12 +216,13 @@ def _call_claude(prompt: str) -> str:
 
 
 def _call_qwen(prompt: str, base_url: str, max_tokens: int = 2048,
-               read_timeout: int = 180, retries: int = 0) -> str:
+               read_timeout: int = 180, retries: int = 0, label: str = '') -> str:
     """Call Qwen3 via OpenAI-compatible API. Returns raw text output.
 
     `read_timeout` is the per-attempt read timeout (connect is fixed at 10s).
     `retries` extra attempts on a timeout / connection drop (the server may be
     momentarily busy with OCR) — the request itself is idempotent.
+    `label` is an optional caller tag (e.g. the paper) for log attribution.
     """
     import requests as req
     url = f'{base_url.rstrip("/")}/llm/v1/chat/completions'
@@ -238,7 +239,9 @@ def _call_qwen(prompt: str, base_url: str, max_tokens: int = 2048,
             }, timeout=(10, read_timeout))
         except (req.exceptions.Timeout, req.exceptions.ConnectionError) as exc:
             last_exc = exc
-            logger.warning('Qwen attempt %d/%d failed: %s', attempt + 1, retries + 1, exc)
+            tag = f'{label} ' if label else ''
+            logger.warning('%sQwen attempt %d/%d failed: %s',
+                           tag, attempt + 1, retries + 1, exc)
             continue
         if resp.status_code != 200:
             logger.error('Qwen %d: %s', resp.status_code, resp.text[:500])
@@ -342,9 +345,29 @@ _REF_HEADING_WORDS = (
 # Optional trailing clause some journals append, e.g. "References and Notes",
 # "References and Further Reading".
 _REF_HEADING_SUFFIX = r'(?:\s*(?:and|&|及び|및)\s*(?:notes?|further\s+reading|cited))?'
+
+
+def _is_cjk(ch: str) -> bool:
+    """True for a CJK ideograph, kana, or Hangul syllable."""
+    o = ord(ch)
+    return (0x4E00 <= o <= 0x9FFF or 0x3040 <= o <= 0x30FF or 0xAC00 <= o <= 0xD7AF)
+
+
+def _heading_word_pattern(w: str) -> str:
+    """Regex for one heading word, tolerant of OCR spacing in CJK/Hangul.
+
+    CJK/Hangul headings are routinely OCR'd with spaces between glyphs ("文 献",
+    "참고 문헌"), so allow optional whitespace between every character. Latin
+    words keep their literal spacing (a space there is a real word boundary).
+    """
+    if any(_is_cjk(c) for c in w):
+        return r'\s*'.join(re.escape(c) for c in w)
+    return re.escape(w)
+
+
 _REF_HEADING_RE = re.compile(
     r'^\s{0,3}#{0,6}\s*(?:[0-9IVXivx]+\s*[.)]\s*)?(?:' +
-    '|'.join(re.escape(w) for w in _REF_HEADING_WORDS) +
+    '|'.join(_heading_word_pattern(w) for w in _REF_HEADING_WORDS) +
     r')' + _REF_HEADING_SUFFIX + r'\s*[:：.]?\s*$',
     re.IGNORECASE,
 )
@@ -425,21 +448,111 @@ def _extract_refs_html(full: str) -> tuple[str, str]:
     return ('\n\n'.join(entries), 'high') if entries else ('', '')
 
 
-def _extract_refs_markdown(full: str) -> tuple[str, str]:
-    """Line-based references locator for plain-markdown OCR output."""
-    lines = full.split('\n')
-    start = None
-    for i, line in enumerate(lines):
-        if _REF_HEADING_RE.match(line):
-            start = i
-    if start is None:
-        return '', ''
-    body = []
-    for line in lines[start + 1:]:
+# A citation "head" line: an author/title line that carries a publication year
+# near its start, followed by a citation delimiter — covers "Ager, D. V., 1963:",
+# "岩崎泰顕・坂本吾省, 1981:" and the Western "Smith, J. (2001). …" style (year in
+# parentheses). Body prose also contains years, but deep inside a long sentence,
+# so anchoring the year within the first ~55 chars + a delimiter separates
+# references from running text. Used to bound a references section by content
+# density in multi-article journal issues / multi-chapter books.
+_CITATION_HEAD_RE = re.compile(
+    r'^\s{0,4}\S.{0,55}?\(?(?:18|19|20)\d{2}[a-z]?\)?\s*[.:：,，、]')
+
+# Tuning for _capture_refs_section (multi-article path only).
+_REFS_GAP_STOP = 12      # consecutive non-head lines ⇒ references region ended
+_REFS_MAX_CONT = 8       # max continuation lines attached to the last entry
+_REFS_MIN_HEADS = 2      # min author-year heads for a section to be real
+
+# A line that signals the article body / a back-matter section has resumed
+# (these never begin a reference, so they end the references region).
+_BODY_TEXT_RE = re.compile(
+    r'^\s*(?:指名討論|討論|質疑|司会|はじめに|おわりに|まとめ|要\s*約|序\s*論|緒\s*言|'
+    r'abstract|introduction)', re.IGNORECASE)
+
+
+def _is_body_line(s: str) -> bool:
+    """True if a (non-head) line looks like article prose, not a reference fragment.
+
+    Chandra fragments each reference into several SHORT lines (author-year head,
+    then the italic journal, volume, pages each on their own line), none of which
+    carry a CJK sentence period. Body prose, by contrast, is long and/or ends
+    sentences with '。'. So short fragment lines are kept; long / '。' / section-
+    heading lines end the references region.
+    """
+    return ('。' in s) or len(s) > 120 or bool(_BODY_TEXT_RE.match(s))
+
+
+def _capture_refs_section(lines: list, start: int, end: int) -> str:
+    """Bound ONE references section inside [start, end) by citation-head density.
+
+    In a journal-issue PDF each article's reference list is followed immediately
+    by the next article's body (and often a data table or figure block), so
+    running to `end` (the next refs heading) would swallow all of it. Heads alone
+    can't bound it — one reference is OCR-fragmented across ~5-7 short lines, so a
+    long gap of non-head lines is normal WITHIN the references. We therefore walk
+    the window keeping reference content (heads + short non-body continuation
+    lines) and stop only once `_REFS_GAP_STOP` consecutive non-head lines pile up
+    — which is what a resumed body paragraph or a numeric table (e.g. "1*", "2*"
+    rows) produces, but a single fragmented entry does not. A window with fewer
+    than `_REFS_MIN_HEADS` author-year lines is rejected as a false heading (e.g.
+    a "文 献" line inside the journal's submission guidelines).
+    """
+    seg = lines[start:end]
+    for off, line in enumerate(seg):
         if _REF_STOP_RE.match(line):
+            seg = seg[:off]
             break
-        body.append(line)
-    block = '\n'.join(body).strip()
+    if sum(1 for line in seg if _CITATION_HEAD_RE.match(line)) < _REFS_MIN_HEADS:
+        return ''
+    out, gap, keep = [], 0, 0
+    for line in seg:
+        s = line.strip()
+        out.append(line)
+        if not s:
+            continue
+        if _CITATION_HEAD_RE.match(line) or _NUMBERED_ENTRY_RE.match(line):
+            gap = 0
+            keep = len(out)
+            continue
+        gap += 1
+        if gap >= _REFS_GAP_STOP:
+            break
+        if gap <= _REFS_MAX_CONT and not _is_body_line(s):
+            keep = len(out)               # continuation of the last entry
+    return '\n'.join(out[:keep]).strip()
+
+
+def _extract_refs_markdown(full: str) -> tuple[str, str]:
+    """Line-based references locator for plain-markdown OCR output.
+
+    Single references heading → capture to a back-matter STOP heading or EOF
+    (long-standing behavior, robust to mid-section page furniture). Multiple
+    headings → a multi-article journal issue: bound EACH section by content
+    density so the last one doesn't run to EOF and swallow trailing articles,
+    figures, tables and covers.
+    """
+    lines = full.split('\n')
+    heads = [i for i, line in enumerate(lines) if _REF_HEADING_RE.match(line)]
+    if not heads:
+        return '', ''
+
+    if len(heads) == 1:
+        start = heads[0]
+        body = []
+        for line in lines[start + 1:]:
+            if _REF_STOP_RE.match(line):
+                break
+            body.append(line)
+        block = '\n'.join(body).strip()
+        return (block, 'high') if block else ('', '')
+
+    blocks = []
+    for i, h in enumerate(heads):
+        win_end = heads[i + 1] if i + 1 < len(heads) else len(lines)
+        b = _capture_refs_section(lines, h + 1, win_end)
+        if b:
+            blocks.append(b)
+    block = '\n\n'.join(blocks).strip()
     return (block, 'high') if block else ('', '')
 
 
@@ -764,21 +877,25 @@ def extract_references_llm(
             # alone (≈712) truncated the JSON ('Unterminated string').
             in_chars = sum(len(b) for b in batch)
             mt = min(8192, max(len(batch) * 256, in_chars // 2) + 1024)
+            tag = f'{label} ' if label else ''
             t0 = time.monotonic()
             try:
-                raw = _call_qwen(prompt, url, max_tokens=mt, read_timeout=240, retries=0)
+                raw = _call_qwen(prompt, url, max_tokens=mt, read_timeout=240,
+                                 retries=0, label=label)
             except (_req.exceptions.Timeout, _req.exceptions.ConnectionError):
                 # Too slow at this size — shrink and retry the SAME refs, unless
                 # already at the floor (then it's a real failure).
                 if _refs_batcher.size > _AdaptiveBatcher.MIN:
                     _refs_batcher.shrink()
-                    logger.info('refs: timeout at batch %d → shrink to %d, retrying',
-                                len(batch), _refs_batcher.size)
+                    logger.info('%srefs %d/%d: timeout at batch %d → shrink to %d, '
+                                'retrying', tag, i + len(batch), total, len(batch),
+                                _refs_batcher.size)
                     continue
+                logger.info('%srefs %d/%d: timeout at batch %d (already at floor) '
+                            '→ giving up', tag, i + len(batch), total, len(batch))
                 raise
             dt = time.monotonic() - t0
             _refs_batcher.update(dt)
-            tag = f'{label} ' if label else ''
             logger.info('%srefs %d/%d: %d in %.1fs → next batch %d',
                         tag, i + len(batch), total, len(batch), dt, _refs_batcher.size)
         else:
