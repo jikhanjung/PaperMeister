@@ -8,7 +8,7 @@
 
 ## 현재 단계
 
-**Phase: P07 Phase 2 완전 종료 / Phase 3 완료 + 기본 사용 가능 / Phase 4 hookup 진행 중 / Phase D 대량 운영 — 라이브러리 전체 biblio 완료 (~2026-06-15) / P02 PyInstaller 패키징 — `.exe` 빌드 성공 + 실행 검증 완료 (2026-06-15)**
+**Phase: P07 Phase 2 완전 종료 / Phase 3 완료 + 기본 사용 가능 / Phase 4 hookup 진행 중 / Phase D 대량 운영 — 라이브러리 전체 biblio 완료 (~2026-06-15) / P02 PyInstaller 패키징 — `.exe` 빌드 성공 + 실행 검증 완료 (2026-06-15) / P11 References 추출 + 인용 네트워크 (Phase 1) — 코드 작성 완료, 라이브 실행 대기 (2026-06-25)**
 
 ### 안정적으로 돌아가는 것
 - 기존 GUI (`papermeister/ui/` — **동결**, 신규 개발 없음). Process/Preferences 다이얼로그는 새 desktop 앱에서 재사용 중
@@ -62,6 +62,18 @@
   - **로컬 폴더 가져오기** (세션 47): Rail 'import' 액션(아이콘 `import.svg`) → `QFileDialog`로 폴더 선택 → **`ScanWorker`(QThread, dir-walk 사전 카운트 → determinate 진행)** + **`ScanWindow` 진행창**(per-file 로그 + new/linked/total 요약) → `ingestion.import_source_directory`(재귀 스캔 + SHA256 dedup) → SourceNav refresh(폴더명 탭) → 그 소스 pending PDF "지금 OCR?" 확인 → `ProcessWindow` 재사용. 멀티탭(Zotero + 폴더1/2…)은 SourceNav가 소스마다 탭이라 공짜. **핵심: `ingest_pdf`이 `PaperFolder` M2M 링크 생성** — desktop `list_by_folder`가 M2M로만 조회하므로 필수. 이미 Zotero에 있는(hash 동일) PDF는 skip 대신 **그 기존 Paper를 폴더에 링크**(중복 0, 같은 논문이 Zotero 컬렉션+로컬 폴더 양쪽 탭에 표시). 로컬 PDF는 다운로드 없이 PyMuPDF 메타 추출. **탭 우클릭 → "Remove (local folder)"** 로 directory 소스 삭제 가능(`delete_directory_source`: 순수 로컬 논문만 cascade 삭제, Zotero 공유 논문은 링크만 해제, 디스크 파일·OCR 캐시 보존). **end-to-end는 사용자 Windows 검증 대기**. [devlog 062](./devlog/20260615_062_Desktop_Local_Folder_Import.md)
 
 ### 진행 중인 것
+- **P11 References 추출 + 인용 네트워크 (Phase 1)** — 코드 작성 완료, 라이브 실행 대기 (2026-06-25, 세션 49). 계획서 [devlog P11](./devlog/20260625_P11_References_Extraction_Citation_Network.md)
+  - **목표**: 논문 본문 맨 뒤 references 섹션을 파싱(ocrserver Qwen3 32B) → `Reference` 테이블 저장 → 보유 Paper와 매칭. held(PDF 보유) vs cited-only(외부) 구분
+  - **신규 모델 `Reference`** (`models.py`): citing_paper FK + order_index + raw_text(source of truth) + 파싱 필드(authors_json/year/title/container/volume/issue/pages/doi/ref_type) + resolution(resolved_paper FK nullable/match_method/match_score) + provenance(source/model_version/parse_confidence). `database.py ALL_TABLES`에 등록(create_tables가 멱등 생성). **held vs cited는 `resolved_paper` null 여부**로 판정, 별도 플래그 없음
+  - **`biblio.py` 추가**: `extract_references_block(pages)`(뒤에서부터 references 헤딩 탐색 EN+CJK, appendix 등에서 끊기, 미발견 시 마지막 2p fallback+low conf) / `split_reference_entries`(번호형 `[n]`/`n.` 결정적 분할, 3개 미만이면 통째로 LLM에) / `_REFS_PROMPT`(JSON 배열, raw 원문 보존, 환각 금지) / `_parse_llm_json_array` / `extract_references_llm(file_hash, backend)`. `_call_qwen`에 `max_tokens` 파라미터 추가(refs는 8192)
+  - **`scripts/extract_references.py`**: `--scope`/`--paper-ids`/`--limit`/`--reextract`, **`--execute`**(기본 dry-run). `(citing_paper, source)` 단위 delete-and-replace 멱등. skip_existing 기본 ON
+  - **`scripts/resolve_references.py`**: DOI 정확 일치(Paper.doi+PaperBiblio.doi 정규화) → 제목 토큰 inverted-index 후보 생성 → year+1저자 성 스코어링(`--threshold` 기본 0.7). `--reresolve`, **`--execute`**(기본 dry-run)
+  - **`papermeister/references.py`**: `save_references(paper_id, entries, source, model_version)` 공용 저장 헬퍼 — delete-and-replace 멱등. 스크립트+데스크톱이 공유(필드 매핑 단일화)
+  - **desktop 우클릭 "Extract References"** (사용자 요청): **Paper(processed/review/done) / 폴더 / My Library** 세 레벨 모두. PaperList `extract_references` 액션, SourceNav `extract_references_folder`/`extract_references_source`. main_window에 biblio와 **분리된** 전용 큐(`_refs_queue`/`_refs_task`/`_refs_window`) + `ReferencesWindow` 진행창(`desktop/windows/references_window.py`, biblio와 동일 UX). 백엔드는 `ocr_pod_url` 있으면 qwen, 없으면 claude. **biblio와 분리 이유**: 다른 LLM 호출 + Zotero apply 없음
+  - **`Paper.references_checked` 체크 필드** (사용자 요청): references 섹션 없는 paper가 매 batch 재파싱되던 문제 해결. 추출 시도하면(있든 없든) True stamp → 타겟은 `references_checked==False`인 processed PDF만. `_migrate`가 컬럼 추가 + **기존 Reference 보유 paper 백필**. "no references section"은 실패가 아닌 **checked-empty**(`extract_references_llm`이 ValueError 대신 `[]` 반환, LLM 호출도 생략). ValueError는 OCR 자체 없을 때만(진짜 에러→재시도). `--paper-ids`/`--reextract`는 플래그 우회
+  - **헤딩 다양성 보강** (사용자 지적): references 제목이 저널/시대/언어마다 다양 → 헤딩 목록 대폭 확장. 다국어(EN 다수변형/FR/DE/ES/IT/PT/CJK 참고문헌·引用文献·参考文献·主要参考文献…) + 번호(`5.`/`IV.`)·콜론·"and Notes" 접미사 흡수, plain 라인 매치(`#{0,6}`), 줄 앵커로 "Literature Review"·"see references" 오탐 방지. 헤딩 미검출 시 마지막 2p LLM fallback이 2차 안전망
+  - **검증 완료(WSL)**: compile OK, 휴리스틱 self-test(헤딩 35종 매치/8종 거부, 번호형/CJK/fallback/JSON 배열), resolve 매칭(DOI/title/external 구분) end-to-end, `save_references` 멱등, **마이그레이션 컬럼추가+백필**, headless 데스크톱 임포트+메서드 배선 전부 통과. **라이브 실행(Windows + ocrserver Qwen3)은 사용자 검증 대기**
+  - **다음**: 소수 샘플로 파싱 품질 확인 → resolve 임계값 튜닝 → 인용 네트워크 export/표시. Phase 2(`CitedWork` 외부노드 dedup)·Level 3(in-text 인용맥락)은 범위 밖
 - **P02 PyInstaller 패키징 — 완료** (2026-06-15): `python -m desktop` → onedir `dist\PaperMeister\PaperMeister.exe`. 빌드 성공 + 실행 검증(Qt/SQLite/SSL Zotero sync/PyMuPDF PDF/FTS5 검색 전부 동작). **빌드 방법은 conda 특유의 DLL 함정 때문에 `build_desktop_clean.bat`(플레인 cmd + conda OFF PATH인 venv)** 필수 — `build_desktop.bat`(conda 셸 직접 빌드)는 Qt DLL 오염으로 실패함. 트러블슈팅 전말·최종 레시피는 [devlog 061](./devlog/20260615_061_PyInstaller_Conda_DLL_Troubleshooting.md), 계획·설계는 [devlog P02](./devlog/20260615_P02_PyInstaller_Desktop_Packaging.md). 후속(저순위): 앱 `.ico`/버전정보/코드사이닝, 배포 자동화
 - **Phase 4 (hookup)**:
   - **Apply Biblio Zotero write-back 라이브 검증**: 세션 18에서 write 키로 한 번 돌렸음. paper 4315 (bookSection)에서 400 → `ITEM_TYPE_JOURNAL_FIELD` map 픽스 + `ZoteroPatchRejected` 래퍼로 해결. 48편 status=extracted 잔존 (다음 Process 시 재시도 → 일부는 evaluate가 needs_review로 분류한 정상 케이스, 나머지는 bookSection 400으로 멈춘 케이스)
@@ -182,6 +194,13 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 ---
 
 ## 최근 세션 요약
+
+**2026-06-25 (세션 49)** — [devlog P11](./devlog/20260625_P11_References_Extraction_Citation_Network.md)
+- **P11 References 추출 + 인용 네트워크 (Phase 1) 설계 + 코드 작성** — 논문 본문 references 섹션을 파싱해 인용 네트워크의 토대 구축. held(PDF 보유) vs cited-only(외부) 구분이 핵심 요구
+- **결정** (사용자 확정): Phase 1만 먼저(`Reference` 테이블, 외부노드 dedup `CitedWork`는 Phase 2로 분리) / 파싱 엔진은 ocrserver Qwen3 32B 단독(claude -p 불가, 무료·CJK 강건) / devlog 계획서 작성 후 구현
+- **프레이밍**: references는 "파생 레이어" — OCR JSON이 source of truth라 언제든 재생성 가능. raw 문자열만 보존하면 됨(PaperBiblio식 전버전 보관 불필요). 추출↔해소 2패스 분리(extract_biblio↔reflect_biblio 철학)
+- **산출물**: `Reference` 모델 + `biblio.py`(섹션 위치 휴리스틱/엔트리 분할/Qwen 배열 파싱) + `scripts/extract_references.py` + `scripts/resolve_references.py`(DOI→FTS-style 토큰 후보→year+저자 스코어). 모두 `--execute` 컨벤션
+- **검증(WSL)**: compile + 휴리스틱/resolve self-test 통과. **라이브(Windows+ocrserver)는 사용자 검증 대기**
 
 **2026-06-17 (세션 48)** — [devlog 063](./devlog/20260617_063_Search_Title_Boost_And_Highlighting.md)
 - **검색 품질 — document-level title boost**: `passage_fts`가 passage 단위라 title×10 가중치가 문서 전체엔 안 먹던 "trilobite 문제" 해결. `search.search()`에 Python 재랭킹(별도 paper_fts 없이) — `query_terms` 토큰화(CJK 보존) 후 3-tier(전부 제목 매치/일부/없음) 정렬, tier 내부 BM25. 검증: 본문 8회 vs 제목 1회 → 제목 매치 1위

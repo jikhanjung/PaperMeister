@@ -121,6 +121,8 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 | `promote_standalone.py` | Standalone PDF → Zotero parent item 생성 |
 | `update_promoted_items.py` | 기존 Zotero parent item in-place 수정 |
 | `preview_standalone_biblio.py` | Standalone PDF 추출 결과 미리보기 (read-only) |
+| `extract_references.py` | (P11) references 섹션 파싱 → `Reference` 테이블 (Qwen3, `--execute`) |
+| `resolve_references.py` | (P11) `Reference` → 보유 Paper 매칭 (DOI + 제목 스코어, `--execute`) |
 
 ## Future Phases
 
