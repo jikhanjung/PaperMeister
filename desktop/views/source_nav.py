@@ -295,9 +295,13 @@ class SourceNav(QWidget):
             # in any collection, plus uncollected).
             menu.addAction('Process All (OCR → Biblio)',
                             lambda: self.folder_action.emit('process_source', value))
+            menu.addAction('Extract References (all)',
+                            lambda: self.folder_action.emit('extract_references_source', value))
         else:
             menu.addAction('Process Folder (OCR → Biblio)',
                             lambda: self.folder_action.emit('process_folder', value))
+            menu.addAction('Extract References (folder)',
+                            lambda: self.folder_action.emit('extract_references_folder', value))
             # "Upload OCR JSON to Zotero" only makes sense for Zotero-backed
             # folders — local-directory PDFs have no Zotero attachment.
             if self._source_type_for_tree(tree) == 'zotero':

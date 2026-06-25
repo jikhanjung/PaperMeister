@@ -43,6 +43,9 @@ class MainWindow(QMainWindow):
         self._biblio_task = None     # single biblio extraction background task
         self._auto_biblio_queue = []  # [(paper_id, file_id), ...] queued after OCR
         self._biblio_window = None   # batch biblio progress window (lazy)
+        self._refs_task = None        # single references extraction background task
+        self._refs_queue = []         # [(paper_id, file_id), ...] for references parsing
+        self._refs_window = None      # batch references progress window (lazy)
         self._sync_worker = None  # ZoteroSyncWorker
         self._scan_worker = None   # local-folder import worker (ScanWorker)
         self._scan_window = None   # import progress window (lazy)
@@ -384,6 +387,8 @@ class MainWindow(QMainWindow):
             self.detail_panel._tabs.setCurrentIndex(1)  # PDF tab
         elif action == 'extract_biblio':
             self._run_biblio_extraction(paper_id, file_id)
+        elif action == 'extract_references':
+            self._run_references_extraction(paper_id, file_id)
         elif action == 'review_biblio':
             self.detail_panel.show_paper(paper_id)
             self.detail_panel._tabs.setCurrentIndex(0)  # Metadata tab (includes biblio)
@@ -393,6 +398,10 @@ class MainWindow(QMainWindow):
             self._process_folder(folder_id)
         elif action == 'process_source':
             self._process_source(folder_id)  # value is a Source.id here
+        elif action == 'extract_references_folder':
+            self._run_references_scope(self._collect_folder_ids(folder_id), 'this folder')
+        elif action == 'extract_references_source':
+            self._run_references_scope(None, 'My Library (all)')
         elif action == 'upload_ocr_json':
             self._upload_ocr_json(folder_id)
 
@@ -1003,6 +1012,204 @@ class MainWindow(QMainWindow):
         task.failed.connect(lambda msg: self._on_biblio_failed(paper_id, msg))
         self._biblio_task = task
         task.start()
+
+    # ── References extraction (P11) ──────────────────────────
+    # Parses a paper's bibliography into Reference rows via the ocrserver
+    # Qwen model. Separate serialized queue from biblio (different backend
+    # call + no Zotero apply), but the same progress-window UX.
+
+    def _refs_backend(self) -> str:
+        """References parsing always uses the local server (Qwen) when it's
+        configured; falls back to claude otherwise."""
+        from papermeister.preferences import get_pref
+        return 'qwen' if get_pref('ocr_pod_url', '') else 'claude'
+
+    def _refs_targets(self, folder_ids):
+        """Processed PDFs (in scope) whose paper hasn't had references checked.
+
+        `Paper.references_checked` is set once extraction has run (even if no
+        references section was found), so papers without a bibliography aren't
+        re-parsed on every batch. Returns [(paper_id, file_id), ...].
+        folder_ids None → whole library.
+        """
+        from papermeister.models import Paper, PaperFile, PaperFolder
+
+        if folder_ids is None:
+            pdfs = (
+                PaperFile.select(PaperFile.id, PaperFile.paper)
+                .join(Paper)
+                .where(
+                    PaperFile.status == 'processed',
+                    PaperFile.path.endswith('.pdf'),
+                    Paper.references_checked == False,  # noqa: E712 (peewee)
+                )
+                .order_by(PaperFile.paper.desc())
+            )
+        else:
+            pdfs = (
+                PaperFile.select(PaperFile.id, PaperFile.paper)
+                .join(Paper).join(PaperFolder, on=(PaperFolder.paper == Paper.id))
+                .where(
+                    PaperFolder.folder << folder_ids,
+                    PaperFile.status == 'processed',
+                    PaperFile.path.endswith('.pdf'),
+                    Paper.references_checked == False,  # noqa: E712 (peewee)
+                )
+                .order_by(Paper.id.desc())
+            )
+
+        queued = {pid for pid, _ in self._refs_queue}
+        targets, seen = [], set()
+        for pf in pdfs:
+            pid = pf.paper_id
+            if pid in seen or pid in queued:
+                continue
+            seen.add(pid)
+            targets.append((pid, pf.id))
+        return targets
+
+    def _run_references_extraction(self, paper_id: int, file_id: int):
+        """Single-paper references extraction (right-click on a paper)."""
+        from papermeister.models import PaperFile
+        pf = PaperFile.get_or_none(PaperFile.id == file_id) if file_id else None
+        if not pf or not pf.hash:
+            self.status_bar.set_task('No file hash — cannot extract references')
+            return
+
+        engine = 'Qwen3 (local server)' if self._refs_backend() == 'qwen' \
+            else 'Claude Sonnet 4.6 (Max plan quota)'
+        resp = QMessageBox.question(
+            self, 'Extract References',
+            f'Parse this paper\'s references section using {engine}?',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if resp != QMessageBox.StandardButton.Yes:
+            return
+
+        if self._refs_window is None:
+            from desktop.windows.references_window import ReferencesWindow
+            self._refs_window = ReferencesWindow(self)
+        if (paper_id, file_id) not in self._refs_queue:
+            self._refs_queue.append((paper_id, file_id))
+            self._refs_window.begin(1)
+        else:
+            self._refs_window.show()
+            self._refs_window.raise_()
+        self.status_bar.set_task(f'Queued references extraction for paper {paper_id}…')
+        self._drain_refs_queue()
+
+    def _run_references_scope(self, folder_ids, scope_label: str):
+        """Folder / whole-library references extraction (right-click on a
+        folder or 'My Library')."""
+        targets = self._refs_targets(folder_ids)
+        if not targets:
+            self.status_bar.set_task(
+                f'Nothing to do — references already extracted ({scope_label})')
+            return
+
+        resp = QMessageBox.question(
+            self, 'Extract References',
+            f'Parse references for {len(targets)} OCR-completed paper(s) in '
+            f'{scope_label}?',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if resp != QMessageBox.StandardButton.Yes:
+            return
+
+        # Honour the on-screen sort order for the visible papers.
+        rank = {pid: i for i, pid in enumerate(self.paper_list.visible_paper_ids())}
+        targets.sort(key=lambda t: rank.get(t[0], len(rank)))
+
+        if self._refs_window is None:
+            from desktop.windows.references_window import ReferencesWindow
+            self._refs_window = ReferencesWindow(self)
+        self._refs_window.begin(len(targets))
+        self._refs_queue.extend(targets)
+        self.status_bar.set_task(f'References: {len(targets)} paper(s)…')
+        self._drain_refs_queue()
+
+    def _drain_refs_queue(self):
+        """Start references extraction for the next queued item, if idle."""
+        if self._refs_task and self._refs_task.isRunning():
+            return
+        if not self._refs_queue:
+            return
+        paper_id, file_id = self._refs_queue.pop(0)
+        self._run_references_extraction_silent(paper_id, file_id)
+
+    def _run_references_extraction_silent(self, paper_id: int, file_id: int):
+        """Parse references in the background and save Reference rows."""
+        import os
+        from papermeister.models import PaperFile
+        from desktop.workers.background import BackgroundTask
+
+        pf = PaperFile.get_or_none(PaperFile.id == file_id) if file_id else None
+        if not pf or not pf.hash:
+            self._drain_refs_queue()
+            return
+
+        backend = self._refs_backend()
+        file_hash = pf.hash
+        self.status_bar.set_task(f'Parsing references for paper {paper_id}…')
+        if self._refs_window and self._refs_window.isVisible():
+            self._refs_window.set_current(f'Parsing: {self._biblio_title(paper_id)}')
+
+        def _do_extract():
+            from papermeister.biblio import extract_references_llm
+            from papermeister.references import save_references
+            entries, source, model_version = extract_references_llm(
+                file_hash, backend=backend)
+            n = save_references(paper_id, entries, source, model_version)
+            return n, None
+
+        task = BackgroundTask(_do_extract)
+        task.done.connect(lambda result: self._on_refs_extracted(paper_id, result))
+        task.failed.connect(lambda msg: self._on_refs_failed(paper_id, msg))
+        self._refs_task = task
+        task.start()
+
+    def _on_refs_extracted(self, paper_id: int, result):
+        win = self._refs_window if (self._refs_window and self._refs_window.isVisible()) else None
+        try:
+            n, _err = result
+            # Mark checked (even when n == 0) so batch re-runs skip this paper.
+            from papermeister.models import Paper
+            Paper.update(references_checked=True).where(Paper.id == paper_id).execute()
+            title = self._biblio_title(paper_id)
+            if n > 0:
+                self.status_bar.set_task(f'Parsed {n} references for paper {paper_id}')
+                if win:
+                    win.record(f'{title} — {n} references', 'ok', refs=n)
+            else:
+                self.status_bar.set_task(f'No references found for paper {paper_id}')
+                if win:
+                    win.record(f'{title} — no references section', 'empty')
+        except Exception as e:
+            self.status_bar.set_task(f'References error for paper {paper_id}: {e}')
+            if win:
+                win.record(f'{self._biblio_title(paper_id)} — error: {e}', 'error')
+        finally:
+            self._after_refs(paper_id)
+
+    def _on_refs_failed(self, paper_id: int, msg: str):
+        self.status_bar.set_task(f'References failed for paper {paper_id}: {msg}')
+        win = self._refs_window if (self._refs_window and self._refs_window.isVisible()) else None
+        if win:
+            win.record(f'{self._biblio_title(paper_id)} — failed: {msg}', 'error')
+        self._after_refs(paper_id)
+
+    def _after_refs(self, paper_id: int):
+        """Shared tail: drain queue, finish window when idle."""
+        self._drain_refs_queue()
+        win = self._refs_window
+        if (
+            win and win.isVisible()
+            and not self._refs_queue
+            and not (self._refs_task and self._refs_task.isRunning())
+        ):
+            win.finish()
 
     def _open_preferences(self):
         """Open the frozen PreferencesDialog for RunPod / Zotero credentials."""

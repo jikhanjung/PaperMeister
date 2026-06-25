@@ -324,11 +324,23 @@ class PaperListView(QTreeWidget):
                 extract_act.setToolTip(
                     'Disabled: turn on "Enable manual biblio extraction" in Preferences → Biblio'
                 )
+            menu.addAction(
+                'Extract References',
+                lambda: self.context_action.emit('extract_references', paper_id, file_id or 0),
+            )
             menu.addAction('Open PDF', lambda: self.context_action.emit('open_pdf', paper_id, file_id or 0))
         elif status == 'review':
             menu.addAction('Review Biblio', lambda: self.context_action.emit('review_biblio', paper_id, 0))
+            menu.addAction(
+                'Extract References',
+                lambda: self.context_action.emit('extract_references', paper_id, file_id or 0),
+            )
             menu.addAction('Open PDF', lambda: self.context_action.emit('open_pdf', paper_id, file_id or 0))
         elif status == 'done':
+            menu.addAction(
+                'Extract References',
+                lambda: self.context_action.emit('extract_references', paper_id, file_id or 0),
+            )
             menu.addAction('Open PDF', lambda: self.context_action.emit('open_pdf', paper_id, file_id or 0))
         # pending/failed/none have no further actions beyond the OCR action above.
 
