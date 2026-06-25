@@ -12,6 +12,7 @@ Convention: dry-run by default; pass --execute to write to the DB.
 """
 
 import argparse
+import logging
 import os
 import sys
 import time
@@ -78,6 +79,9 @@ def main():
     parser.add_argument('--no-resolve', action='store_true',
                         help='Skip the post-extraction auto-resolve pass')
     args = parser.parse_args()
+
+    # Show the adaptive per-batch progress ("refs N/M: K in T.Ts → next batch B").
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
 
     init_db()
     args.source_label = 'llm-qwen' if args.backend == 'qwen' else 'llm-sonnet'

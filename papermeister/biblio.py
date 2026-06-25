@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import time
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
@@ -549,6 +550,42 @@ def _parse_llm_json_array(text: str) -> list:
     raise ValueError(f'No JSON array found in LLM output: {text[:200]}')
 
 
+class _AdaptiveBatcher:
+    """Slow-start controller for references-per-LLM-call.
+
+    Starts by sending ONE reference (prove it works + measure latency), then
+    grows the batch multiplicatively while responses are fast and shrinks when
+    they're slow — keeping each call comfortably under the read timeout while
+    maximizing throughput. State persists across papers within a run, so after
+    a short warm-up the batch size settles at what the server can handle.
+    """
+    MIN = 1
+    MAX = 24
+    TARGET_LO = 20.0   # under this → server is fast, grow
+    TARGET_HI = 75.0   # over this → getting close to the timeout, shrink
+    MAX_CHARS = 7000   # hard input cap regardless of count (long entries)
+
+    def __init__(self, size: int = 1):
+        self.size = size
+
+    def update(self, elapsed: float):
+        if elapsed < self.TARGET_LO:
+            self.size = min(self.size * 2, self.MAX)          # slow-start ramp
+        elif elapsed > self.TARGET_HI:
+            self.size = max(self.MIN, self.size // 2)
+        else:
+            self.size = min(self.size + 1, self.MAX)          # gentle in-band creep
+
+    def shrink(self):
+        """Hard shrink after a timeout, so we retry the same refs smaller."""
+        self.size = max(self.MIN, self.size // 2)
+
+
+# Process-wide controller: warms up once, reused across papers (refs extraction
+# is serialized in both the CLI and the desktop, so no locking needed).
+_refs_batcher = _AdaptiveBatcher()
+
+
 def _chunk_entries(entries: list, max_chars: int = 4500,
                    max_entries: int = 15) -> list:
     """Group entry strings into batches for the LLM.
@@ -603,7 +640,6 @@ def extract_references_llm(
         return [], source, model_version
 
     entries = split_reference_entries(block)
-    chunks = _chunk_entries(entries)
 
     if backend == 'qwen':
         from .preferences import get_pref
@@ -611,18 +647,46 @@ def extract_references_llm(
         if not url:
             raise RuntimeError('Server URL not configured in Preferences')
 
+    import requests as _req
+    total = len(entries)
     parsed = []
-    for chunk in chunks:
-        prompt = _REFS_PROMPT + '--- REFERENCES TEXT ---\n' + '\n\n'.join(chunk)
+    i = 0
+    while i < total:
+        # Take up to the current adaptive batch size, also bounded by chars.
+        size = _refs_batcher.size
+        batch, chars = [], 0
+        while (i + len(batch) < total and len(batch) < size
+               and (not batch or chars + len(entries[i + len(batch)])
+                    <= _AdaptiveBatcher.MAX_CHARS)):
+            chars += len(entries[i + len(batch)]) + 1
+            batch.append(entries[i + len(batch)])
+
+        prompt = _REFS_PROMPT + '--- REFERENCES TEXT ---\n' + '\n\n'.join(batch)
         if backend == 'qwen':
-            # ~15 entries/chunk → a few thousand output tokens; 4096 is ample
-            # and keeps generation well under the read timeout.
-            raw = _call_qwen(prompt, url, max_tokens=4096, retries=1)
+            mt = min(8192, len(batch) * 256 + 512)
+            t0 = time.monotonic()
+            try:
+                raw = _call_qwen(prompt, url, max_tokens=mt, retries=0)
+            except (_req.exceptions.Timeout, _req.exceptions.ConnectionError):
+                # Too slow at this size — shrink and retry the SAME refs, unless
+                # already at the floor (then it's a real failure).
+                if _refs_batcher.size > _AdaptiveBatcher.MIN:
+                    _refs_batcher.shrink()
+                    logger.info('refs: timeout at batch %d → shrink to %d, retrying',
+                                len(batch), _refs_batcher.size)
+                    continue
+                raise
+            dt = time.monotonic() - t0
+            _refs_batcher.update(dt)
+            logger.info('refs %d/%d: %d in %.1fs → next batch %d',
+                        i + len(batch), total, len(batch), dt, _refs_batcher.size)
         else:
             raw = _call_claude(prompt)
+
         for item in _parse_llm_json_array(raw):
             if isinstance(item, dict):
                 item.setdefault('parse_confidence', confidence)
                 parsed.append(item)
+        i += len(batch)
 
     return parsed, source, model_version
