@@ -121,6 +121,7 @@ class MainWindow(QMainWindow):
         self.paper_list.folder_reveal_requested.connect(self.source_nav.reveal_folder)
         self.paper_list.context_action.connect(self._on_context_action)
         self.detail_panel.apply_completed.connect(self._on_apply_completed)
+        self.detail_panel.reference_navigate.connect(self._on_reference_navigate)
         self.search_bar.returnPressed.connect(self._on_search_submitted)
         self.search_bar.textChanged.connect(self._on_search_text_changed)
 
@@ -1275,6 +1276,18 @@ class MainWindow(QMainWindow):
         self.status_bar.set_task(
             f'Applied paper #{paper_id} ({action})' if changed else f'No changes for paper #{paper_id}'
         )
+
+    def _on_reference_navigate(self, paper_id: int):
+        """A 'in library' reference badge was clicked → open that cited paper.
+        Select it in the list if it's on screen; always show it in the detail."""
+        from papermeister.models import Paper
+        if Paper.get_or_none(Paper.id == paper_id) is None:
+            self.status_bar.set_task(f'Paper #{paper_id} is no longer in the library')
+            return
+        if not self.paper_list.select_paper(paper_id):
+            # Not in the current list view — just show it in the detail panel.
+            self.detail_panel.show_paper(paper_id)
+        self.status_bar.set_task(f'Opened cited paper #{paper_id}')
 
     def _load_initial(self):
         try:

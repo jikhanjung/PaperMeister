@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from peewee import JOIN, fn
 
 from papermeister.models import (
-    Author, Folder, Paper, PaperBiblio, PaperFile, PaperFolder, Source,
+    Author, Folder, Paper, PaperBiblio, PaperFile, PaperFolder, Reference, Source,
 )
 
 
@@ -386,3 +386,83 @@ def load_detail(paper_id: int) -> PaperDetail | None:
         latest_biblio=biblio_dict,
         ocr_preview=None,  # Phase 4: read from ocr_json cache
     )
+
+
+@dataclass
+class ReferenceRow:
+    """One parsed bibliography entry for the References detail tab (P11)."""
+    id: int
+    order_index: int
+    raw_text: str
+    authors: list  # [{"family","given"}, ...] or ["Name", ...]
+    year: int | None
+    title: str
+    container: str
+    volume: str
+    issue: str
+    pages: str
+    doi: str
+    ref_type: str
+    resolved_paper_id: int | None   # set → we own this cited work (held)
+    match_method: str               # doi|title|'' (unresolved)
+
+    def citation(self) -> str:
+        """A compact author · year · container line for the card subtitle."""
+        names = []
+        for a in self.authors[:6]:
+            if isinstance(a, dict):
+                fam = (a.get('family') or '').strip()
+                giv = (a.get('given') or '').strip()
+                names.append(f'{fam}, {giv}'.strip(', ') if fam else giv)
+            elif a:
+                names.append(str(a))
+        who = '; '.join(n for n in names if n)
+        if len(self.authors) > 6:
+            who += ' et al.'
+        parts = []
+        if who:
+            parts.append(who)
+        if self.year:
+            parts.append(f'({self.year})')
+        # container volume(issue), pages
+        vol = self.volume + (f'({self.issue})' if self.issue else '')
+        bits = [b for b in (vol, self.pages) if b]
+        tail = self.container
+        if bits:
+            tail = f'{tail} {", ".join(bits)}' if tail else ', '.join(bits)
+        if tail:
+            parts.append(tail)
+        return ' '.join(parts)
+
+
+def load_references(paper_id: int) -> list[ReferenceRow]:
+    """All parsed references for a citing paper, ordered as in the bibliography."""
+    import json
+    rows: list[ReferenceRow] = []
+    q = (
+        Reference.select()
+        .where(Reference.citing_paper == paper_id)
+        .order_by(Reference.order_index)
+    )
+    for r in q:
+        try:
+            authors = json.loads(r.authors_json or '[]')
+        except (json.JSONDecodeError, TypeError):
+            authors = []
+        rows.append(ReferenceRow(
+            id=r.id,
+            order_index=r.order_index,
+            raw_text=r.raw_text or '',
+            authors=authors if isinstance(authors, list) else [],
+            year=r.year,
+            title=r.title or '',
+            container=r.container or '',
+            volume=r.volume or '',
+            issue=r.issue or '',
+            pages=r.pages or '',
+            doi=r.doi or '',
+            ref_type=r.ref_type or 'unknown',
+            resolved_paper_id=r.resolved_paper_id,
+            match_method=r.match_method or '',
+        ))
+    return rows

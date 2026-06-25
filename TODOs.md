@@ -29,9 +29,10 @@
 - [ ] DOI/제목 매칭 정확도 측정 (false positive 확인)
 - [ ] 라이브러리 전체 추출 완주 (`--scope all --execute`)
 
-### UI / 활용 (대기)
+### UI / 활용
+- [x] **DetailPanel References 탭** — 해당 논문의 references를 카드로 나열. 카드마다 citation(저자·연도·저널) + 제목 + held(in library, 클릭→이동) / cited-only 배지. raw 원문은 툴팁. lazy 빌드(탭 4번째). `paper_service.load_references` + `ReferenceRow.citation()`
 - [ ] 인용 네트워크 export(GEXF/CSV) 또는 `db_stats.py`에 cited 카운트 추가
-- [ ] DetailPanel에 references / cited-by 표시 검토
+- [ ] DetailPanel에 cited-by(역방향: 이 논문을 인용한 내 논문들) 표시 검토
 
 ### 범위 밖 (향후 Phase)
 - [ ] Phase 2: `CitedWork` 정규화 노드 (외부 논문 dedup → most-cited-external·co-citation)

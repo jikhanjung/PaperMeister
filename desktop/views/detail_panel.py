@@ -6,6 +6,8 @@ Tabs
 - PDF        — Rendered PDF pages via PyMuPDF
 - Text       — Rendered markdown from ~/.papermeister/ocr_json/{hash}.json
                via QTextBrowser.setMarkdown (empty state if not processed)
+- References  — Parsed bibliography entries (P11) as cards, with a held
+               (in-library, clickable) vs cited-only badge per entry
 
 Stub banner sits above the tab bar so it is visible regardless of tab.
 """
@@ -157,6 +159,7 @@ class _LazyPdfView(QScrollArea):
 
 class DetailPanel(QWidget):
     apply_completed = pyqtSignal(int, bool, str)  # paper_id, changed, action
+    reference_navigate = pyqtSignal(int)          # open a cited paper we own
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -190,8 +193,10 @@ class DetailPanel(QWidget):
         self._current_detail = None
         self._pdf_built = False
         self._text_built = False
+        self._refs_built = False
         self._pdf_wrapper: QWidget | None = None
         self._text_wrapper: QWidget | None = None
+        self._refs_wrapper: QWidget | None = None
         self._apply_task: BackgroundTask | None = None
         self._apply_btn: QPushButton | None = None
         self._biblio_id: int | None = None
@@ -291,15 +296,18 @@ class DetailPanel(QWidget):
         self._tabs.clear()
         self._pdf_built = False
         self._text_built = False
+        self._refs_built = False
 
-        # Metadata is cheap — build now. PDF/Text wrappers stay empty until
-        # the user activates the tab; that's where the OCR-JSON read and
-        # PDF page renders happen.
+        # Metadata is cheap — build now. PDF/Text/References wrappers stay empty
+        # until the user activates the tab; that's where the OCR-JSON read,
+        # PDF page renders, and reference cards get built.
         self._tabs.addTab(self._build_metadata_tab(detail), 'Metadata')
         self._pdf_wrapper = self._make_lazy_wrapper()
         self._tabs.addTab(self._pdf_wrapper, 'PDF')
         self._text_wrapper = self._make_lazy_wrapper()
         self._tabs.addTab(self._text_wrapper, 'Text')
+        self._refs_wrapper = self._make_lazy_wrapper()
+        self._tabs.addTab(self._refs_wrapper, 'References')
 
         self._tabs.currentChanged.connect(self._on_tab_changed)
 
@@ -332,6 +340,11 @@ class DetailPanel(QWidget):
             self._text_built = True
             self._text_wrapper.layout().addWidget(
                 self._build_ocr_tab(self._current_detail)
+            )
+        elif idx == 3 and not self._refs_built and self._refs_wrapper is not None:
+            self._refs_built = True
+            self._refs_wrapper.layout().addWidget(
+                self._build_references_tab(self._current_detail)
             )
 
     # ── Metadata tab ─────────────────────────────────────────
@@ -822,6 +835,111 @@ class DetailPanel(QWidget):
             self._apply_btn.setText('Failed')
             self._apply_btn.setToolTip(message)
             self._apply_btn.setEnabled(True)
+
+    # ── References tab ───────────────────────────────────────
+
+    def _build_references_tab(self, d) -> QWidget:
+        """List the paper's parsed references (P11) as cards.
+
+        Each card shows the formatted citation + title + a held/cited badge.
+        References resolved to a paper we own are clickable → open that paper.
+        """
+        refs = paper_service.load_references(d.paper_id)
+
+        if not refs:
+            return self._ocr_empty_panel(
+                'No references extracted for this paper yet.\n'
+                'Right-click the paper → "Extract References" '
+                '(or a folder / My Library) to parse the bibliography.'
+            )
+
+        host = QWidget()
+        layout = QVBoxLayout(host)
+        layout.setContentsMargins(SPACING['lg'], SPACING['lg'], SPACING['lg'], SPACING['lg'])
+        layout.setSpacing(SPACING['md'])
+
+        held = sum(1 for r in refs if r.resolved_paper_id)
+        summary = QLabel(
+            f'{len(refs)} reference{"s" if len(refs) != 1 else ""}'
+            f'  ·  {held} in library  ·  {len(refs) - held} cited only'
+        )
+        summary.setProperty('class', 'FieldLabel')
+        layout.addWidget(summary)
+
+        for r in refs:
+            layout.addWidget(self._build_reference_card(r))
+
+        layout.addStretch(1)
+        return _scroll_wrap(host)
+
+    def _build_reference_card(self, r) -> QFrame:
+        frame = QFrame()
+        frame.setProperty('class', 'Card')
+        frame.setFrameShape(QFrame.Shape.StyledPanel)
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(SPACING['lg'], SPACING['md'], SPACING['lg'], SPACING['md'])
+        layout.setSpacing(SPACING['xs'])
+
+        # Top row: [n] title … [badge]
+        top = QHBoxLayout()
+        top.setSpacing(SPACING['sm'])
+
+        idx = QLabel(f'{r.order_index + 1}.')
+        idx.setProperty('class', 'FieldLabel')
+        idx.setAlignment(Qt.AlignmentFlag.AlignTop)
+        top.addWidget(idx)
+
+        title_text = r.title or (r.raw_text[:140] if r.raw_text else '(untitled reference)')
+        title = QLabel(title_text)
+        title.setWordWrap(True)
+        title.setProperty('class', 'FieldValue')
+        title.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        top.addWidget(title, 1)
+
+        badge = self._reference_badge(r)
+        top.addWidget(badge, alignment=Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(top)
+
+        # Citation subtitle (authors · year · container vol, pages)
+        cite = r.citation()
+        if cite:
+            sub = QLabel(cite)
+            sub.setWordWrap(True)
+            sub.setProperty('class', 'FieldLabel')
+            sub.setContentsMargins(SPACING['lg'], 0, 0, 0)
+            layout.addWidget(sub)
+
+        # DOI line (clickable)
+        if r.doi:
+            doi = QLabel(f'<a href="https://doi.org/{r.doi}">doi:{r.doi}</a>')
+            doi.setProperty('class', 'FieldLabel')
+            doi.setOpenExternalLinks(True)
+            doi.setContentsMargins(SPACING['lg'], 0, 0, 0)
+            layout.addWidget(doi)
+
+        # Raw OCR text on hover (audit / store-first transparency).
+        if r.raw_text:
+            frame.setToolTip(r.raw_text)
+        return frame
+
+    def _reference_badge(self, r) -> QLabel:
+        """Held (in-library, clickable) vs cited-only badge for a reference."""
+        if r.resolved_paper_id:
+            lbl = QLabel('<a href="#">● in library</a>')
+            lbl.setOpenExternalLinks(False)
+            lbl.setToolTip(
+                f'Matched to a paper in your library ({r.match_method}). Click to open.'
+            )
+            lbl.setStyleSheet('color: #4ade80;')
+            pid = r.resolved_paper_id
+            lbl.linkActivated.connect(lambda _=None, p=pid: self.reference_navigate.emit(p))
+            lbl.setCursor(Qt.CursorShape.PointingHandCursor)
+        else:
+            lbl = QLabel('○ cited only')
+            lbl.setToolTip('Not in your library (external reference).')
+            lbl.setStyleSheet('color: #9aa0aa;')
+        lbl.setProperty('class', 'FieldLabel')
+        return lbl
 
     # ── OCR tab ──────────────────────────────────────────────
 

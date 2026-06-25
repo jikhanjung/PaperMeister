@@ -198,6 +198,18 @@ class PaperListView(QTreeWidget):
                 item.setData(0, Qt.ItemDataRole.UserRole + 3, is_standalone)
                 break
 
+    def select_paper(self, paper_id: int) -> bool:
+        """Select the row for paper_id if it's in the current view (scrolling to
+        it + firing the normal selection → detail flow). Returns False if the
+        paper isn't currently listed."""
+        for i in range(self.topLevelItemCount()):
+            item = self.topLevelItem(i)
+            if item.data(0, Qt.ItemDataRole.UserRole) == paper_id:
+                self.setCurrentItem(item)
+                self.scrollToItem(item)
+                return True
+        return False
+
     def refresh_row(self, paper_id: int):
         """Re-fetch a single paper's row and update all columns in place
         (status / authors / year / title), e.g. after a biblio apply changed
