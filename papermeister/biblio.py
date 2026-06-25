@@ -521,8 +521,32 @@ def split_reference_entries(block: str) -> list:
     if len(paras) >= 3:
         return paras
 
-    # (3) Single blob — let the LLM segment.
-    return [block.strip()]
+    # (3) No clear separators (refs run together / single-newline separated).
+    # Split into char-bounded pieces so the batcher can chunk it and each call's
+    # output stays within the token budget; the LLM segments each piece.
+    block = block.strip()
+    if len(block) <= 1500:
+        return [block]
+    groups, cur, cur_len = [], [], 0
+    for ln in block.split('\n'):
+        if cur and cur_len + len(ln) > 1200:
+            groups.append('\n'.join(cur))
+            cur, cur_len = [], 0
+        cur.append(ln)
+        cur_len += len(ln) + 1
+    if cur:
+        groups.append('\n'.join(cur))
+    # Hard-split any monster piece (references on a single long line) by chars.
+    pieces = []
+    for g in groups:
+        g = g.strip()
+        if not g:
+            continue
+        if len(g) <= 1800:
+            pieces.append(g)
+        else:
+            pieces.extend(g[k:k + 1500] for k in range(0, len(g), 1500))
+    return pieces
 
 
 # A line that is ONLY a URL / DOI / page number / punctuation, or that STARTS
@@ -601,7 +625,7 @@ class _AdaptiveBatcher:
     MAX = 20
     TARGET_LO = 25.0   # under this → fast, double (slow-start)
     TARGET_HI = 130.0  # over this → close to timeout, halve
-    MAX_CHARS = 7000   # hard input cap regardless of count (long entries)
+    MAX_CHARS = 5000   # hard input cap per call (keeps output under the timeout)
 
     def __init__(self, size: int = 1):
         self.size = size
@@ -701,7 +725,11 @@ def extract_references_llm(
 
         prompt = _REFS_PROMPT + '--- REFERENCES TEXT ---\n' + '\n\n'.join(batch)
         if backend == 'qwen':
-            mt = min(8192, len(batch) * 200 + 512)
+            # Scale by INPUT size, not just entry count: a single un-split blob
+            # is one "entry" but yields many reference objects — sizing by count
+            # alone (≈712) truncated the JSON ('Unterminated string').
+            in_chars = sum(len(b) for b in batch)
+            mt = min(8192, max(len(batch) * 256, in_chars // 2) + 1024)
             t0 = time.monotonic()
             try:
                 raw = _call_qwen(prompt, url, max_tokens=mt, read_timeout=240, retries=0)
