@@ -474,16 +474,13 @@ def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=N
         _cleanup_temp(filepath)
 
     with db.atomic():
-        # Clear existing passages and FTS data for reprocessing
-        db.execute_sql('DELETE FROM passage_fts WHERE paper_id = ?', [paper.id])
+        # Reprocessing: drop old passages. passage_fts (external content) and
+        # paper_fts are kept in sync by triggers — no manual FTS writes here.
         Passage.delete().where(Passage.paper == paper).execute()
 
-        if is_zotero:
-            # Zotero metadata was set during import; build authors_str from existing records
-            authors = Author.select().where(Author.paper == paper).order_by(Author.order)
-            authors_str = ', '.join(a.name for a in authors)
-        else:
-            # Directory import: use PDF metadata
+        if not is_zotero:
+            # Directory import: refresh metadata + authors from PDF metadata.
+            # (Zotero metadata/authors were set at import time.)
             Author.delete().where(Author.paper == paper).execute()
             if meta and meta['title']:
                 paper.title = meta['title']
@@ -491,25 +488,14 @@ def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=N
                 paper.year = meta['year']
             paper.save()
 
-            authors_str = ''
             if meta and meta['author']:
                 names = [n.strip() for n in meta['author'].split(';') if n.strip()]
                 for i, name in enumerate(names):
                     Author.create(paper=paper, name=name, order=i)
-                authors_str = ', '.join(names)
 
         for page_num, text in pages:
             for passage_text in split_into_passages(text):
-                passage = Passage.create(
-                    paper=paper,
-                    page=page_num,
-                    text=passage_text,
-                )
-                db.execute_sql(
-                    'INSERT INTO passage_fts(paper_id, page, passage_id, title, authors, text) '
-                    'VALUES(?, ?, ?, ?, ?, ?)',
-                    [paper.id, page_num, passage.id, paper.title, authors_str, passage_text],
-                )
+                Passage.create(paper=paper, page=page_num, text=passage_text)
 
         paper_file.status = 'processed'
         paper_file.save()

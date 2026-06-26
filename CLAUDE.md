@@ -66,7 +66,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 - Import 2단계: ScanWorker(폴더 구조 + PaperFile 생성, 빠름) → ProcessWorker(OCR, 느림)
 - Hash-based deduplication (SHA256) at ingestion. Zotero는 zotero_key 기반 dedup.
 - `PaperFile.status`: `pending` → `processed` / `failed`. PaperFile 없으면 `no PDF`.
-- FTS5 `passage_fts`: title(×10), authors(×5), text(×1) BM25 가중치. 단 passage 단위 인덱스라 title 가중치는 passage 내부에서만 작용 — document-level title boost는 미구현 (Phase 5 과제)
+- FTS5 (P13 external-content): `passage_fts`는 **external-content(text-only)** — `passage` 테이블 위에 색인만 두고 원문은 안 복사(OCR 본문 중복 ~1.75GB 제거, DB ~40%↓). 검색은 `passage` JOIN으로 paper_id/page 획득, `snippet(passage_fts,0,…)`, `bm25(passage_fts)`. 제목어/저자명이 본문에 없어도 찾도록 **document 단위 `paper_fts(title, authors)`**(standalone) 추가 — 검색은 본문 ∪ 제목·저자 병합. 제목 부스트는 `search.py::_title_tier` 3단 Python 재랭킹(devlog 063). **동기화는 트리거**(`passage`→passage_fts, `paper`/`author`→paper_fts) — FTS 테이블을 직접 INSERT/DELETE 하지 말 것. 기존 DB는 `scripts/migrate_fts_external_content.py`로 1회 변환(미변환 시 `init_db`가 차단)
 - `papermeister/search.py::search()`: `limit` 파라미터는 **distinct paper 수** (2026-04-12 이전엔 passage row 수였음). FTS5 `bm25()`가 aggregate 컨텍스트에서 호출 불가한 제약 때문에 SQL `GROUP BY` 대신 Python dict dedupe로 처리. `max_passages=200_000` 안전 상한
 - UI는 QThread로 비동기 처리, DB는 peewee thread-local 연결
 - OCR health 체크: `ensure_workers_ready()`로 세션당 한 번만 수행
@@ -124,6 +124,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 | `extract_references.py` | (P11) references 섹션 파싱 → `Reference` 테이블 (Qwen3, `--execute`) |
 | `reset_references.py` | (P11) 지정 paper의 `Reference` 행 삭제 + `references_checked` 해제 → 재추출 대상으로 되돌림 (`--paper-ids`, `--execute`) |
 | `reprocess_references.bat` | (P11, Windows) reset(化石 합본) → extract_references `--scope all` → normalize_works `--pass 1` 일괄 실행 래퍼 |
+| `migrate_fts_external_content.py` | (P13) `passage_fts` → external-content + `paper_fts` 추가 1회 변환 (자동 백업 VACUUM INTO + rebuild + VACUUM, `--execute`) |
 | `resolve_references.py` | (P11) `Reference` → 보유 Paper 매칭 (DOI + 제목 스코어, `--execute`) |
 | `normalize_works.py` | (P11 Phase 2) 외부 문헌 → `CitedWork` 노드 정규화. 패스1 exact dedup + 패스2 LLM 병합 + cite_count/reconcile (`--execute`, `--pass`, `--workers`) |
 | `probe_qwen.py` | (P11) ocrserver LLM 응답시간 진단 (trivial/1ref/5ref 계측) |

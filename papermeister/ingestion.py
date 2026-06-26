@@ -155,7 +155,7 @@ def delete_directory_source(source_id, progress_callback=None):
             remaining = PaperFolder.select().where(PaperFolder.paper == p).count()
             if not from_zotero and remaining == 0:
                 # Pure-local paper, now orphaned → delete it and its cascade.
-                db.execute_sql('DELETE FROM passage_fts WHERE paper_id = ?', [p.id])
+                # passage_fts/paper_fts clean up via triggers on the row deletes.
                 p.delete_instance(recursive=True, delete_nullable=True)
                 deleted += 1
             else:
@@ -318,19 +318,10 @@ def _merge_stale_standalone(old_paper, new_paper):
         PaperFile.update(paper=new_paper).where(PaperFile.paper == old_paper).execute()
         PaperBiblio.update(paper=new_paper).where(PaperBiblio.paper == old_paper).execute()
         Passage.update(paper=new_paper).where(Passage.paper == old_paper).execute()
-        # passage_fts denormalizes paper_id, title, authors — keep them
-        # consistent with the new canonical paper.
-        new_authors_str = ', '.join(
-            a.name for a in
-            Author.select(Author.name)
-            .where(Author.paper == new_paper)
-            .order_by(Author.order)
-        )
-        db.execute_sql(
-            'UPDATE passage_fts SET paper_id = ?, title = ?, authors = ? '
-            'WHERE paper_id = ?',
-            [new_paper.id, new_paper.title, new_authors_str, old_paper.id],
-        )
+        # passage_fts is external content keyed by passage rowid → re-pointing
+        # passages to new_paper needs no FTS change (paper_id is read via JOIN,
+        # the passage text is unchanged). paper_fts for old_paper is dropped by
+        # the paper-delete trigger below; new_paper keeps its own row.
         # Authors and PaperFolder cascade away with the old paper.
         old_paper.delete_instance()
 
@@ -362,9 +353,8 @@ def purge_local_by_keys(keys, progress_callback=None):
         for ch in chunks:
             papers.extend(Paper.select().where(Paper.zotero_key.in_(ch)))
         for p in papers:
-            # passage_fts is an FTS5 table with no FK — clear it explicitly
-            # (same reason _merge_stale_standalone updates it by hand).
-            db.execute_sql('DELETE FROM passage_fts WHERE paper_id = ?', [p.id])
+            # passage_fts/paper_fts clean up via triggers on the cascaded row
+            # deletes (no manual FTS maintenance needed).
             p.delete_instance(recursive=True, delete_nullable=True)
             deleted_papers += 1
         # Attachment-only deletions: parent paper survives, drop the PaperFile.

@@ -8,6 +8,84 @@ DB_PATH = os.path.join(os.path.expanduser('~'), '.papermeister', 'papermeister.d
 ALL_TABLES = [Source, Folder, Paper, Author, PaperFile, PaperFolder, Passage,
               PaperBiblio, Reference, CitedWork]
 
+# ---------------------------------------------------------------------------
+# FTS5 (devlog P13). `passage_fts` is EXTERNAL-CONTENT (text-only) over the
+# `passage` table — it stores only the inverted index, reading the original text
+# back from `passage` by rowid, so the OCR fulltext is NOT duplicated (~1.75 GB
+# saved). `paper_fts` is a small standalone index over paper title + authors so
+# title/author-only terms (absent from the body) stay searchable. Both are kept
+# in sync by triggers — never INSERT/DELETE the FTS tables by hand.
+# ---------------------------------------------------------------------------
+_FTS_SCHEMA = (
+    "CREATE VIRTUAL TABLE IF NOT EXISTS passage_fts USING fts5("
+    "text, content='passage', content_rowid='id', tokenize='unicode61')",
+    "CREATE VIRTUAL TABLE IF NOT EXISTS paper_fts USING fts5("
+    "title, authors, tokenize='unicode61')",
+)
+_FTS_TRIGGERS = (
+    # passage -> passage_fts (external content: deletes must replay old values).
+    "CREATE TRIGGER IF NOT EXISTS passage_fts_ai AFTER INSERT ON passage BEGIN "
+    "INSERT INTO passage_fts(rowid, text) VALUES (new.id, new.text); END",
+    "CREATE TRIGGER IF NOT EXISTS passage_fts_ad AFTER DELETE ON passage BEGIN "
+    "INSERT INTO passage_fts(passage_fts, rowid, text) "
+    "VALUES ('delete', old.id, old.text); END",
+    "CREATE TRIGGER IF NOT EXISTS passage_fts_au AFTER UPDATE OF text ON passage BEGIN "
+    "INSERT INTO passage_fts(passage_fts, rowid, text) "
+    "VALUES ('delete', old.id, old.text); "
+    "INSERT INTO passage_fts(rowid, text) VALUES (new.id, new.text); END",
+    # paper/author -> paper_fts (standalone: ordinary DELETE/UPDATE allowed).
+    "CREATE TRIGGER IF NOT EXISTS paper_fts_ai AFTER INSERT ON paper BEGIN "
+    "INSERT INTO paper_fts(rowid, title, authors) VALUES (new.id, new.title, ''); END",
+    "CREATE TRIGGER IF NOT EXISTS paper_fts_ad AFTER DELETE ON paper BEGIN "
+    "DELETE FROM paper_fts WHERE rowid = old.id; END",
+    "CREATE TRIGGER IF NOT EXISTS paper_fts_au AFTER UPDATE OF title ON paper BEGIN "
+    "UPDATE paper_fts SET title = new.title WHERE rowid = new.id; END",
+    "CREATE TRIGGER IF NOT EXISTS author_fts_ai AFTER INSERT ON author BEGIN "
+    "UPDATE paper_fts SET authors = "
+    "(SELECT group_concat(name, ', ') FROM author WHERE paper_id = new.paper_id) "
+    "WHERE rowid = new.paper_id; END",
+    "CREATE TRIGGER IF NOT EXISTS author_fts_ad AFTER DELETE ON author BEGIN "
+    "UPDATE paper_fts SET authors = "
+    "COALESCE((SELECT group_concat(name, ', ') FROM author WHERE paper_id = old.paper_id), '') "
+    "WHERE rowid = old.paper_id; END",
+    "CREATE TRIGGER IF NOT EXISTS author_fts_au AFTER UPDATE OF name ON author BEGIN "
+    "UPDATE paper_fts SET authors = "
+    "(SELECT group_concat(name, ', ') FROM author WHERE paper_id = new.paper_id) "
+    "WHERE rowid = new.paper_id; END",
+)
+# One-time (re)population from the base tables; triggers only fire on subsequent
+# changes. Used by init_db (fresh DB) and the P13 migration script.
+_FTS_POPULATE = (
+    "INSERT INTO passage_fts(passage_fts) VALUES('rebuild')",
+    "INSERT INTO paper_fts(rowid, title, authors) "
+    "SELECT p.id, COALESCE(p.title, ''), "
+    "COALESCE((SELECT group_concat(a.name, ', ') FROM author a "
+    "WHERE a.paper_id = p.id), '') FROM paper p",
+)
+
+
+def create_fts(database):
+    """Create the FTS tables + sync triggers (idempotent, IF NOT EXISTS)."""
+    for stmt in _FTS_SCHEMA + _FTS_TRIGGERS:
+        database.execute_sql(stmt)
+
+
+def _require_external_fts(database):
+    """Halt if `passage_fts` is the pre-P13 standalone schema.
+
+    The new search/sync code assumes external-content FTS; running it against the
+    old self-contained table would silently misbehave. A one-time migration
+    converts it — see scripts/migrate_fts_external_content.py.
+    """
+    row = database.execute_sql(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='passage_fts'"
+    ).fetchone()
+    if row and row[0] and "content='passage'" not in row[0]:
+        raise RuntimeError(
+            'passage_fts is the pre-P13 (standalone) schema. Run '
+            '`python scripts/migrate_fts_external_content.py --execute` once to '
+            'upgrade to external-content FTS (devlog P13).')
+
 
 def _migrate(database):
     """Add missing columns to existing tables."""
@@ -147,11 +225,6 @@ def init_db(db_path=None):
     db.initialize(real_db)
     db.create_tables(ALL_TABLES)
     _migrate(db)
-    db.execute_sql('''
-        CREATE VIRTUAL TABLE IF NOT EXISTS passage_fts USING fts5(
-            title, authors, text,
-            paper_id UNINDEXED, page UNINDEXED, passage_id UNINDEXED,
-            tokenize='unicode61'
-        )
-    ''')
+    _require_external_fts(db)   # block app on a pre-P13 DB until it's migrated
+    create_fts(db)             # external-content passage_fts + paper_fts (fresh DB)
     return db

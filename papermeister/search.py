@@ -32,31 +32,47 @@ def search(query, limit=50, max_passages=200_000):
     if not query.strip():
         return []
 
-    def _run(q):
+    def _run_body(q):
+        # passage_fts is external content over `passage` (text only): JOIN back
+        # to passage for paper_id/page; text is column 0 for snippet().
         return db.execute_sql(
-            'SELECT paper_id, page, passage_id, '
-            "snippet(passage_fts, 2, '**', '**', '...', 32) as snippet, "
-            'bm25(passage_fts, 10.0, 5.0, 1.0) as rank '
-            'FROM passage_fts WHERE passage_fts MATCH ? '
+            'SELECT p.paper_id, p.page, p.id AS passage_id, '
+            "snippet(passage_fts, 0, '**', '**', '...', 32) as snippet, "
+            'bm25(passage_fts) as rank '
+            'FROM passage_fts JOIN passage p ON p.id = passage_fts.rowid '
+            'WHERE passage_fts MATCH ? '
             'ORDER BY rank LIMIT ?',
             [q, max_passages],
         ).fetchall()
 
+    def _run_meta(q):
+        # Document-level title/author matches. Since passage_fts indexes only
+        # body text, terms appearing solely in a paper's title or author list
+        # would otherwise be unfindable — paper_fts restores that recall.
+        return db.execute_sql(
+            'SELECT rowid, bm25(paper_fts) as rank '
+            'FROM paper_fts WHERE paper_fts MATCH ? '
+            'ORDER BY rank LIMIT ?',
+            [q, max(limit * 4, 50)],
+        ).fetchall()
+
     try:
-        rows = _run(query.strip())
+        rows = _run_body(query.strip())
+        meta_rows = _run_meta(query.strip())
     except Exception:
         # FTS5 syntax error → retry with the query quoted as a literal phrase.
         try:
-            rows = _run(f'"{query.strip()}"')
+            q = f'"{query.strip()}"'
+            rows = _run_body(q)
+            meta_rows = _run_meta(q)
         except Exception:
             return []
 
-    # Dedupe by paper_id, preserving BM25 rank order (first hit = best rank).
-    # We stop adding new papers once we hit `limit`, but we still collect
-    # additional matches for already-seen papers so each result carries a
-    # few snippets for the detail view.
-    # Trashed papers are skipped (Paper.trashed_at IS NOT NULL); the FTS
-    # index itself doesn't track trash state, so we filter post-hoc.
+    # Dedupe body matches by paper_id, preserving BM25 rank order (first hit =
+    # best rank). We stop adding new papers once we hit `limit`, but still
+    # collect additional snippets for already-seen papers for the detail view.
+    # Trashed papers are skipped (Paper.trashed_at IS NOT NULL); the FTS index
+    # itself doesn't track trash state, so we filter post-hoc.
     seen_papers: dict[int, dict] = {}
     skipped_trashed: set[int] = set()
     for paper_id, page, passage_id, snippet, rank in rows:
@@ -70,7 +86,7 @@ def search(query, limit=50, max_passages=200_000):
             if paper.trashed_at is not None:
                 skipped_trashed.add(paper_id)
                 continue
-            entry = {'paper': paper, 'matches': []}
+            entry = {'paper': paper, 'matches': [], 'rank': rank}
             seen_papers[paper_id] = entry
         if len(entry['matches']) < 5:  # cap per-paper snippets
             entry['matches'].append({
@@ -80,13 +96,24 @@ def search(query, limit=50, max_passages=200_000):
                 'rank': rank,
             })
 
-    # Document-level title boost. passage_fts weights title ×10, but that only
-    # acts inside each passage row — a paper with the query in its TITLE but a
-    # sparse body still ranks below body-heavy papers (the classic "trilobite"
-    # problem). Re-rank into three tiers by how the title matches, ordered by
-    # BM25 within each: all query terms in the title → top, some → middle,
-    # none → bottom. This is the promised document-level boost without a
-    # separate paper_fts index.
+    # Fold in title/author-only matches (papers with no body hit). They carry no
+    # snippet; the title boost below floats them to the right place.
+    for paper_id, rank in meta_rows:
+        if paper_id in seen_papers or paper_id in skipped_trashed:
+            continue
+        if len(seen_papers) >= limit:
+            break
+        paper = Paper.get_by_id(paper_id)
+        if paper.trashed_at is not None:
+            skipped_trashed.add(paper_id)
+            continue
+        seen_papers[paper_id] = {'paper': paper, 'matches': [], 'rank': rank}
+
+    # Document-level title boost. Re-rank into three tiers by how the title
+    # matches, ordered by BM25-ish rank within each: all query terms in the
+    # title → top, some → middle, none → bottom. A paper whose query is in its
+    # TITLE but sparse in the body still ranks above body-heavy papers (the
+    # classic "trilobite" problem).
     terms = query_terms(query)
 
     def _title_tier(paper):
@@ -102,7 +129,7 @@ def search(query, limit=50, max_passages=200_000):
 
     return sorted(
         seen_papers.values(),
-        key=lambda x: (_title_tier(x['paper']), x['matches'][0]['rank']),
+        key=lambda x: (_title_tier(x['paper']), x['rank']),
     )
 
 
