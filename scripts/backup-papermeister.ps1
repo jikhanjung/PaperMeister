@@ -28,6 +28,11 @@ $Db         = Join-Path $env:USERPROFILE '.papermeister\papermeister.db'
 $RemoteHost = 'jikhanserver'
 $RemoteDir  = '~/backups'        # server-side directory (created once, see above)
 $Keep       = 24                 # number of recent backups to retain on the server
+# Task Scheduler does NOT inherit the conda env's PATH, so 'python' won't resolve
+# there — call the env's python by full path (only stdlib is needed). Falls back
+# to whatever 'python' is on PATH if that exe doesn't exist.
+$Python     = Join-Path $env:USERPROFILE 'anaconda3\envs\PaperMeister\python.exe'
+if (-not (Test-Path $Python)) { $Python = 'python' }
 # ---------------------------------------------------------------------------
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -37,10 +42,13 @@ $localGz   = Join-Path $env:TEMP $name
 
 try {
     # 1) consistent + gzipped snapshot (safe while the DB is being written)
-    python (Join-Path $scriptDir '_db_snapshot.py') $Db $localGz
+    & $Python (Join-Path $scriptDir '_db_snapshot.py') $Db $localGz
+    if ($LASTEXITCODE -ne 0) { throw "snapshot step failed (exit $LASTEXITCODE) — check `$Python: $Python" }
+    if (-not (Test-Path $localGz)) { throw "snapshot produced no file: $localGz" }
 
     # 2) ship to the server (timestamped → accumulates one file per run)
     scp $localGz "${RemoteHost}:${RemoteDir}/${name}"
+    if ($LASTEXITCODE -ne 0) { throw "scp failed (exit $LASTEXITCODE)" }
 
     # 3) retention: keep only the newest $Keep on the server
     $skip = $Keep + 1
