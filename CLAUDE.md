@@ -125,6 +125,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 | `reset_references.py` | (P11) 지정 paper의 `Reference` 행 삭제 + `references_checked` 해제 → 재추출 대상으로 되돌림 (`--paper-ids`, `--execute`) |
 | `reprocess_references.bat` | (P11, Windows) reset(化石 합본) → extract_references `--scope all` → normalize_works `--pass 1` 일괄 실행 래퍼 |
 | `migrate_fts_external_content.py` | (P13) `passage_fts` → external-content + `paper_fts` 추가 1회 변환 (자동 백업 VACUUM INTO + rebuild + VACUUM, `--execute`) |
+| `backup-papermeister.ps1` + `_db_snapshot.py` | (운영) 라이브 DB 일관성 스냅샷(online backup) → gzip → 서버 scp + 보존정리. Task Scheduler 3시간 간격 백업용 |
 | `resolve_references.py` | (P11) `Reference` → 보유 Paper 매칭 (DOI + 제목 스코어, `--execute`) |
 | `normalize_works.py` | (P11 Phase 2) 외부 문헌 → `CitedWork` 노드 정규화. 패스1 exact dedup + 패스2 LLM 병합 + cite_count/reconcile (`--execute`, `--pass`, `--workers`) |
 | `probe_qwen.py` | (P11) ocrserver LLM 응답시간 진단 (trivial/1ref/5ref 계측) |
