@@ -1182,7 +1182,7 @@ class MainWindow(QMainWindow):
         def _do_extract():
             from papermeister.biblio import extract_references_llm
             from papermeister import references as refs_mod
-            entries, source, model_version = extract_references_llm(
+            entries, source, model_version, _complete = extract_references_llm(
                 file_hash, backend=backend)
             n = refs_mod.save_references(paper_id, entries, source, model_version)
             # Auto-resolve the freshly-saved references against held papers so

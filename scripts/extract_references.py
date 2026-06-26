@@ -119,29 +119,35 @@ def main():
         # batches concurrent requests. DB writes happen in the main loop below.
         label = f'[{pid} {_short(title)}]'
         try:
-            entries, source, mv = extract_references_llm(
+            entries, source, mv, complete = extract_references_llm(
                 h, backend=args.backend, label=label)
-            return pid, title, entries, source, mv, None
+            return pid, title, entries, source, mv, complete, None
         except Exception as e:
-            return pid, title, None, None, None, str(e)
+            return pid, title, None, None, None, False, str(e)
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
     with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
         futures = [pool.submit(_extract, pid, h, title) for pid, h, title in targets]
         for i, fut in enumerate(as_completed(futures), 1):
-            pid, title, entries, source, mv, e = fut.result()
+            pid, title, entries, source, mv, complete, e = fut.result()
             short = _short(title)
             if e:
                 err += 1
                 print(f'[{i}/{len(targets)}] {pid} {short} ERR: {e[:80]}', flush=True)
                 continue
             n = save_references(pid, entries, source, mv)   # main thread (DB)
-            # Mark checked even when n == 0 (no references section) so re-runs skip it.
-            Paper.update(references_checked=True).where(Paper.id == pid).execute()
+            if complete:
+                # Mark checked even when n == 0 (no references section) so re-runs
+                # skip it. Partial results (complete=False) are saved but left
+                # unchecked → a later --scope all re-parses and replaces them.
+                Paper.update(references_checked=True).where(Paper.id == pid).execute()
             ok += 1
             total_refs += n
             done_pids.append(pid)
-            tag = f'{n} refs' if n else 'no references section'
+            if complete:
+                tag = f'{n} refs' if n else 'no references section'
+            else:
+                tag = f'{n} refs PARTIAL — some batches skipped, will retry'
             print(f'[{i}/{len(targets)}] {pid} {short} ok | {tag}', flush=True)
 
     # Auto-resolve the just-extracted references against held papers (one shared

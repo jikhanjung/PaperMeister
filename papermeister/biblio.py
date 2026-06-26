@@ -820,7 +820,7 @@ def _chunk_entries(entries: list, max_chars: int = 4500,
 
 def extract_references_llm(
     file_hash: str, backend: str = 'qwen', base_url: str = '', label: str = '',
-) -> tuple[list, str, str]:
+) -> tuple[list, str, str, bool]:
     """Parse a paper's references section into structured entries via LLM.
 
     Args:
@@ -829,12 +829,15 @@ def extract_references_llm(
         base_url: ocrserver URL (qwen). If empty, read from preferences.
 
     Returns:
-        (entries, source_label, model_version). `entries` is a list of dicts
-        each carrying the parsed fields plus 'raw' and 'parse_confidence';
+        (entries, source_label, model_version, complete). `entries` is a list of
+        dicts each carrying the parsed fields plus 'raw' and 'parse_confidence';
         it is EMPTY when no references section was found (a valid "checked,
         none" outcome — the caller should mark the paper checked, not retry).
-        Raises ValueError only when the OCR text itself is missing (genuine
-        error — retry after OCR), or RuntimeError on misconfiguration.
+        `complete` is False when one or more batches were skipped (timeout at the
+        floor, or malformed JSON): the returned entries are PARTIAL and worth
+        saving, but the caller should leave the paper unchecked so a later run
+        can re-parse it. Raises ValueError only when the OCR text itself is
+        missing (genuine error — retry after OCR), or RuntimeError on misconfig.
     """
     source = 'llm-qwen' if backend == 'qwen' else 'llm-sonnet'
     model_version = QWEN_REFS_MODEL_VERSION if backend == 'qwen' else 'claude-sonnet-4-6'
@@ -846,7 +849,7 @@ def extract_references_llm(
     if not block:
         # No references section in this document — a valid empty result, not
         # a failure. No LLM call needed.
-        return [], source, model_version
+        return [], source, model_version, True
 
     entries = split_reference_entries(block)
 
@@ -859,6 +862,7 @@ def extract_references_llm(
     import requests as _req
     total = len(entries)
     parsed = []
+    complete = True   # flips False if any batch is skipped (timeout / bad JSON)
     i = 0
     while i < total:
         # Take up to the current adaptive batch size, also bounded by chars.
@@ -871,13 +875,13 @@ def extract_references_llm(
             batch.append(entries[i + len(batch)])
 
         prompt = _REFS_PROMPT + '--- REFERENCES TEXT ---\n' + '\n\n'.join(batch)
+        tag = f'{label} ' if label else ''
         if backend == 'qwen':
             # Scale by INPUT size, not just entry count: a single un-split blob
             # is one "entry" but yields many reference objects — sizing by count
             # alone (≈712) truncated the JSON ('Unterminated string').
             in_chars = sum(len(b) for b in batch)
             mt = min(8192, max(len(batch) * 256, in_chars // 2) + 1024)
-            tag = f'{label} ' if label else ''
             t0 = time.monotonic()
             try:
                 raw = _call_qwen(prompt, url, max_tokens=mt, read_timeout=240,
@@ -891,9 +895,16 @@ def extract_references_llm(
                                 'retrying', tag, i + len(batch), total, len(batch),
                                 _refs_batcher.size)
                     continue
+                # At the floor and still timing out — skip THIS batch (lose its
+                # refs) but keep what we've parsed so far and carry on, rather
+                # than discarding the whole paper. Mark the result incomplete so
+                # the caller can re-run it later.
                 logger.info('%srefs %d/%d: timeout at batch %d (already at floor) '
-                            '→ giving up', tag, i + len(batch), total, len(batch))
-                raise
+                            '→ skipping %d refs', tag, i + len(batch), total,
+                            len(batch), len(batch))
+                complete = False
+                i += len(batch)
+                continue
             dt = time.monotonic() - t0
             _refs_batcher.update(dt)
             logger.info('%srefs %d/%d: %d in %.1fs → next batch %d',
@@ -901,7 +912,18 @@ def extract_references_llm(
         else:
             raw = _call_claude(prompt)
 
-        items = [it for it in _parse_llm_json_array(raw) if isinstance(it, dict)]
+        try:
+            items = [it for it in _parse_llm_json_array(raw) if isinstance(it, dict)]
+        except (json.JSONDecodeError, ValueError) as ex:
+            # The model returned malformed / truncated JSON for this batch. Skip
+            # just this batch — keep the references parsed from the other batches
+            # — instead of losing the whole paper. Flag the result incomplete.
+            logger.info('%srefs %d/%d: bad JSON for batch %d (%s) → skipping %d refs',
+                        tag, i + len(batch), total, len(batch),
+                        str(ex)[:60], len(batch))
+            complete = False
+            i += len(batch)
+            continue
         # We split the entries ourselves, so attach the original text as `raw`
         # by position (store-first) instead of paying the LLM to echo it. Only
         # when counts line up; otherwise leave raw empty (fields are still valid).
@@ -913,7 +935,7 @@ def extract_references_llm(
             parsed.append(item)
         i += len(batch)
 
-    return parsed, source, model_version
+    return parsed, source, model_version, complete
 
 
 # ===========================================================================
