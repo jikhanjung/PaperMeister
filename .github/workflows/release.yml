@@ -18,7 +18,7 @@ jobs:
     outputs:
       build_number: ${{ steps.bn.outputs.build_number }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - id: bn
@@ -34,10 +34,10 @@ jobs:
     needs: call-build-workflow
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: release-files/
 
@@ -66,7 +66,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: PaperMeister ${{ github.ref_name }}
