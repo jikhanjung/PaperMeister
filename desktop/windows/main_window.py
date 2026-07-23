@@ -43,6 +43,7 @@ class MainWindow(QMainWindow):
         self._biblio_task = None     # single biblio extraction background task
         self._auto_biblio_queue = []  # [(paper_id, file_id), ...] queued after OCR
         self._biblio_window = None   # batch biblio progress window (lazy)
+        self._biblio_guard = self._make_biblio_guard()  # server-down pause/resume
         self._refs_task = None        # single references extraction background task
         self._refs_queue = []         # [(paper_id, file_id), ...] for references parsing
         self._refs_window = None      # batch references progress window (lazy)
@@ -640,9 +641,7 @@ class MainWindow(QMainWindow):
         # same serialized queue as the post-OCR auto-biblio path), with a
         # progress window so the user sees per-paper results.
         if biblio_targets:
-            if self._biblio_window is None:
-                from desktop.windows.biblio_window import BiblioWindow
-                self._biblio_window = BiblioWindow(self)
+            self._ensure_biblio_window()
             self._biblio_window.begin(len(biblio_targets))
             self._auto_biblio_queue.extend(biblio_targets)
             self._drain_biblio_queue()
@@ -789,9 +788,7 @@ class MainWindow(QMainWindow):
         # Route through the shared serialized biblio queue (same path as the
         # folder batch) + show the progress window so a single extraction gets
         # the same per-paper result display.
-        if self._biblio_window is None:
-            from desktop.windows.biblio_window import BiblioWindow
-            self._biblio_window = BiblioWindow(self)
+        self._ensure_biblio_window()
         if (paper_id, file_id) not in self._auto_biblio_queue:
             self._auto_biblio_queue.append((paper_id, file_id))
             self._biblio_window.begin(1)  # shows window; extends total if a batch is live
@@ -866,6 +863,7 @@ class MainWindow(QMainWindow):
         win = self._biblio_window if (self._biblio_window and self._biblio_window.isVisible()) else None
         if win:
             win.record(f'{self._biblio_title(paper_id)} — failed: {msg}', 'error')
+        self._biblio_guard.record_fail()
         self._after_biblio(paper_id)
 
     def _after_biblio(self, paper_id: int):
@@ -890,10 +888,14 @@ class MainWindow(QMainWindow):
             pred, err = result
 
             if err:
+                self._biblio_guard.record_fail()
                 self.status_bar.set_task(f'Biblio extraction failed: {err}')
                 if win:
                     win.record(f'{self._biblio_title(paper_id)} — extraction failed', 'error')
                 return
+            # A valid prediction means the LLM server responded — reset the
+            # server-down streak even if a downstream apply step later fails.
+            self._biblio_guard.record_ok()
 
             # LLM skipped because the OCR JSON already carries an applied
             # papermeister_meta. Materialize a local PaperBiblio so the paper
@@ -972,8 +974,59 @@ class MainWindow(QMainWindow):
         finally:
             self._after_biblio(paper_id)
 
+    def _ensure_biblio_window(self):
+        """Lazily create the biblio progress window and wire its Cancel."""
+        if self._biblio_window is None:
+            from desktop.windows.biblio_window import BiblioWindow
+            self._biblio_window = BiblioWindow(self)
+            self._biblio_window.cancel_requested.connect(self._cancel_biblio)
+        return self._biblio_window
+
+    def _cancel_biblio(self):
+        """Cancel the biblio batch: drop the pending queue, let the in-flight
+        paper finish (its LLM call can't be safely killed)."""
+        dropped = len(self._auto_biblio_queue)
+        self._auto_biblio_queue.clear()
+        self._biblio_guard.cancel()     # in case we were paused waiting on the server
+        if self._biblio_window:
+            self._biblio_window.mark_cancelling(dropped)
+        running = bool(self._biblio_task and self._biblio_task.isRunning())
+        self.status_bar.set_task(
+            f'Biblio cancelled — dropped {dropped} queued'
+            + (', finishing current paper…' if running else '.'))
+        if not running and self._biblio_window and self._biblio_window.isVisible():
+            self._biblio_window.finish()
+
+    def _make_biblio_guard(self):
+        """ServerGuard for the biblio batch: pause on repeated LLM-server failure,
+        poll, auto-resume. With the Claude backend biblio_server_alive() reports
+        'up', so the guard never pauses (nothing to poll)."""
+        from papermeister.biblio import biblio_server_alive
+        from desktop.workers.server_guard import ServerGuard
+
+        def on_pause(remaining):
+            if self._biblio_window:
+                self._biblio_window.mark_paused(
+                    remaining, 'Biblio extractions kept failing and the LLM '
+                    'server did not answer a health check.')
+            self.status_bar.set_task(
+                'Biblio paused — waiting for the LLM server to recover…')
+
+        def on_resume(remaining):
+            if self._biblio_window:
+                self._biblio_window.mark_resumed(remaining)
+            self.status_bar.set_task('Biblio server back — resuming…')
+
+        return ServerGuard(
+            health_check=biblio_server_alive,
+            on_pause=on_pause, on_resume=on_resume,
+            on_drain=self._drain_biblio_queue,
+            remaining=lambda: len(self._auto_biblio_queue), parent=self)
+
     def _drain_biblio_queue(self):
         """Start biblio extraction for the next queued item, if idle."""
+        if self._biblio_guard.paused():  # waiting for the LLM server to recover
+            return
         if self._biblio_task and self._biblio_task.isRunning():
             return  # already running, will drain again when it finishes
         if not self._auto_biblio_queue:

@@ -275,6 +275,17 @@ def references_server_alive(base_url: str = '', timeout: int = 6) -> bool:
         return False
 
 
+def biblio_server_alive() -> bool:
+    """Health signal for the biblio batch. Only the Qwen backend hits a pollable
+    server; with Claude (`claude -p` subprocess) there is nothing to poll, so
+    report 'alive' — per-item Claude failures handle themselves and shouldn't
+    pause the batch."""
+    from .preferences import get_pref
+    if get_pref('biblio_backend', '') != 'qwen':
+        return True
+    return references_server_alive()
+
+
 def extract_biblio_llm(
     file_hash: str, backend: str = 'claude', filename: str = '',
 ) -> tuple[dict, str, str]:
