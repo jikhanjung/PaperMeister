@@ -1110,9 +1110,7 @@ class MainWindow(QMainWindow):
         if resp != QMessageBox.StandardButton.Yes:
             return
 
-        if self._refs_window is None:
-            from desktop.windows.references_window import ReferencesWindow
-            self._refs_window = ReferencesWindow(self)
+        self._ensure_refs_window()
         if (paper_id, file_id) not in self._refs_queue:
             self._refs_queue.append((paper_id, file_id))
             self._refs_window.begin(1)
@@ -1145,13 +1143,37 @@ class MainWindow(QMainWindow):
         rank = {pid: i for i, pid in enumerate(self.paper_list.visible_paper_ids())}
         targets.sort(key=lambda t: rank.get(t[0], len(rank)))
 
-        if self._refs_window is None:
-            from desktop.windows.references_window import ReferencesWindow
-            self._refs_window = ReferencesWindow(self)
+        self._ensure_refs_window()
         self._refs_window.begin(len(targets))
         self._refs_queue.extend(targets)
         self.status_bar.set_task(f'References: {len(targets)} paper(s)…')
         self._drain_refs_queue()
+
+    def _ensure_refs_window(self):
+        """Lazily create the references progress window and wire its Cancel."""
+        if self._refs_window is None:
+            from desktop.windows.references_window import ReferencesWindow
+            self._refs_window = ReferencesWindow(self)
+            self._refs_window.cancel_requested.connect(self._cancel_refs)
+        return self._refs_window
+
+    def _cancel_refs(self):
+        """Cancel the references batch: drop everything still queued and let the
+        paper already in flight finish (its LLM call can't be safely killed)."""
+        dropped = len(self._refs_queue)
+        self._refs_queue.clear()
+        if self._refs_window:
+            self._refs_window.mark_cancelling(dropped)
+        running = bool(self._refs_task and self._refs_task.isRunning())
+        self.status_bar.set_task(
+            f'References cancelled — dropped {dropped} queued'
+            + (', finishing current paper…' if running else '.'))
+        if not running:
+            # Nothing in flight → finalize immediately.
+            self._refs_index = None
+            self._refs_work_index = None
+            if self._refs_window and self._refs_window.isVisible():
+                self._refs_window.finish()
 
     def _drain_refs_queue(self):
         """Start references extraction for the next queued item, if idle."""

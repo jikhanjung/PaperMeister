@@ -7,7 +7,7 @@ finishes, and `finish()` when the queue drains.
 """
 from datetime import datetime
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QProgressBar, QPushButton, QTextEdit, QVBoxLayout, QWidget,
 )
@@ -24,6 +24,11 @@ _KIND_COLOR = {
 class ReferencesWindow(QWidget):
     """Shows per-paper references parsing results + overall progress."""
 
+    # Emitted when the user clicks Cancel; the main window drains the pending
+    # queue and lets the in-flight paper finish (an LLM call can't be safely
+    # interrupted mid-request).
+    cancel_requested = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle('References Extraction')
@@ -32,6 +37,8 @@ class ReferencesWindow(QWidget):
         self._total = 0
         self._done = 0
         self._refs = 0
+        self._cancelled = False
+        self._active = False   # a batch is in progress (drives begin() extend)
         self._counts = {'ok': 0, 'empty': 0, 'error': 0}
         self._setup_ui()
 
@@ -59,16 +66,26 @@ class ReferencesWindow(QWidget):
         self.summary_label.setStyleSheet('font-size: 12px; color: #888;')
         bottom.addWidget(self.summary_label)
         bottom.addStretch()
+        self.cancel_btn = QPushButton('Cancel')
+        self.cancel_btn.clicked.connect(self._on_cancel_clicked)
+        bottom.addWidget(self.cancel_btn)
         self.close_btn = QPushButton('Close')
         self.close_btn.clicked.connect(self.close)
         bottom.addWidget(self.close_btn)
         layout.addLayout(bottom)
 
+    def _on_cancel_clicked(self):
+        # Disable immediately so it can't be double-fired; the main window will
+        # relabel us via mark_cancelling().
+        self.cancel_btn.setEnabled(False)
+        self.cancel_requested.emit()
+
     # ── Driven by main window ────────────────────────────────────
 
     def begin(self, total: int):
-        """Start (or extend) a batch. If already running, add to the total."""
-        if self.isVisible() and self._done < self._total:
+        """Start (or extend) a batch. If one is still in progress, add to the
+        total; otherwise start fresh."""
+        if self.isVisible() and self._active:
             self._total += total
             self._log(f'+ Added {total} paper(s) to queue (total {self._total}).', 'info')
         else:
@@ -78,12 +95,24 @@ class ReferencesWindow(QWidget):
             self._counts = {'ok': 0, 'empty': 0, 'error': 0}
             self.log.clear()
             self._log(f'=== References extraction: {total} paper(s) ===')
+        self._active = True
+        self._cancelled = False
         self.progress_bar.setRange(0, self._total)
         self.progress_bar.setValue(self._done)
         self.progress_count.setText(f'{self._done} / {self._total}')
         self.summary_label.setText('')
+        self.cancel_btn.setEnabled(True)
         self.show()
         self.raise_()
+
+    def mark_cancelling(self, dropped: int):
+        """User asked to cancel: the pending queue was dropped; only the paper
+        already in flight will finish."""
+        self._cancelled = True
+        self.cancel_btn.setEnabled(False)
+        self.current_label.setText('Cancelling — finishing current paper…')
+        self._log(f'Cancelled — dropped {dropped} queued paper(s); '
+                  f'finishing the one in progress.', 'info')
 
     def add_total(self, n: int):
         self._total += n
@@ -105,10 +134,13 @@ class ReferencesWindow(QWidget):
         self.progress_count.setText(f'{self._done} / {self._total}')
 
     def finish(self):
-        self.current_label.setText('Done')
+        self._active = False
+        self.current_label.setText('Cancelled' if self._cancelled else 'Done')
+        self.cancel_btn.setEnabled(False)
         c = self._counts
+        prefix = 'cancelled · ' if self._cancelled else ''
         self.summary_label.setText(
-            f"parsed {c['ok']} · empty {c['empty']} · error {c['error']} "
+            f"{prefix}parsed {c['ok']} · empty {c['empty']} · error {c['error']} "
             f"· {self._refs} references"
         )
 
