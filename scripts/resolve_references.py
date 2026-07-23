@@ -47,37 +47,62 @@ def main():
     refs = list(q)
     print(f'References to resolve: {len(refs)}')
 
-    updates = []  # (ref_id, paper_id, method, score)
-    counts = {'doi': 0, 'title': 0, 'none': 0}
+    # Re-resolve ONLY the held dimension. The external CitedWork layer (P12:
+    # resolved_work + 'work-*' match_method) is preserved — a reference that
+    # neither matches a held paper now nor was held before AND already points at
+    # a CitedWork is left untouched, so we never overwrite a 'work-*' label with
+    # 'none' or double-link resolved_work. When a ref becomes held we clear its
+    # resolved_work (mutual exclusivity); dropped false-positives become
+    # unresolved and can be re-canonicalized by normalize_works --pass 1.
+    plan = []  # (ref_id, new_pid, method, score)
+    stable = recovered = dropped = unresolved = skipped = 0
     for r in refs:
         pid, method, score = resolve_one(
             r.doi, r.title, r.year, r.authors_json, index,
             threshold=args.threshold, min_tokens=args.min_tokens)
-        counts[method] = counts.get(method, 0) + 1
-        updates.append((r.id, pid, method, score))
+        was_held = r.resolved_paper_id is not None
+        if pid is not None:
+            if r.resolved_paper_id == pid:
+                stable += 1
+            else:
+                recovered += 1                 # newly held (from external/unresolved/re-point)
+                plan.append((r.id, pid, method, score))
+        elif was_held:
+            dropped += 1                       # held match no longer valid (FP removal)
+            plan.append((r.id, None, 'none', None))
+        elif r.resolved_work_id is not None:
+            skipped += 1                       # external CitedWork — leave P12 layer intact
+        else:
+            unresolved += 1                    # plain unresolved — mark 'none'
+            if r.match_method != 'none':
+                plan.append((r.id, None, 'none', None))
 
-    print(f"\nResolved by DOI:   {counts['doi']}")
-    print(f"Resolved by title: {counts['title']}")
-    print(f"Unresolved:        {counts['none']}")
+    print(f"\nHeld — stable {stable}, recovered/re-pointed {recovered}, "
+          f"dropped(FP) {dropped}")
+    print(f"External CitedWork left intact: {skipped} | unresolved: {unresolved}")
+    print(f"Rows to write: {len(plan)}")
 
     if not args.execute:
-        print('\nDRY-RUN (no --execute). Sample title matches:')
-        shown = 0
-        for ref_id, pid, method, score in updates:
-            if method == 'title' and shown < 15:
-                r = Reference.get_by_id(ref_id)
-                title = index['papers'][pid]['title']
-                print(f'  ref="{(r.title or r.raw_text)[:50]}" -> '
-                      f'paper={pid} "{title[:50]}" (score={score})')
-                shown += 1
+        print('\nDRY-RUN (no --execute). Sample changes:')
+        for ref_id, pid, method, score in plan[:15]:
+            r = Reference.get_by_id(ref_id)
+            src = (r.title or r.raw_text or '')[:45]
+            if pid is not None:
+                print(f'  +held  "{src}" -> paper={pid} '
+                      f'"{index["papers"][pid]["title"][:45]}" ({method} {score})')
+            else:
+                print(f'  -drop  "{src}" (was paper={r.resolved_paper_id})')
         return
 
     with db.atomic():
-        for ref_id, pid, method, score in updates:
+        for ref_id, pid, method, score in plan:
             Reference.update(
-                resolved_paper=pid, match_method=method, match_score=score
+                resolved_paper=pid, resolved_work=None,
+                match_method=method, match_score=score
             ).where(Reference.id == ref_id).execute()
-    print('\nWritten to DB.')
+    print(f'\nWritten to DB. {len(plan)} references updated.')
+    print('Next: normalize_works.py --pass 1 --execute (re-canonicalize newly '
+          'unresolved refs into CitedWorks) then --pass 2 (cite_count/reconcile).')
 
 
 if __name__ == '__main__':
