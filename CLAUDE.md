@@ -14,10 +14,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 패턴 | 용도 | 예시 |
 |------|------|------|
 | `YYYYMMDD_P99_title.md` | **계획 문서** (구현 전 설계/계획) | `20260330_P01_MVP_Architecture.md` |
+| `YYYYMMDD_R99_title.md` | **리뷰/감사 문서** (코드품질·보안 등 횡단 검토) | `20260723_R01_Code_Quality_Guide_Adoption.md` |
 | `YYYYMMDD_999_title.md` | **구현 기록** (완료된 작업 정리) | `20260330_001_MVP_Initial_Implementation.md` |
 
-- `P` 접두사 = Plan, 숫자 접두사 = 완료된 구현 기록
-- 날짜 내 순번으로 정렬 (P01, P02... / 001, 002...)
+- `P` 접두사 = Plan, `R` 접두사 = Review/audit(횡단 검토·감사), 숫자 접두사 = 완료된 구현 기록
+- 날짜 내 순번으로 정렬 (P01, P02... / R01, R02... / 001, 002...)
 
 ## Project Overview
 
