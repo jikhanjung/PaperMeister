@@ -38,6 +38,7 @@ class ReferencesWindow(QWidget):
         self._done = 0
         self._refs = 0
         self._cancelled = False
+        self._stop_label = 'Cancelled'   # label shown on finish() when stopped
         self._active = False   # a batch is in progress (drives begin() extend)
         self._counts = {'ok': 0, 'empty': 0, 'error': 0}
         self._setup_ui()
@@ -109,10 +110,22 @@ class ReferencesWindow(QWidget):
         """User asked to cancel: the pending queue was dropped; only the paper
         already in flight will finish."""
         self._cancelled = True
+        self._stop_label = 'Cancelled'
         self.cancel_btn.setEnabled(False)
         self.current_label.setText('Cancelling — finishing current paper…')
         self._log(f'Cancelled — dropped {dropped} queued paper(s); '
                   f'finishing the one in progress.', 'info')
+
+    def mark_auto_stopped(self, dropped: int, detail: str):
+        """Auto-stopped because the LLM server looks down: the pending queue was
+        dropped (nothing left in flight — the failing paper already returned)."""
+        self._cancelled = True
+        self._stop_label = 'Stopped'
+        self.cancel_btn.setEnabled(False)
+        self.current_label.setText('Stopped — server unreachable')
+        self._log(f'Auto-stopped: {detail} Dropped {dropped} queued paper(s). '
+                  f'Restart the server and re-run to resume (unfinished papers '
+                  f'were left unchecked).', 'error')
 
     def add_total(self, n: int):
         self._total += n
@@ -135,10 +148,10 @@ class ReferencesWindow(QWidget):
 
     def finish(self):
         self._active = False
-        self.current_label.setText('Cancelled' if self._cancelled else 'Done')
+        self.current_label.setText(self._stop_label if self._cancelled else 'Done')
         self.cancel_btn.setEnabled(False)
         c = self._counts
-        prefix = 'cancelled · ' if self._cancelled else ''
+        prefix = f'{self._stop_label.lower()} · ' if self._cancelled else ''
         self.summary_label.setText(
             f"{prefix}parsed {c['ok']} · empty {c['empty']} · error {c['error']} "
             f"· {self._refs} references"

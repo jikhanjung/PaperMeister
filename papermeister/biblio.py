@@ -251,6 +251,30 @@ def _call_qwen(prompt: str, base_url: str, max_tokens: int = 2048,
     raise last_exc
 
 
+def references_server_alive(base_url: str = '', timeout: int = 6) -> bool:
+    """Quick health probe of the references LLM endpoint (the exact server the
+    parser calls). True if it answers a trivial request promptly. Used to decide
+    whether a run of parse failures means the server is down (stop) or was just a
+    transient blip (keep going). A tiny max_tokens keeps it fast even when the
+    server is up but busy, so it distinguishes 'down' from 'slow'."""
+    from .preferences import get_pref
+    url = (base_url or get_pref('ocr_pod_url', '')).rstrip('/')
+    if not url:
+        return False
+    import requests as req
+    try:
+        resp = req.post(f'{url}/llm/v1/chat/completions', json={
+            'model': 'qwen',
+            'messages': [{'role': 'user', 'content': 'ping'}],
+            'max_tokens': 1,
+            'temperature': 0.0,
+            'chat_template_kwargs': {'enable_thinking': False},
+        }, timeout=(5, timeout))
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
 def extract_biblio_llm(
     file_hash: str, backend: str = 'claude', filename: str = '',
 ) -> tuple[dict, str, str]:
