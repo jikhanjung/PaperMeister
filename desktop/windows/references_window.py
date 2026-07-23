@@ -116,16 +116,18 @@ class ReferencesWindow(QWidget):
         self._log(f'Cancelled — dropped {dropped} queued paper(s); '
                   f'finishing the one in progress.', 'info')
 
-    def mark_auto_stopped(self, dropped: int, detail: str):
-        """Auto-stopped because the LLM server looks down: the pending queue was
-        dropped (nothing left in flight — the failing paper already returned)."""
-        self._cancelled = True
-        self._stop_label = 'Stopped'
-        self.cancel_btn.setEnabled(False)
-        self.current_label.setText('Stopped — server unreachable')
-        self._log(f'Auto-stopped: {detail} Dropped {dropped} queued paper(s). '
-                  f'Restart the server and re-run to resume (unfinished papers '
-                  f'were left unchecked).', 'error')
+    def mark_paused(self, remaining: int, detail: str):
+        """Paused because the LLM server looks down: the queue is KEPT and the
+        main window polls for recovery to auto-resume. Not terminal — Cancel is
+        still available."""
+        self.current_label.setText('Paused — waiting for LLM server to recover…')
+        self._log(f'Server unreachable: {detail} Paused with {remaining} '
+                  f'paper(s) left — polling for recovery…', 'error')
+
+    def mark_resumed(self, remaining: int):
+        """Server came back — the main window is resuming the queue."""
+        self.current_label.setText('Resuming…')
+        self._log(f'Server back — resuming ({remaining} paper(s) left).', 'info')
 
     def add_total(self, n: int):
         self._total += n
