@@ -1204,7 +1204,7 @@ class MainWindow(QMainWindow):
         def _do_extract():
             from papermeister.biblio import extract_references_llm
             from papermeister import references as refs_mod
-            entries, source, model_version, _complete = extract_references_llm(
+            entries, source, model_version, complete = extract_references_llm(
                 file_hash, backend=backend)
             n = refs_mod.save_references(paper_id, entries, source, model_version)
             # Auto-resolve the freshly-saved references against held papers so
@@ -1223,7 +1223,7 @@ class MainWindow(QMainWindow):
                     paper_id, index=self._refs_index,
                     work_index=self._refs_work_index)
                 resolved = counts.get('doi', 0) + counts.get('title', 0)
-            return n, resolved
+            return n, resolved, complete
 
         task = BackgroundTask(_do_extract)
         task.done.connect(lambda result: self._on_refs_extracted(paper_id, result))
@@ -1234,12 +1234,26 @@ class MainWindow(QMainWindow):
     def _on_refs_extracted(self, paper_id: int, result):
         win = self._refs_window if (self._refs_window and self._refs_window.isVisible()) else None
         try:
-            n, resolved = result
-            # Mark checked (even when n == 0) so batch re-runs skip this paper.
+            n, resolved, complete = result
+            # Only stamp checked when parsing completed. A partial result
+            # (complete=False: the LLM server timed out / died and batches were
+            # skipped) is saved but left UNCHECKED so a later run re-parses and
+            # replaces it — mirrors extract_references.py. Otherwise a server
+            # outage would silently mark papers done with missing references.
             from papermeister.models import Paper
-            Paper.update(references_checked=True).where(Paper.id == paper_id).execute()
+            if complete:
+                Paper.update(references_checked=True).where(
+                    Paper.id == paper_id).execute()
             title = self._biblio_title(paper_id)
-            if n > 0:
+            if not complete:
+                self.status_bar.set_task(
+                    f'References incomplete for paper {paper_id} '
+                    f'(server?) — will retry')
+                if win:
+                    win.record(
+                        f'{title} — {n} refs PARTIAL (server?), left to retry',
+                        'error', refs=n)
+            elif n > 0:
                 self.status_bar.set_task(
                     f'Parsed {n} references for paper {paper_id} '
                     f'({resolved} in library)')
