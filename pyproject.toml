@@ -34,3 +34,12 @@ ignore = [
 "scripts/*" = ["T201", "E402"]   # scripts print by design; sys.path.insert precedes imports
 "desktop/app.py" = ["E402"]      # the requests SSL monkeypatch must run before Qt/pyzotero imports
 "tests/*" = ["S101"]             # asserts are the point of tests
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+markers = [
+    "unit: pure-logic unit test (no GUI, no DB)",
+    "ui: needs a Qt QApplication",
+    "integration: touches the DB / file I/O",
+]

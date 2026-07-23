@@ -1,0 +1,6 @@
+# Dev / CI tooling (not shipped with the app). Install with:
+#   pip install -r requirements-dev.txt
+-r requirements.txt
+
+ruff
+pytest
