@@ -8,7 +8,9 @@
 
 ## 현재 단계
 
-**Phase: P07 Phase 2 완전 종료 / Phase 3 완료 + 기본 사용 가능 / Phase 4 hookup 진행 중 / Phase D 대량 운영 — 라이브러리 전체 biblio 완료 (~2026-06-15) / P02 PyInstaller 패키징 — `.exe` 빌드 성공 + 실행 검증 완료 (2026-06-15) / P11 References 추출 + 인용 네트워크 (Phase 1) — 코드 작성 완료, 라이브 실행 대기 (2026-06-25)**
+**Phase: P07 Phase 2 완전 종료 / Phase 3 완료 + 기본 사용 가능 / Phase 4 hookup 진행 중 / Phase D 대량 운영 — 라이브러리 전체 biblio 완료 (~2026-06-15) / P02 PyInstaller 패키징 — `.exe` 빌드 성공 + 실행 검증 완료 (2026-06-15) / P11 References + P12 CitedWork 정규화 + P13 FTS external-content — 전부 라이브 DB 반영 완료 (~2026-06-26~28), references는 부분 진행 (1,733/9,889편) / 068 DB 복원력 — 손상 무손실 복구 + 자동 오프사이트 백업 (2026-06-26)**
+
+> **라이브 DB 실측 (2026-07-23, Windows DB 6/28 사본 스키마 확인)**: P13 FTS 마이그레이션 **적용 완료**(external-content `passage_fts` + standalone `paper_fts` + 트리거 9종, `passage_fts_content` 없음, `pre-p13-backup` 4.3GB 존재, DB 2.3GB, `quick_check=ok`). references 추출 **부분 완료** — `references_checked=1` **1,733/9,889편(17.5%)**, `Reference` 104,755행(held 매칭 13,102 / CitedWork 매칭 58,360). P12 정규화도 라이브 실행됨 — `CitedWork` **49,728노드**. 즉 P11/P12/P13 모두 라이브 반영, references만 나머지 편수 재개 대기.
 
 ### 안정적으로 돌아가는 것
 - 기존 GUI (`papermeister/ui/` — **동결**, 신규 개발 없음). Process/Preferences 다이얼로그는 새 desktop 앱에서 재사용 중
@@ -62,13 +64,13 @@
   - **로컬 폴더 가져오기** (세션 47): Rail 'import' 액션(아이콘 `import.svg`) → `QFileDialog`로 폴더 선택 → **`ScanWorker`(QThread, dir-walk 사전 카운트 → determinate 진행)** + **`ScanWindow` 진행창**(per-file 로그 + new/linked/total 요약) → `ingestion.import_source_directory`(재귀 스캔 + SHA256 dedup) → SourceNav refresh(폴더명 탭) → 그 소스 pending PDF "지금 OCR?" 확인 → `ProcessWindow` 재사용. 멀티탭(Zotero + 폴더1/2…)은 SourceNav가 소스마다 탭이라 공짜. **핵심: `ingest_pdf`이 `PaperFolder` M2M 링크 생성** — desktop `list_by_folder`가 M2M로만 조회하므로 필수. 이미 Zotero에 있는(hash 동일) PDF는 skip 대신 **그 기존 Paper를 폴더에 링크**(중복 0, 같은 논문이 Zotero 컬렉션+로컬 폴더 양쪽 탭에 표시). 로컬 PDF는 다운로드 없이 PyMuPDF 메타 추출. **탭 우클릭 → "Remove (local folder)"** 로 directory 소스 삭제 가능(`delete_directory_source`: 순수 로컬 논문만 cascade 삭제, Zotero 공유 논문은 링크만 해제, 디스크 파일·OCR 캐시 보존). **end-to-end는 사용자 Windows 검증 대기**. [devlog 062](./devlog/20260615_062_Desktop_Local_Folder_Import.md)
 
 ### 진행 중인 것
-- **P11 Phase 2 — 외부 문헌 정규화 (CitedWork 노드)** — 코드 작성 완료 + 임시 DB 검증(코어 16/16, desktop 14/14), 라이브 마이그레이션·백필 대기 (2026-06-25, 세션 49). 계획 [devlog P12](./devlog/20260625_P12_External_Work_Normalization.md) · 구현 [devlog 064](./devlog/20260625_064_External_Work_Normalization_Implementation.md)
+- **P11 Phase 2 — 외부 문헌 정규화 (CitedWork 노드)** — ✅ **라이브 실행됨** (2026-07-23 DB 실측: `CitedWork` **49,728노드**, `Reference.resolved_work` 매칭 58,360). 코드 검증(코어 16/16, desktop 14/14) 후 Windows에서 normalize_works `--execute` 실행 완료. 계획 [devlog P12](./devlog/20260625_P12_External_Work_Normalization.md) · 구현 [devlog 064](./devlog/20260625_064_External_Work_Normalization_Implementation.md)
   - **목표**: 외부(cited-only) 문헌에 canonical 노드(`CitedWork`) 부여 → 같은 외부 논문이 여러 Reference로 흩어지지 않게 dedup → co-citation / "자주 인용하지만 미보유" 발굴 가능
   - **신규 `CitedWork`** + `Reference.resolved_work` FK. resolved_paper(held) ⊻ resolved_work(외부), 둘 다 null=junk
   - **2-패스**: 패스1 = DOI/title_key **exact dedup**(deterministic, `references.canonicalize_reference`). 패스2 = `(제1저자 surname, year)` blocking으로 후보 ≥2 클러스터만 **LLM 병합 판정**(`biblio.llm_match_works`), `merge_checked`로 resumable. fuzzy는 결정 안 하고 후보 생성 전용 (사용자 결정: "exact면 OK, 아니면 LLM이 fuzzy보다 신뢰")
   - **실행**: 추출 종료 후 Windows에서 `python scripts\normalize_works.py --execute`(패스1) → `--pass 2 --execute`(패스2). 추출 파이프라인(CLI+**desktop**)은 이미 패스1 auto-canonicalize 연결됨. **현재 실행 중인 추출엔 무영향**(옛 코드 메모리 상주)
   - **단계 6 desktop UI 완료**: References 탭 외부 카드 배지(held 초록 / 공동인용 앰버 `◆ also cited by N`→클릭 시 공동인용 논문 메뉴 / 단독 회색) + **Cited Works 브라우저**(Rail `works` 아이콘 → 인용수 desc 테이블 + 인용 논문 리스트, 더블클릭 이동, 필터/≥2 토글). 임시 DB 검증 desktop 14/14·코어 16/16
-- **P11 References 추출 + 인용 네트워크 (Phase 1)** — 코드 작성 완료, 라이브 실행 대기 (2026-06-25, 세션 49). 계획서 [devlog P11](./devlog/20260625_P11_References_Extraction_Citation_Network.md)
+- **P11 References 추출 + 인용 네트워크 (Phase 1)** — ✅ **라이브 실행됨(부분)** (2026-07-23 DB 실측: `references_checked=1` **1,733/9,889편(17.5%)**, `Reference` **104,755행**, held 매칭 13,102 / cited-only는 P12 CitedWork로 흡수). 나머지 편수는 Process/Extract References 재개로 진행. 계획서 [devlog P11](./devlog/20260625_P11_References_Extraction_Citation_Network.md)
   - **목표**: 논문 본문 맨 뒤 references 섹션을 파싱(ocrserver Qwen3 32B) → `Reference` 테이블 저장 → 보유 Paper와 매칭. held(PDF 보유) vs cited-only(외부) 구분
   - **신규 모델 `Reference`** (`models.py`): citing_paper FK + order_index + raw_text(source of truth) + 파싱 필드(authors_json/year/title/container/volume/issue/pages/doi/ref_type) + resolution(resolved_paper FK nullable/match_method/match_score) + provenance(source/model_version/parse_confidence). `database.py ALL_TABLES`에 등록(create_tables가 멱등 생성). **held vs cited는 `resolved_paper` null 여부**로 판정, 별도 플래그 없음
   - **`biblio.py` 추가**: `extract_references_block(pages)`(뒤에서부터 references 헤딩 탐색 EN+CJK, appendix 등에서 끊기, 미발견 시 마지막 2p fallback+low conf) / `split_reference_entries`(번호형 `[n]`/`n.` 결정적 분할, 3개 미만이면 통째로 LLM에) / `_REFS_PROMPT`(JSON 배열, raw 원문 보존, 환각 금지) / `_parse_llm_json_array` / `extract_references_llm(file_hash, backend)`. `_call_qwen`에 `max_tokens` 파라미터 추가(refs는 8192)
@@ -82,8 +84,8 @@
   - **DetailPanel References 탭** (사용자 요청): 우측 패널 4번째 탭. 해당 논문 references를 **카드**로 나열 — citation(저자·연도·저널 vol/pages) + 제목 + **held(in library, 클릭→`reference_navigate`로 해당 논문 이동) / cited-only 배지**, raw 원문 툴팁, DOI 링크. lazy 빌드. `paper_service.load_references`+`ReferenceRow`, `paper_list.select_paper` 추가
   - **References 탭 cited-by 역방향** (사용자 요청): 탭 상단에 "CITED BY" 섹션 — 이 논문을 인용한 라이브러리 논문들(`Reference.resolved_paper==this`)을 카드로(클릭→이동), 최신순. 아래는 기존 outgoing references. `paper_service.load_cited_by`+`CitedByRow`. 양방향 인용관계를 한 탭에 통합. refs 없고 cited-by만 있어도 표시
   - **추출 직후 자동 resolve** (사용자 요청): resolve 로직을 `references.py`로 통합(`build_resolution_index`/`resolve_one`/`resolve_paper_references`) → 스크립트·데스크톱 공유. **desktop 추출 워커가 save 직후 자동 resolve** (배치당 held-paper 인덱스 1회 빌드·`self._refs_index` 캐시, refs 직렬이라 race 없음, 드레인 시 무효화). 진행창 "N references, M in library" + 완료 후 References 탭 자동 refresh. CLI `extract_references.py`도 추출 후 일괄 resolve(`--no-resolve` opt-out). 즉 **별도 resolve 단계 불필요** — 배지가 바로 채워짐. (판단: DOI 정확일치 → 제목 토큰 후보 + year/1저자 스코어 ≥0.7)
-  - **검증 완료(WSL)**: compile OK, 휴리스틱 self-test(헤딩 35종 매치/8종 거부, 번호형/CJK/fallback/JSON 배열), resolve 매칭(DOI/title/external 구분) end-to-end, `save_references` 멱등, **마이그레이션 컬럼추가+백필**, headless 데스크톱 임포트+메서드 배선 전부 통과. **라이브 실행(Windows + ocrserver Qwen3)은 사용자 검증 대기**
-  - **다음**: 소수 샘플로 파싱 품질 확인 → resolve 임계값 튜닝 → 인용 네트워크 export/표시. Phase 2(`CitedWork` 외부노드 dedup)·Level 3(in-text 인용맥락)은 범위 밖
+  - **검증 완료(WSL)**: compile OK, 휴리스틱 self-test(헤딩 35종 매치/8종 거부, 번호형/CJK/fallback/JSON 배열), resolve 매칭(DOI/title/external 구분) end-to-end, `save_references` 멱등, **마이그레이션 컬럼추가+백필**, headless 데스크톱 임포트+메서드 배선 전부 통과. **라이브 실행(Windows + ocrserver Qwen3) 완료 — 1,733편 처리됨** (2026-07-23 실측)
+  - **다음**: 나머지 ~8,150편 references 추출 재개 → resolve 임계값 튜닝 → 인용 네트워크 export/표시. Level 3(in-text 인용맥락)은 범위 밖
 - **P02 PyInstaller 패키징 — 완료** (2026-06-15): `python -m desktop` → onedir `dist\PaperMeister\PaperMeister.exe`. 빌드 성공 + 실행 검증(Qt/SQLite/SSL Zotero sync/PyMuPDF PDF/FTS5 검색 전부 동작). **빌드 방법은 conda 특유의 DLL 함정 때문에 `build_desktop_clean.bat`(플레인 cmd + conda OFF PATH인 venv)** 필수 — `build_desktop.bat`(conda 셸 직접 빌드)는 Qt DLL 오염으로 실패함. 트러블슈팅 전말·최종 레시피는 [devlog 061](./devlog/20260615_061_PyInstaller_Conda_DLL_Troubleshooting.md), 계획·설계는 [devlog P02](./devlog/20260615_P02_PyInstaller_Desktop_Packaging.md). 후속(저순위): 앱 `.ico`/버전정보/코드사이닝, 배포 자동화
 - **Phase 4 (hookup)**:
   - **Apply Biblio Zotero write-back 라이브 검증**: 세션 18에서 write 키로 한 번 돌렸음. paper 4315 (bookSection)에서 400 → `ITEM_TYPE_JOURNAL_FIELD` map 픽스 + `ZoteroPatchRejected` 래퍼로 해결. 48편 status=extracted 잔존 (다음 Process 시 재시도 → 일부는 evaluate가 needs_review로 분류한 정상 케이스, 나머지는 bookSection 400으로 멈춘 케이스)
@@ -204,6 +206,19 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 ---
 
 ## 최근 세션 요약
+
+**2026-07-23 (세션 50)** — 상태 점검 + **P14 계획/착수** (references 진행 모니터 + 인용 네트워크) — [devlog P14](./devlog/20260723_P14_Citation_Matching_And_Network.md)
+- HANDOFF 상단이 세션 49(P11 "라이브 대기")에 멈춰 있어 git log(P12/P13/065~068)와 어긋남을 발견 → **Windows 라이브 DB(2.3GB)를 WSL 로컬로 복사 후 스키마·카운트 실측**으로 실제 진행 확정
+- **P13 FTS 마이그레이션 적용 완료 확인**: `passage_fts` external-content + standalone `paper_fts` + 트리거 9종, `passage_fts_content` 부재, `pre-p13-backup`(4.3GB) 존재, `quick_check=ok`. DB 4.3→2.3GB
+- **P11 references 부분 실행 + P12 CitedWork 정규화 라이브 확인**: `references_checked` 1,737/9,828편(17.7%), `Reference` 104,889행(held 13,123 / external 58,473), `CitedWork` 49,728노드
+- **P14 계획서 커밋** (`2a0dc35`): 참조 매칭 품질(A1 증분 재-resolve / A2 감사) + 인용 네트워크(L0 통계 / L1 export / L2 ego-view / L3 공동인용). 착수 순서 L0→A2→L1→A1→(L2/L3 추출 후)
+- **구현·검증·커밋 (read-only, Windows 실행 전제)**:
+  - `scripts/refs_progress.py` — 추출 진행률/처리율/ETA 모니터(`--watch`)
+  - `scripts/citation_stats.py` (L0, `1d01402`) — held→held 그래프 통계(3,831노드/12,038엣지 @17.6%)
+  - `scripts/export_citation_graph.py` (L1, `1d01402`) — nodes/edges CSV + GEXF(Gephi), `--with-external`
+  - `scripts/audit_matches.py` (A2, `8ed8591`) — 매칭 감사. **실측 발견**: title 매칭 12,925 중 4,279 의심(FP, 예: "On Growth and Form" 오연결), 제목이 보유논문과 일치하는데 미연결 4,403(FN, 예: 완전일치인데 unresolved)
+- **⚠️ A2가 드러낸 것**: 문제는 임계값이 아니라 **`resolve_one` 스코어러** — (a) 짧은/일반 제목 토큰겹침 FP, (b) 정규화 제목 완전일치인데 year/저자 요건으로 놓침. **A1(증분 재-resolve) 전에 스코어러 보강 필요**(완전일치 강신호 우선 + 짧은제목 가드) → 재-resolve로 ~4,400 FN 회수. **사용자 결정 대기**
+- 참고: `.papermeister/papermeister.db.pre-p13-backup`(4.3GB, 6/26)는 검증 종료 후 삭제 가능
 
 **2026-06-25 (세션 49)** — [devlog P11](./devlog/20260625_P11_References_Extraction_Citation_Network.md)
 - **P11 References 추출 + 인용 네트워크 (Phase 1) 설계 + 코드 작성** — 논문 본문 references 섹션을 파싱해 인용 네트워크의 토대 구축. held(PDF 보유) vs cited-only(외부) 구분이 핵심 요구
