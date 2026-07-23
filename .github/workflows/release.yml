@@ -1,0 +1,79 @@
+name: Release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  # Gate the release on the test suite (lint + Linux/Windows tests).
+  test:
+    uses: ./.github/workflows/test.yml
+
+  compute-build-number:
+    runs-on: ubuntu-latest
+    outputs:
+      build_number: ${{ steps.bn.outputs.build_number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: bn
+        run: echo "build_number=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+
+  call-build-workflow:
+    needs: [test, compute-build-number]
+    uses: ./.github/workflows/reusable_build.yml
+    with:
+      build_number: ${{ needs.compute-build-number.outputs.build_number }}
+
+  create-release:
+    needs: call-build-workflow
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-files/
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd release-files
+          find . -type f -name "*.zip" -exec sha256sum {} \; > ../SHA256SUMS.txt
+          cd ..
+          cat SHA256SUMS.txt
+
+      - name: Prepare release body
+        id: release_body
+        run: |
+          {
+            echo 'RELEASE_BODY<<GH_EOF'
+            echo "PaperMeister ${GITHUB_REF_NAME} — Windows portable build"
+            echo ""
+            echo "## SHA256 Checksums"
+            echo ""
+            echo '```'
+            cat SHA256SUMS.txt
+            echo '```'
+            echo ""
+            echo "Built from commit: ${{ github.sha }}"
+            echo 'GH_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: PaperMeister ${{ github.ref_name }}
+          body: ${{ steps.release_body.outputs.RELEASE_BODY }}
+          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+          files: |
+            release-files/papermeister-windows/*.zip
+            SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

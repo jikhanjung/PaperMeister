@@ -67,22 +67,34 @@ import 깨짐을 red build로 잡음, (d) 미처리 슬롯 예외가 앱을 조�
 
 **수용 기준**: `pytest -m unit`가 WSL headless로 통과. 최소 4개 파일·핵심 로직 커버.
 
-## Phase 3 — CI + 스모크 테스트  · WSL↔Windows 갭 방어의 핵심
+## Phase 3 — CI + 서버 패키징·릴리스  · ✅ 구현됨 (Modan2 미러)
 
-**산출물**
-- `tests/test_smoke.py` — **import 스모크**: `papermeister/`·`desktop/` 전 모듈을 import
-  (pkgutil walk). 버전-온리 심볼·누락 의존·문법 깨짐을 즉시 red로. *가장 저비용 고효율.*
-  - 2차(후속): `QT_QPA_PLATFORM=offscreen`로 `MainWindow` 생성까지 — 단 startup에서 Zotero
-    sync/DB를 건드리므로 **`PM_SMOKE` 등 no-network/no-autosync 플래그** 선도입 필요(설계 항목).
-- `.github/workflows/ci.yml` — 매트릭스 `{ubuntu-latest, windows-latest} × {3.10, 3.12}`:
-  1. checkout → setup-python → `pip install -r requirements.txt`(+ dev)
-  2. `ruff check` (gating)
-  3. `pytest -m "unit or (not ui)"` + import 스모크
-  - 외부 의존(`claude -p`, RunPod, Zotero)은 **런타임**이라 CI 불필요 — import/유닛만.
-- **처음엔 advisory로 관찰**(그린 확인) → 안정되면 required.
+**CI (`test.yml`)** — 매트릭스 `{ubuntu-latest, windows-latest} × 3.12`:
+- `lint` job(ubuntu 1회, gating): `ruff check . --output-format=github`. (`ruff format --check`는
+  아직 미포맷이라 제외 — 후속 format 커밋 후 추가.)
+- `test` job(양 OS, gating): Linux Qt 런타임 libs(offscreen용 libegl/libgl/libxkbcommon+xcb;
+  **OpenGL/GLUT/Xvfb 불필요** — PDF는 PyMuPDF 렌더) → pip cache → `requirements-dev.txt` →
+  import 스모크(`tests/test_smoke.py`) → `pytest tests/`. `shell: bash`로 Windows도 동일 스크립트.
+- `workflow_call` 노출 → release가 게이트로 재사용.
 
-**수용 기준**: PR/푸시 시 Windows·Linux 양쪽에서 import 스모크+유닛+ruff 그린.
-**주의**: PyQt6/PyMuPDF의 Windows 러너 설치 가능 여부 초기 확인. offscreen Qt 필수.
+**서버 패키징·릴리스** (사용자 요청: Modan2 방식 미러) — `version.py`(`__version__`) 신설,
+build_number=`git rev-list --count HEAD`(워크플로 독립·단조):
+- `reusable_build.yml`(`workflow_call`): **Windows 전용**(PaperMeister는 Windows-run) — clean
+  **pip** 환경(conda 아님 → devlog 061 함정 회피, spec의 conda `Library\bin` 보강은
+  `os.path.isdir` 가드로 no-op) → `pyinstaller PaperMeister.spec` → onedir를 **portable zip**
+  (`PaperMeister-Windows-Portable-v{VER}-build{N}.zip`) → artifact. mac/Linux 레그는 Modan2처럼
+  나중에 동형 추가 가능.
+- `build.yml`: **수동(`workflow_dispatch`)만** — Modan2는 매 main push 빌드하나, PaperMeister는
+  커밋이 잦아 과함. test는 매 push, 빌드는 온디맨드/릴리스.
+- `release.yml`: 태그 `v*.*.*` push → test(게이트) → build → `create-release`(artifact 다운로드 +
+  `SHA256SUMS.txt` + softprops/action-gh-release, `-alpha/-beta/-rc`면 prerelease).
+
+**수용 기준**: PR/push에서 ruff+스모크+pytest가 Linux·Windows 그린. 태그 push 시 Windows zip이
+GitHub Release에 첨부.
+**미검증(라이브 필요)**: windows-latest에서 `pyinstaller PaperMeister.spec` 실빌드 성공 여부는
+첫 CI 실행이 확인(로컬 검증 불가). spec의 conda 가드 덕에 pip-CI에서 표준 빌드 기대.
+**후속**: Inno Setup 설치본(현재 portable zip만), 앱 아이콘/버전정보, mac/Linux 레그, CHANGELOG
+소싱 릴리스 노트(현재는 checksums+commit만).
 
 ## Phase 4 — 런타임 견고성 + pre-commit  · 이미 절반, 마무리
 

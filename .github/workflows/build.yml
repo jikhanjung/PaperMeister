@@ -1,0 +1,30 @@
+name: Build
+
+permissions:
+  contents: read
+
+# Manual only. PaperMeister commits are frequent and a full PyInstaller build is
+# expensive, so we don't build per-push (unlike Modan2) — test.yml runs on every
+# push, release.yml builds on tags, and this is the on-demand build button.
+on:
+  workflow_dispatch:
+
+jobs:
+  # Build number = commit count (workflow-independent + monotonic; shared with
+  # release.yml so every build path stamps the same number).
+  compute-build-number:
+    runs-on: ubuntu-latest
+    outputs:
+      build_number: ${{ steps.bn.outputs.build_number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: bn
+        run: echo "build_number=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+
+  call-build-workflow:
+    needs: compute-build-number
+    uses: ./.github/workflows/reusable_build.yml
+    with:
+      build_number: ${{ needs.compute-build-number.outputs.build_number }}

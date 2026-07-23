@@ -1,0 +1,56 @@
+name: Reusable Build Workflow
+
+# Mirrors Modan2's reusable_build.yml, scoped to Windows — PaperMeister is a
+# Windows-run app (Zotero/RunPod/Anaconda on the user's side). macOS/Linux legs
+# can be added the same way if ever needed. Produces a portable zip of the
+# PyInstaller onedir bundle (an Inno Setup installer is a later addition).
+on:
+  workflow_call:
+    inputs:
+      build_number:
+        required: true
+        type: string
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Clean pip env (NOT conda) — this is exactly the environment that fixed
+      # the conda-DLL packaging failures (devlog 061). The spec's conda-only
+      # Library\bin fixup is guarded by os.path.isdir, so it no-ops here.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Get version
+        id: get_version
+        shell: bash
+        run: echo "VERSION=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+
+      - name: Build (PyInstaller onedir)
+        run: pyinstaller PaperMeister.spec
+
+      - name: Zip portable build
+        shell: pwsh
+        run: |
+          $zip = "PaperMeister-Windows-Portable-v${{ steps.get_version.outputs.VERSION }}-build${{ inputs.build_number }}.zip"
+          if (Test-Path "dist/PaperMeister") {
+            Compress-Archive -Path "dist/PaperMeister/*" -DestinationPath $zip
+            echo "Created $zip"
+          } else {
+            echo "ERROR: dist/PaperMeister not found"; exit 1
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: papermeister-windows
+          path: PaperMeister-Windows-*.zip
