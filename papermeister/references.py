@@ -139,16 +139,40 @@ def build_resolution_index() -> dict:
 
 
 def _score_title(ref_toks, info, ref_year, ref_sn) -> float:
-    """Similarity score between a reference and a held paper's title."""
+    """Similarity score between a reference and a held paper's title.
+
+    Pure containment (inter/min) let a SHORT reference embedded in a LONG paper
+    title score a perfect 1.0 (e.g. "On Growth and Form" inside "...the growth
+    and form of teeth..."), a common false positive. We blend containment with
+    Jaccard (symmetric) so a match must cover a fair share of BOTH titles —
+    unless the token sets are near-identical, which is a confident same-title
+    signal that also survives a missing/disagreeing year (recovers false
+    negatives like exact-title refs left unresolved).
+    """
     if not ref_toks or not info['tokens']:
         return 0.0
     rset = set(ref_toks)
-    inter = rset & info['tokens']
+    pset = info['tokens']
+    inter = rset & pset
     if not inter:
         return 0.0
-    score = len(inter) / min(len(rset), len(info['tokens']))   # containment
+    ni, nr, npv = len(inter), len(rset), len(pset)
+    # Near-identical token sets (allow one token off on the larger side, e.g. a
+    # subtitle or OCR slip). A strong structural signal — trust it on its own.
+    near_exact = ni >= 3 and ni >= max(nr, npv) - 1
+    if near_exact:
+        base = 0.95
+    else:
+        containment = ni / min(nr, npv)
+        jaccard = ni / (nr + npv - ni)
+        base = 0.5 * containment + 0.5 * jaccard
+
+    score = base
     if ref_year and info['year']:
-        score += 0.1 if ref_year == info['year'] else -0.3
+        if ref_year == info['year']:
+            score += 0.1
+        elif not near_exact:        # a near-identical title isn't vetoed by year
+            score -= 0.3
     if ref_sn and info['surname'] and ref_sn == info['surname']:
         score += 0.15
     return score
