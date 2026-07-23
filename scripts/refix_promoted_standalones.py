@@ -32,6 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Match the desktop app's SSL monkey-patch (institutional CAs trip pyzotero).
 import requests
 import urllib3
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 _original_request = requests.api.request
 def _no_verify_request(method, url, **kwargs):
@@ -132,7 +133,7 @@ def main():
     for p, pdf in cands:
         log(f'  paper [{p.id}] "{(p.title or "")[:40]}"')
         log(f'        phantom parent: {p.zotero_key} (gone)  →  demote to PDF {pdf.zotero_key}')
-        log(f'        then create fresh parent + reparent PDF (+ JSON siblings)')
+        log('        then create fresh parent + reparent PDF (+ JSON siblings)')
 
     if not args.execute:
         log('')

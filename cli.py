@@ -9,7 +9,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from papermeister.database import init_db
 from papermeister.models import (
-    Author, Folder, Paper, PaperFile, Passage, Source,
+    Author,
+    Folder,
+    Paper,
+    PaperFile,
+    Passage,
+    Source,
 )
 
 
@@ -23,6 +28,7 @@ def _init():
 def cmd_import(args):
     """Import a directory of PDFs."""
     import os
+
     from papermeister.ingestion import import_source_directory
 
     dir_path = os.path.abspath(args.path)
@@ -38,7 +44,7 @@ def cmd_import(args):
     print(f'Done. Source: {source.name} (id={source.id})')
     print(f'  New files: {len(new_files)}')
     if new_files:
-        print(f'  Run "python cli.py process" to OCR pending files.')
+        print('  Run "python cli.py process" to OCR pending files.')
     return 0
 
 
@@ -115,7 +121,7 @@ def _run_process(pending):
 
     with ThreadPoolExecutor(max_workers=max_concurrent) as pool:
         futures = [pool.submit(process_one, pf) for pf in pending]
-        for f in as_completed(futures):
+        for _f in as_completed(futures):
             pass
 
     print(f'\nComplete: {counter["done"]} processed, {counter["failed"]} failed.')
@@ -304,7 +310,6 @@ def cmd_config(args):
                 print(f'{args.key}: {val}')
         else:
             # Show all
-            import json
             from papermeister.preferences import _load
             data = _load()
             if not data:
@@ -380,14 +385,13 @@ def _resolve_zotero_folders(source, collection_str=None):
         if not folder:
             return None, f'Collection "{collection_str}" not found. Run "python cli.py zotero sync" first.'
         return [folder], None
-    else:
-        folders = list(Folder.select().where(
-            Folder.source == source,
-            Folder.zotero_key != '',
-        ))
-        if not folders:
-            return None, 'No Zotero collections found. Run "python cli.py zotero sync" first.'
-        return folders, None
+    folders = list(Folder.select().where(
+        Folder.source == source,
+        Folder.zotero_key != '',
+    ))
+    if not folders:
+        return None, 'No Zotero collections found. Run "python cli.py zotero sync" first.'
+    return folders, None
 
 
 def cmd_zotero(args):

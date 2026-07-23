@@ -6,7 +6,6 @@ Step 3 (P05): functions to compare extracted BiblioResult against ground truth.
 import re
 import unicodedata
 
-
 # Default weights for the overall score
 DEFAULT_WEIGHTS = {
     'title': 0.35,

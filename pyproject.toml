@@ -1,0 +1,36 @@
+[project]
+name = "papermeister"
+description = "Turn an academic paper (PDF) collection into a searchable knowledge base."
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 99
+target-version = "py312"
+extend-exclude = [".build-venv", "build", "dist"]
+
+[tool.ruff.lint]
+# Curated per P15 Phase 1: base + the groups that catch real desktop bugs.
+# Style/simplification groups (SIM, RET, PIE, A, PERF, PTH) are deferred to a
+# later dedicated pass — they're "general rot", lower-value, and risky to bulk-fix
+# before the test suite exists.
+select = [
+    "E", "F", "I", "N", "UP", "B", "C4",  # base
+    "DTZ",     # naive datetime / missing tzinfo
+    "RUF012",  # mutable class-level defaults (a real past-defect class)
+    "S",       # bandit — eval/exec, pickle, unsafe yaml, subprocess, path
+]
+ignore = [
+    "N802", "N803", "N806",  # Qt uses camelCase (methods / args / locals)
+    "E501",    # line length — handled later by `ruff format` in its own commit
+    "S110",    # best-effort try/except/pass; revisit in the robustness pass to log
+    "DTZ005",  # naive local timestamps; tz-awareness is a separate deliberate decision
+    "S603", "S607",  # deliberate `claude -p` / subprocess on PATH, no shell (the safe form)
+    "S608",    # reviewed: parameterized IN (%s placeholders) / hardcoded clause, no injection
+    "S311",    # non-crypto random for install ids / nonces, intended
+    "N818",    # deliberate exception names (…Denied/…Rejected/…AlreadyApplied); renaming churns callers
+]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["T201", "E402"]   # scripts print by design; sys.path.insert precedes imports
+"desktop/app.py" = ["E402"]      # the requests SSL monkeypatch must run before Qt/pyzotero imports
+"tests/*" = ["S101"]             # asserts are the point of tests

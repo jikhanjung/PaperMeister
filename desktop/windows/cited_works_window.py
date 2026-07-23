@@ -5,6 +5,8 @@ cite them — i.e. acquisition candidates ("frequently cited but not in library"
 Selecting a work shows the library papers that cite it; double-clicking one of
 those emits `open_paper` so the main window can navigate to it.
 """
+from typing import ClassVar
+
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -29,7 +31,7 @@ from desktop.services import paper_service
 class CitedWorksWindow(QWidget):
     open_paper = pyqtSignal(int)  # a citing library paper was activated
 
-    _COLS = ['Cites', 'Year', 'Authors', 'Title', 'In', 'DOI']
+    _COLS: ClassVar = ['Cites', 'Year', 'Authors', 'Title', 'In', 'DOI']
 
     def __init__(self, parent=None):
         super().__init__(parent)

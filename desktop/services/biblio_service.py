@@ -8,7 +8,6 @@ from papermeister import biblio_reflect
 from papermeister.database import db
 from papermeister.models import Author, Paper, PaperBiblio
 
-
 # ── Author name display ─────────────────────────────────────────
 
 

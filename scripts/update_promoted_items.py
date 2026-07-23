@@ -15,16 +15,18 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from papermeister.biblio import OCR_JSON_DIR
 from papermeister.database import init_db
-from papermeister.models import Author, Paper, PaperBiblio, db
+from papermeister.ingestion import hash_file
+from papermeister.models import Author, PaperBiblio, PaperFile, db
 from papermeister.preferences import get_pref
 from papermeister.zotero_client import ZoteroClient
-from papermeister.models import PaperFile
 from scripts.promote_standalone import (
-    build_creators, build_parent_item_payload, ITEM_TYPE_MAP, collection_key_for,
+    ITEM_TYPE_MAP,
+    build_creators,
+    build_parent_item_payload,
+    collection_key_for,
 )
-from papermeister.ingestion import hash_file
-from papermeister.biblio import OCR_JSON_DIR
 
 # journal_issue → document (Zotero has no journalIssue type)
 ITEM_TYPE_MAP_EXT = {
@@ -186,7 +188,7 @@ def main():
                              & (~PaperFile.path.endswith('.json')))
                       .first())
                 if not pf:
-                    print(f'    ✗ no PDF PaperFile to promote')
+                    print('    ✗ no PDF PaperFile to promote')
                     failed += 1
                     continue
                 coll = collection_key_for(paper)
@@ -240,7 +242,7 @@ def main():
                 result = zot.update_item(payload)
                 if result is True or (isinstance(result, dict) and not result.get('failed')):
                     update_db_paper(paper, b)
-                    print(f'    ✓ updated in place')
+                    print('    ✓ updated in place')
                     ok += 1
                 else:
                     print(f'    ✗ update returned: {result}')
@@ -249,7 +251,7 @@ def main():
             print(f'    ✗ ERROR: {e}')
             failed += 1
 
-    print(f'\n=== Summary ===')
+    print('\n=== Summary ===')
     print(f'  ok:      {ok}')
     print(f'  skipped: {skipped}')
     print(f'  failed:  {failed}')

@@ -2,6 +2,7 @@
 import logging
 import os
 import time
+
 from PyQt6.QtCore import QThread, pyqtSignal
 
 _LOG_DIR = os.path.join(os.path.expanduser('~'), '.papermeister', 'logs')
@@ -61,8 +62,11 @@ class ZoteroSyncWorker(QThread):
 
     def _sync(self) -> dict:
         from papermeister.ingestion import (
-            get_or_create_zotero_source, sync_zotero_collections, sync_zotero_items,
-            sync_trash_state, apply_permanent_deletions,
+            apply_permanent_deletions,
+            get_or_create_zotero_source,
+            sync_trash_state,
+            sync_zotero_collections,
+            sync_zotero_items,
         )
         from papermeister.preferences import get_pref, set_pref
         from papermeister.zotero_client import ZoteroClient

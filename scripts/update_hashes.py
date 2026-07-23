@@ -116,7 +116,7 @@ def main():
             for p in batch:
                 p.save()
 
-    log(f'\n=== 결과 ===')
+    log('\n=== 결과 ===')
     log(f'총 PaperFile:     {len(paperfiles)}')
     log(f'PDF 찾음:         {found}')
     log(f'PDF 못 찾음:      {not_found}')
@@ -131,7 +131,7 @@ def main():
         .group_by(PaperFile.status)
         .tuples()
     )
-    log(f'\n=== PaperFile 상태 ===')
+    log('\n=== PaperFile 상태 ===')
     for status, count in status_counts:
         log(f'  {status}: {count}')
 

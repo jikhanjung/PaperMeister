@@ -14,7 +14,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from papermeister.database import init_db
-from papermeister.models import Author, Paper, PaperFile, Folder, Source
+from papermeister.models import Author, Folder, Paper, PaperFile, Source
 
 EVAL_SET_PATH = os.path.expanduser('~/.papermeister/eval_set.json')
 
@@ -128,7 +128,7 @@ def main():
     rng = random.Random(args.seed)
     picked, chosen = sample_stratified(strata, args.size, rng)
 
-    print(f'\nPicked per stratum:')
+    print('\nPicked per stratum:')
     for name, ids in picked.items():
         print(f'  {name}: {len(ids)}')
     print(f'Total: {len(chosen)}')

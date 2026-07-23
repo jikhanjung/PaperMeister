@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # otherwise). Must run before any pyzotero call.
 import requests
 import urllib3
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 _original_request = requests.api.request
 def _no_verify_request(method, url, **kwargs):
@@ -36,10 +37,10 @@ def _no_verify_request(method, url, **kwargs):
 requests.api.request = _no_verify_request
 
 from papermeister.database import init_db
+from papermeister.ingestion import _merge_stale_standalone
 from papermeister.models import Paper, PaperFile
 from papermeister.preferences import get_pref
 from papermeister.zotero_client import ZoteroClient
-from papermeister.ingestion import _merge_stale_standalone
 
 
 def find_standalone_candidates(title_contains: str = '', filename_contains: str = ''):
@@ -122,7 +123,7 @@ def main():
     fetch_errors = 0
     merged = 0
 
-    for i, (paper, pfile) in enumerate(candidates, 1):
+    for i, (paper, _pfile) in enumerate(candidates, 1):
         try:
             item = zot.item(paper.zotero_key)
             data = item['data']

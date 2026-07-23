@@ -6,6 +6,7 @@ import sys
 # default verify parameter at the module level.
 import requests
 import urllib3
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 _original_request = requests.api.request
 def _no_verify_request(method, url, **kwargs):
@@ -15,10 +16,10 @@ requests.api.request = _no_verify_request
 
 from PyQt6.QtWidgets import QApplication
 
-from papermeister.database import init_db
 from desktop.theme.qss import build_stylesheet
 from desktop.theme.tokens import COLORS_DARK, FONT
 from desktop.windows.main_window import MainWindow
+from papermeister.database import init_db
 
 
 def main() -> int:

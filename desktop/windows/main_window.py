@@ -197,8 +197,8 @@ class MainWindow(QMainWindow):
         """Run the background scan of `directory` with the progress window.
         Shared by first-time import and tab right-click 'Re-scan folder'
         (re-import is idempotent — get-or-create source + SHA256 dedup)."""
-        from desktop.workers.scan import ScanWorker
         from desktop.windows.scan_window import ScanWindow
+        from desktop.workers.scan import ScanWorker
 
         if self._scan_window is None:
             self._scan_window = ScanWindow(self)
@@ -530,7 +530,7 @@ class MainWindow(QMainWindow):
         Failed files (e.g. from a server restart mid-OCR) are retried — reset to
         'pending' before submission so the pill transitions cleanly.
         """
-        from papermeister.models import Paper, PaperFile, PaperFolder, PaperBiblio
+        from papermeister.models import Paper, PaperBiblio, PaperFile, PaperFolder
 
         def _ocr_rows():
             if folder_ids is None:
@@ -656,9 +656,10 @@ class MainWindow(QMainWindow):
     def _upload_ocr_json(self, folder_id: int):
         """Upload OCR JSON files to Zotero for processed papers in a folder."""
         import os
+
+        from desktop.workers.background import BackgroundTask
         from papermeister.models import Paper, PaperFile, PaperFolder
         from papermeister.text_extract import OCR_JSON_DIR
-        from desktop.workers.background import BackgroundTask
 
         # Find processed PDF files in this folder tree that have a hash and OCR JSON,
         # but no JSON sibling already uploaded.
@@ -710,10 +711,11 @@ class MainWindow(QMainWindow):
         self.status_bar.set_task(f'Uploading {len(todo)} OCR JSON files…')
 
         def _do_upload():
+            import time
+
+            from papermeister.ingestion import hash_file
             from papermeister.preferences import get_pref
             from papermeister.zotero_client import ZoteroClient
-            from papermeister.ingestion import hash_file
-            import time
 
             user_id = get_pref('zotero_user_id', '')
             api_key = get_pref('zotero_api_key', '')
@@ -759,10 +761,8 @@ class MainWindow(QMainWindow):
 
     def _run_biblio_extraction(self, paper_id: int, file_id: int):
         """Run LLM biblio extraction for a single paper in background."""
-        import json
-        from papermeister.models import PaperFile, PaperBiblio
+        from papermeister.models import PaperFile
         from papermeister.preferences import get_pref
-        from desktop.workers.background import BackgroundTask
 
         pf = PaperFile.get_or_none(PaperFile.id == file_id) if file_id else None
         if not pf or not pf.hash:
@@ -824,7 +824,8 @@ class MainWindow(QMainWindow):
         (already-applied) metadata so the paper drops out of biblio targets and
         shows 'done' instead of being re-listed and skipped forever."""
         import json
-        from papermeister.models import Paper, PaperFile, PaperBiblio, Author
+
+        from papermeister.models import Author, Paper, PaperBiblio, PaperFile
         paper = Paper.get_or_none(Paper.id == paper_id)
         if paper is None:
             return
@@ -916,7 +917,7 @@ class MainWindow(QMainWindow):
             # Try auto-apply if biblio matches Zotero data
             from papermeister import biblio_reflect
             from papermeister.models import Paper
-            from papermeister.zotero_writeback import ZoteroWriteAccessDenied, ZoteroPatchRejected
+            from papermeister.zotero_writeback import ZoteroPatchRejected, ZoteroWriteAccessDenied
             paper = Paper.get_or_none(Paper.id == paper_id)
             biblio = biblio_reflect.select_best_biblio(paper) if paper else None
             summary = self._biblio_pred_summary(pred, paper_id)
@@ -1001,8 +1002,8 @@ class MainWindow(QMainWindow):
         """ServerGuard for the biblio batch: pause on repeated LLM-server failure,
         poll, auto-resume. With the Claude backend biblio_server_alive() reports
         'up', so the guard never pauses (nothing to poll)."""
-        from papermeister.biblio import biblio_server_alive
         from desktop.workers.server_guard import ServerGuard
+        from papermeister.biblio import biblio_server_alive
 
         def on_pause(remaining):
             if self._biblio_window:
@@ -1037,9 +1038,10 @@ class MainWindow(QMainWindow):
     def _run_biblio_extraction_silent(self, paper_id: int, file_id: int):
         """Run biblio extraction without confirmation dialog (for auto pipeline)."""
         import json
-        from papermeister.models import PaperFile, PaperBiblio
-        from papermeister.preferences import get_pref
+
         from desktop.workers.background import BackgroundTask
+        from papermeister.models import PaperBiblio, PaperFile
+        from papermeister.preferences import get_pref
 
         pf = PaperFile.get_or_none(PaperFile.id == file_id) if file_id else None
         if not pf or not pf.hash:
@@ -1056,7 +1058,7 @@ class MainWindow(QMainWindow):
             self._biblio_window.set_current(f'Extracting: {title}')
 
         def _do_extract():
-            from papermeister.biblio import extract_biblio_llm, BiblioAlreadyApplied
+            from papermeister.biblio import BiblioAlreadyApplied, extract_biblio_llm
             try:
                 pred, source, model_version = extract_biblio_llm(
                     file_hash, backend=biblio_backend, filename=biblio_filename)
@@ -1243,9 +1245,8 @@ class MainWindow(QMainWindow):
 
     def _run_references_extraction_silent(self, paper_id: int, file_id: int):
         """Parse references in the background and save Reference rows."""
-        import os
-        from papermeister.models import PaperFile
         from desktop.workers.background import BackgroundTask
+        from papermeister.models import PaperFile
 
         pf = PaperFile.get_or_none(PaperFile.id == file_id) if file_id else None
         if not pf or not pf.hash:
@@ -1259,8 +1260,8 @@ class MainWindow(QMainWindow):
             self._refs_window.set_current(f'Parsing: {self._biblio_title(paper_id)}')
 
         def _do_extract():
-            from papermeister.biblio import extract_references_llm
             from papermeister import references as refs_mod
+            from papermeister.biblio import extract_references_llm
             entries, source, model_version, complete = extract_references_llm(
                 file_hash, backend=backend)
             n = refs_mod.save_references(paper_id, entries, source, model_version)
@@ -1342,8 +1343,8 @@ class MainWindow(QMainWindow):
     def _make_refs_guard(self):
         """ServerGuard for the references batch: pause on repeated LLM-server
         failure, poll, auto-resume."""
-        from papermeister.biblio import references_server_alive
         from desktop.workers.server_guard import ServerGuard
+        from papermeister.biblio import references_server_alive
 
         def on_pause(remaining):
             if self._refs_window:

@@ -532,7 +532,7 @@ def _wrapper_ocr_pdf(pdf_path: str, timeout: float = 600, poll_interval: float =
             poll_errors += 1
             logger.warning('Wrapper poll error (%d): %s', poll_errors, exc)
             if poll_errors >= 10:
-                raise RuntimeError(f'Wrapper poll failed {poll_errors} times: {exc}')
+                raise RuntimeError(f'Wrapper poll failed {poll_errors} times: {exc}') from exc
             time.sleep(poll_interval)
             continue
 
@@ -617,7 +617,7 @@ def ocr_pdf(
                 )
             images_b64 = render_pages(pdf_path, chunk_indices, dpi)
             texts = _pod_ocr_batch(images_b64, timeout)
-            for text, page_idx in zip(texts, chunk_indices):
+            for text, page_idx in zip(texts, chunk_indices, strict=False):
                 raw_pages[page_idx] = {
                     'page': page_idx,
                     'markdown': text,
@@ -652,7 +652,7 @@ def ocr_pdf(
                     try:
                         sub_output = submit_and_wait(sub_imgs, timeout, max_retries)
                         for page_data, page_idx in zip(
-                            sub_output.get('pages', []), sub_indices
+                            sub_output.get('pages', []), sub_indices, strict=False
                         ):
                             page_data['page'] = page_idx
                             raw_pages[page_idx] = page_data
@@ -660,7 +660,7 @@ def ocr_pdf(
                         pass
                 continue
 
-            for page_data, page_idx in zip(output.get('pages', []), chunk_indices):
+            for page_data, page_idx in zip(output.get('pages', []), chunk_indices, strict=False):
                 page_data['page'] = page_idx
                 raw_pages[page_idx] = page_data
 

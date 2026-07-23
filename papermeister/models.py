@@ -1,4 +1,5 @@
 import datetime
+
 import peewee
 
 db = peewee.DatabaseProxy()

@@ -24,8 +24,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from papermeister.database import (
-    DB_PATH, _FTS_SCHEMA, _FTS_TRIGGERS, _FTS_POPULATE)
+from papermeister.database import _FTS_POPULATE, _FTS_SCHEMA, _FTS_TRIGGERS, DB_PATH
 
 
 def _table_sql(conn, name):
@@ -97,7 +96,7 @@ def main():
                   '       Rename/remove it first (refusing to overwrite).')
             return
         print(f'Backing up -> {backup} (VACUUM INTO, ~1-2 min)…')
-        conn.execute("VACUUM INTO '%s'" % backup.replace("'", "''"))
+        conn.execute("VACUUM INTO '{}'".format(backup.replace("'", "''")))
         print(f'  backup OK: {os.path.getsize(backup) / 1e9:.2f} GB')
 
     print('\nMigrating…')

@@ -106,7 +106,7 @@ def wait_for_vllm(vllm_url, timeout=300):
 def find_pdfs(input_dir):
     """Recursively find all PDF files."""
     pdfs = []
-    for root, dirs, files in os.walk(input_dir):
+    for root, _dirs, files in os.walk(input_dir):
         for f in sorted(files):
             if f.lower().endswith('.pdf'):
                 pdfs.append(os.path.join(root, f))
@@ -477,7 +477,7 @@ def main():
     global_elapsed = time.time() - global_t0
 
     print(f'{"="*60}', flush=True)
-    print(f'[DONE]', flush=True)
+    print('[DONE]', flush=True)
     print(f'  Files:  {ok} ok, {failed} failed, {total} total', flush=True)
     print(f'  Pages:  {total_pages}', flush=True)
     print(f'  Time:   {global_elapsed:.1f}s ({global_elapsed/60:.1f}m)', flush=True)

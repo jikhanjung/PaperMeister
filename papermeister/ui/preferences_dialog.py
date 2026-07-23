@@ -1,4 +1,3 @@
-from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -7,7 +6,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPushButton,
     QRadioButton,
     QTabWidget,
@@ -275,8 +273,8 @@ class PreferencesDialog(QDialog):
             self.status_label.setStyleSheet('color: red;')
 
     def _save(self):
-        from ..preferences import set_pref
         from ..ocr import reset_config as reset_ocr_config
+        from ..preferences import set_pref
         if self._ocr_wrapper_radio.isChecked():
             backend = 'wrapper'
         elif self._ocr_pod_radio.isChecked():

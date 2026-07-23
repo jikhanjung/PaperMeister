@@ -16,10 +16,17 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import peewee
+
 from papermeister.database import init_db
 from papermeister.models import (
-    Source, Folder, Paper, Author, PaperFile, PaperFolder,
-    PaperBiblio, Passage, db,
+    Author,
+    Folder,
+    Paper,
+    PaperBiblio,
+    PaperFile,
+    Passage,
+    Source,
+    db,
 )
 
 

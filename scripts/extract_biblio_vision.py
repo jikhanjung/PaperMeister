@@ -18,7 +18,7 @@ import fitz  # PyMuPDF
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from papermeister.database import init_db
-from papermeister.models import Paper, PaperFile, PaperBiblio
+from papermeister.models import Paper, PaperBiblio, PaperFile
 from papermeister.preferences import get_pref
 from papermeister.zotero_client import ZoteroClient
 
@@ -111,8 +111,10 @@ def call_claude_vision(prompt, model='claude-haiku-4-5', timeout=180):
 def save_biblio(paper, file_hash, pred, source, model):
     notes = pred.get('notes', '') or ''
     extras = []
-    if pred.get('issue'): extras.append(f"issue={pred['issue']}")
-    if pred.get('publication_date'): extras.append(f"date={pred['publication_date']}")
+    if pred.get('issue'):
+        extras.append(f"issue={pred['issue']}")
+    if pred.get('publication_date'):
+        extras.append(f"date={pred['publication_date']}")
     if pred.get('table_of_contents'):
         toc = '; '.join(pred['table_of_contents'][:20])
         extras.append(f"toc=[{toc}]")
@@ -209,8 +211,10 @@ def main():
             print(f'    ok ({elapsed:.1f}s) doc_type={pred.get("doc_type")} title={(pred.get("title") or "")[:60]}')
             save_biblio(p, pf.hash, pred, source, args.model)
         finally:
-            try: os.unlink(pdf_path)
-            except OSError: pass
+            try:
+                os.unlink(pdf_path)
+            except OSError:
+                pass
 
     print('\nDone.')
 

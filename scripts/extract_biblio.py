@@ -16,9 +16,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from papermeister.biblio import extract_first_pages, load_ocr_pages
 from papermeister.database import init_db
-from papermeister.models import Paper, PaperFile, PaperBiblio, Folder, Source, db
-from papermeister.biblio import load_ocr_pages, extract_first_pages
+from papermeister.models import Folder, Paper, PaperBiblio, PaperFile, Source
 
 PROMPT_TEMPLATE = """You are extracting bibliographic metadata from the first pages of an academic document (OCR'd text). The text below may contain noise, broken lines, and layout artifacts.
 
@@ -114,11 +114,11 @@ def fetch_targets(args):
         targets.append((pf.paper.id, pf.hash))
 
     if args.skip_existing:
-        existing = set(
+        existing = {
             (b.paper_id, b.file_hash) for b in
             PaperBiblio.select(PaperBiblio.paper_id, PaperBiblio.file_hash)
             .where(PaperBiblio.source == f'llm-{args.model_short}')
-        )
+        }
         targets = [t for t in targets if t not in existing]
 
     return targets
@@ -212,7 +212,7 @@ def main():
                     print(f'[{i}/{len(targets)}] pid={pid} SAVE ERR: {e}', flush=True)
 
     elapsed = time.time() - t0
-    print(f'\n=== Done ===')
+    print('\n=== Done ===')
     print(f'  ok:    {ok}')
     print(f'  err:   {err}')
     print(f'  time:  {elapsed:.1f}s ({elapsed/max(1,len(targets)):.1f}s/paper)')

@@ -15,11 +15,11 @@ CLI wrapper lives at scripts/reflect_biblio.py.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable, Literal
+from typing import Literal
 
-from .models import Author, Folder, Paper, PaperBiblio, Source, db
-
+from .models import Author, Folder, Paper, PaperBiblio, db
 
 # ── Source ranking (P08 §1) ───────────────────────────────────
 # Higher rank = prefer over lower rank. Unknown sources default to rank 0.

@@ -6,8 +6,17 @@ Two button groups:
 - Bottom (actions): Sync, Process, Settings — one-shot action buttons that fire
   `action_triggered(key)` without altering the persistent mode.
 """
+from typing import ClassVar
+
 from PyQt6.QtCore import QPropertyAnimation, QSize, Qt, pyqtSignal
-from PyQt6.QtWidgets import QButtonGroup, QGraphicsOpacityEffect, QMenu, QToolButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import (
+    QButtonGroup,
+    QGraphicsOpacityEffect,
+    QMenu,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from desktop.theme.icons import rail_icon
 
@@ -17,11 +26,11 @@ class Rail(QWidget):
     action_triggered = pyqtSignal(str)     # import | sync | works | process | settings
     full_sync_triggered = pyqtSignal()     # right-click → "Full Sync"
 
-    MODES = [
+    MODES: ClassVar = [
         ('library', 'library', 'Library'),
         ('search',  'search',  'Search'),
     ]
-    ACTIONS = [
+    ACTIONS: ClassVar = [
         ('import',   'import',   'Import Local Folder'),
         ('sync',     'sync',     'Sync Zotero'),
         ('works',    'works',    'Cited Works (citation network)'),

@@ -5,8 +5,7 @@ import logging
 import os
 import re
 import time
-from dataclasses import dataclass, field, asdict
-from typing import Optional
+from dataclasses import asdict, dataclass, field
 
 logger = logging.getLogger('biblio')
 
@@ -40,7 +39,7 @@ class BiblioResult:
     """Structured bibliographic info extracted from a paper's first pages."""
     title: str = ''
     authors: list = field(default_factory=list)  # ordered list of "First Last"
-    year: Optional[int] = None
+    year: int | None = None
     journal: str = ''
     volume: str = ''             # journal volume
     issue: str = ''              # journal issue/number

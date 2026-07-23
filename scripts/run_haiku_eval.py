@@ -12,10 +12,10 @@ from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from papermeister.biblio import extract_first_pages, load_ocr_pages
+from papermeister.biblio_eval import overall_score
 from papermeister.database import init_db
 from papermeister.models import Author, Paper, PaperFile
-from papermeister.biblio import BiblioResult, load_ocr_pages, extract_first_pages
-from papermeister.biblio_eval import overall_score
 
 EVAL_SET_PATH = os.path.expanduser('~/.papermeister/eval_set.json')
 

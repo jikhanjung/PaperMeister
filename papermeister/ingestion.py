@@ -1,14 +1,20 @@
 import datetime
 import hashlib
 import os
-import shutil
 import time
 from pathlib import Path
 
 from .file_utils import attachment_status, is_derived, is_pdf
 from .models import (
-    db, Source, Folder, Paper, Author, PaperFile, PaperFolder,
-    PaperBiblio, Passage,
+    Author,
+    Folder,
+    Paper,
+    PaperBiblio,
+    PaperFile,
+    PaperFolder,
+    Passage,
+    Source,
+    db,
 )
 
 
@@ -239,6 +245,7 @@ def sync_zotero_collections(zotero_client, source, collections):
 
     # Save last sync timestamp and library version
     from datetime import datetime
+
     from .preferences import set_pref
     set_pref('zotero_last_sync', datetime.now().isoformat())
     try:

@@ -77,7 +77,7 @@ def main():
         img_b64 = render_page(args.pdf, i, dpi=args.dpi)
         print(f"  이미지 크기: {len(img_b64) * 3 // 4 // 1024} KB")
 
-        print(f"  OCR 요청 중...")
+        print("  OCR 요청 중...")
         t0 = time.time()
         text = ocr_page(img_b64)
         elapsed = time.time() - t0
@@ -116,7 +116,7 @@ def main():
             f.write(p["text"])
             f.write("\n\n")
 
-    print(f"\n결과 저장 완료:")
+    print("\n결과 저장 완료:")
     print(f"  JSON: {json_path}")
     print(f"  TXT:  {txt_path}")
 

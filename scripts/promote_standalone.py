@@ -13,17 +13,16 @@ Default is dry-run. Use --apply to actually perform Zotero writes.
 import argparse
 import json
 import os
-import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from papermeister.biblio import OCR_JSON_DIR
 from papermeister.database import init_db
-from papermeister.models import Author, Folder, Paper, PaperFile, PaperBiblio, db
+from papermeister.ingestion import hash_file
+from papermeister.models import Author, Paper, PaperBiblio, PaperFile, db
 from papermeister.preferences import get_pref
 from papermeister.zotero_client import ZoteroClient
-from papermeister.ingestion import hash_file
-from papermeister.biblio import OCR_JSON_DIR
 
 ITEM_TYPE_MAP = {
     'article': 'journalArticle',
@@ -246,14 +245,14 @@ def main():
 
             # 4. DB update
             update_db_after_promote(p, b, new_parent_key)
-            print(f'    ✓ DB updated')
+            print('    ✓ DB updated')
             ok += 1
 
         except Exception as e:
             print(f'    ✗ ERROR: {e}')
             failed += 1
 
-    print(f'\n=== Summary ===')
+    print('\n=== Summary ===')
     print(f'  ok:      {ok}')
     print(f'  skipped: {skipped}')
     print(f'  failed:  {failed}')

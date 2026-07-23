@@ -31,6 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Match the desktop app's SSL monkey-patch (institutional CAs trip pyzotero).
 import requests
 import urllib3
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 _original_request = requests.api.request
 def _no_verify_request(method, url, **kwargs):
@@ -39,11 +40,10 @@ def _no_verify_request(method, url, **kwargs):
 requests.api.request = _no_verify_request
 
 from papermeister.database import init_db
-from papermeister.models import Folder, Paper, PaperFile, PaperFolder
+from papermeister.models import PaperFile, PaperFolder
 from papermeister.preferences import get_pref
 from papermeister.text_extract import OCR_JSON_DIR, ocr_json_filename
 from papermeister.zotero_client import ZoteroClient
-
 
 # Legacy filename pattern: 64-hex hash + ".json"
 LEGACY_RE = re.compile(r'^([0-9a-f]{64})\.json$')
@@ -225,7 +225,7 @@ def main():
         log('Error: Zotero credentials not configured.')
         return 1
 
-    log(f'Scanning DB for JSON PaperFiles…')
+    log('Scanning DB for JSON PaperFiles…')
     pairs, skipped_unknown, skipped_no_pdf, skipped_retitle = find_pairs(
         include_already_renamed=args.include_already_renamed,
     )

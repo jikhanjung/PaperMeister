@@ -1,7 +1,20 @@
 import os
+
 import peewee
-from .models import (db, Source, Folder, Paper, Author, PaperFile, PaperFolder,
-                     Passage, PaperBiblio, Reference, CitedWork)
+
+from .models import (
+    Author,
+    CitedWork,
+    Folder,
+    Paper,
+    PaperBiblio,
+    PaperFile,
+    PaperFolder,
+    Passage,
+    Reference,
+    Source,
+    db,
+)
 
 DB_PATH = os.path.join(os.path.expanduser('~'), '.papermeister', 'papermeister.db')
 

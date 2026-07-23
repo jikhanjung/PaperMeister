@@ -493,7 +493,6 @@ class DetailPanel(QWidget):
 
         zotero_key = d.file_zotero_key
         filename = d.file_path or f'{zotero_key}.pdf'
-        paper_id = d.paper_id
 
         def _on_download():
             btn.setEnabled(False)
@@ -537,8 +536,9 @@ class DetailPanel(QWidget):
     def _download_zotero_pdf(zotero_key: str, filename: str) -> str:
         """Download PDF from Zotero to cache. Returns local path."""
         import os
-        from papermeister.zotero_client import ZoteroClient
+
         from papermeister.preferences import get_pref
+        from papermeister.zotero_client import ZoteroClient
 
         cache_dir = os.path.join(
             os.path.expanduser('~'), '.papermeister', 'pdf_cache', zotero_key,

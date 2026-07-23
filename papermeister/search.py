@@ -2,7 +2,7 @@ import re
 
 import peewee
 
-from .models import db, Source, Folder, Paper, PaperFile, Passage
+from .models import Folder, Paper, PaperFile, Passage, db
 
 
 def query_terms(query):

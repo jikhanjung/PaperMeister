@@ -2,9 +2,10 @@
 
 All DB writes go through here so the UI thread never blocks.
 """
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal
 
 
 class BackgroundTask(QThread):

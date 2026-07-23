@@ -11,8 +11,7 @@ from PyQt6.QtWidgets import (
 )
 
 from desktop.services import paper_service
-from desktop.theme.tokens import COLORS_DARK, FONT, RADIUS
-
+from desktop.theme.tokens import FONT, RADIUS
 
 COLUMNS = ['Status', 'Authors', 'Year', 'Title']
 

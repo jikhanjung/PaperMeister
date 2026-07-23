@@ -4,7 +4,7 @@ import tempfile
 
 import fitz  # PyMuPDF
 
-from .models import db, Paper, PaperFile, Passage, Author
+from .models import Author, PaperFile, Passage, db
 
 OCR_JSON_DIR = os.path.join(os.path.expanduser('~'), '.papermeister', 'ocr_json')
 
@@ -139,7 +139,6 @@ def record_biblio_applied(biblio):
 
     Best-effort: any failure is swallowed. Caller should not need to handle.
     """
-    import datetime
     try:
         _record_biblio_applied_impl(biblio)
     except Exception:
@@ -179,7 +178,7 @@ def _record_biblio_applied_impl(biblio):
     meta['schema_version'] = PAPERMEISTER_META_SCHEMA
     meta['biblio_state'] = biblio.status
     meta['biblio_source'] = biblio.source or ''
-    meta['biblio_applied_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    meta['biblio_applied_at'] = datetime.datetime.now(datetime.UTC).isoformat()
     data['papermeister_meta'] = meta
 
     tmp = tempfile.NamedTemporaryFile(
@@ -217,8 +216,8 @@ def _record_biblio_applied_impl(biblio):
     if not user_id or not api_key:
         return
 
-    from .zotero_client import ZoteroClient
     from .ingestion import hash_file
+    from .zotero_client import ZoteroClient
     client = ZoteroClient(user_id, api_key)
     outcome = client.replace_attachment_file(sibling.zotero_key, json_path)
 
@@ -390,7 +389,7 @@ def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=N
             status_callback('Skipped (not a PDF — no OCR target)')
         paper_file.status = 'skipped'
         paper_file.save()
-        return
+        return None
 
     filepath = None
     is_temp = False
@@ -434,7 +433,7 @@ def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=N
             paper_file.save()
             if status_callback:
                 status_callback('PDF is encrypted — marked failed')
-            return
+            return None
         try:
             if status_callback:
                 status_callback('Running OCR...')
@@ -459,7 +458,7 @@ def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=N
         paper_file.save()
         if status_callback:
             status_callback('OCR returned no text — marked failed')
-        return
+        return None
 
     # Extract metadata from PDF if we have the file and it's not a Zotero item
     # (Zotero items already have metadata from the API)
@@ -562,9 +561,9 @@ def _upload_ocr_json_to_zotero(paper_file):
     if not os.path.exists(json_path):
         return
 
+    from .ingestion import hash_file
     from .preferences import get_pref
     from .zotero_client import ZoteroClient
-    from .ingestion import hash_file
     user_id = get_pref('zotero_user_id', '')
     api_key = get_pref('zotero_api_key', '')
     if not user_id or not api_key:

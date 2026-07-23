@@ -19,9 +19,9 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from papermeister.database import init_db
-from papermeister.models import Paper, PaperFile, Reference, Folder, Source
 from papermeister.biblio import extract_references_llm
+from papermeister.database import init_db
+from papermeister.models import Folder, Paper, PaperFile, Source
 from papermeister.references import save_references
 
 
@@ -155,7 +155,10 @@ def main():
     resolved = 0
     if done_pids and not args.no_resolve:
         from papermeister.references import (
-            build_resolution_index, build_work_index, resolve_paper_references)
+            build_resolution_index,
+            build_work_index,
+            resolve_paper_references,
+        )
         index = build_resolution_index()
         # Phase 2: canonicalize externals into CitedWork nodes (pass-1 exact
         # dedup). LLM near-dup merge (pass 2) is a separate batch — normalize_works.py.
@@ -165,7 +168,7 @@ def main():
             resolved += c.get('doi', 0) + c.get('title', 0)
 
     elapsed = time.time() - t0
-    print(f'\n=== Done ===')
+    print('\n=== Done ===')
     print(f'  ok:       {ok}')
     print(f'  err:      {err}')
     print(f'  refs:     {total_refs}')

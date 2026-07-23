@@ -112,7 +112,7 @@ def main():
     print('In-library citation network — stats (P14 L0)')
     print('=' * 64)
     print(f'Coverage : {checked:,}/{papers:,} papers references-checked ({pct:.1f}%)')
-    print(f'           → graph is a SUBGRAPH; degrees are a lower bound.\n')
+    print('           → graph is a SUBGRAPH; degrees are a lower bound.\n')
     print('References resolution:')
     print(f'  total        : {total_refs:>8,}')
     print(f'  held (in-lib): {held:>8,}  ({100.0*held/total_refs:.1f}%)' if total_refs else '  held: 0')

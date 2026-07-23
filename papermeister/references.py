@@ -25,23 +25,23 @@ def save_references(paper_id: int, entries: list, source: str, model_version: st
         rows = []
         for i, e in enumerate(entries):
             year = e.get('year')
-            rows.append(dict(
-                citing_paper=paper_id,
-                order_index=i,
-                raw_text=(e.get('raw', '') or '')[:4000],
-                authors_json=json.dumps(e.get('authors', []) or [], ensure_ascii=False),
-                year=year if isinstance(year, int) else None,
-                title=e.get('title', '') or '',
-                container=e.get('container', '') or '',
-                volume=str(e.get('volume', '') or ''),
-                issue=str(e.get('issue', '') or ''),
-                pages=str(e.get('pages', '') or ''),
-                doi=e.get('doi', '') or '',
-                ref_type=e.get('type', 'unknown') or 'unknown',
-                source=source,
-                model_version=model_version,
-                parse_confidence=e.get('parse_confidence', '') or '',
-            ))
+            rows.append({
+                'citing_paper': paper_id,
+                'order_index': i,
+                'raw_text': (e.get('raw', '') or '')[:4000],
+                'authors_json': json.dumps(e.get('authors', []) or [], ensure_ascii=False),
+                'year': year if isinstance(year, int) else None,
+                'title': e.get('title', '') or '',
+                'container': e.get('container', '') or '',
+                'volume': str(e.get('volume', '') or ''),
+                'issue': str(e.get('issue', '') or ''),
+                'pages': str(e.get('pages', '') or ''),
+                'doi': e.get('doi', '') or '',
+                'ref_type': e.get('type', 'unknown') or 'unknown',
+                'source': source,
+                'model_version': model_version,
+                'parse_confidence': e.get('parse_confidence', '') or '',
+            })
         if rows:
             Reference.insert_many(rows).execute()
     return len(rows)

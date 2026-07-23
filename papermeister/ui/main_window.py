@@ -7,7 +7,6 @@ from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
     QHBoxLayout,
-    QHeaderView,
     QLineEdit,
     QMainWindow,
     QPushButton,
@@ -20,7 +19,6 @@ from PyQt6.QtWidgets import (
 )
 
 from .process_window import ProcessWindow
-
 
 # ── Workers ──────────────────────────────────────────────────
 
@@ -237,7 +235,7 @@ class MainWindow(QMainWindow):
     # ── Source tree ───────────────────────────────────────────
 
     def _refresh_source_tree(self):
-        from ..models import Source, Folder
+        from ..models import Folder, Source
 
         self.source_tree.clear()
 

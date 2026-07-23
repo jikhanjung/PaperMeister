@@ -2,11 +2,19 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from peewee import JOIN, fn
+from peewee import JOIN
 
 from papermeister.models import (
-    Author, CitedWork, Folder, Paper, PaperBiblio, PaperFile, PaperFolder,
-    Reference, Source, db,
+    Author,
+    CitedWork,
+    Folder,
+    Paper,
+    PaperBiblio,
+    PaperFile,
+    PaperFolder,
+    Reference,
+    Source,
+    db,
 )
 
 
@@ -40,7 +48,7 @@ def _author_string(paper_id: int) -> str:
     if not names:
         return ''
     if len(names) > 3:
-        return ', '.join(names[:2]) + f' et al.'
+        return ', '.join(names[:2]) + ' et al.'
     return ', '.join(names)
 
 
@@ -517,9 +525,8 @@ def load_references(paper_id: int) -> list[ReferenceRow]:
         counts: dict[int, int] = {}
         cur = db.execute_sql(
             "SELECT resolved_work_id, COUNT(DISTINCT citing_paper_id) "
-            "FROM reference WHERE resolved_work_id IN (%s) "
-            "GROUP BY resolved_work_id"
-            % ','.join('?' * len(work_ids)),
+            "FROM reference WHERE resolved_work_id IN ({}) "
+            "GROUP BY resolved_work_id".format(','.join('?' * len(work_ids))),
             tuple(work_ids),
         )
         for wid, c in cur.fetchall():
@@ -578,7 +585,7 @@ def top_cited_works(limit: int = 300, min_cites: int = 2, query: str = '') -> li
         "GROUP BY resolved_work_id HAVING c >= ?",
         (min_cites,),
     )
-    counts = {wid: c for wid, c in cur.fetchall()}
+    counts = dict(cur.fetchall())
     if not counts:
         return []
     ranked = sorted(counts, key=lambda w: -counts[w])

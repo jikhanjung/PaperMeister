@@ -48,7 +48,7 @@ def load_linkmodes(zotero_db):
         ).fetchall()
     finally:
         con.close()
-    return {k: lm for k, lm in rows}
+    return dict(rows)
 
 
 def main():

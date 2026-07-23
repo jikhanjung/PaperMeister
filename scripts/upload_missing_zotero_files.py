@@ -29,6 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Match the desktop app's SSL monkey-patch (institutional CAs trip pyzotero).
 import requests
 import urllib3
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 _original_request = requests.api.request
 def _no_verify_request(method, url, **kwargs):
@@ -169,7 +170,7 @@ def main():
             pf.save()
             reset += 1
         log(f'  {result} [{pf.zotero_key}] paper={pf.paper_id}'
-            f'{"  → status=pending" if (not args.no_reset and result != None) else ""}')
+            f'{"  → status=pending" if (not args.no_reset and result is not None) else ""}')
 
     log('')
     log('=== Result ===')

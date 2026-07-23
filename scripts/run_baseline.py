@@ -9,10 +9,10 @@ from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from papermeister.biblio import BiblioResult, extract_first_pages, load_ocr_pages
+from papermeister.biblio_eval import overall_score
 from papermeister.database import init_db
 from papermeister.models import Author, Paper, PaperFile
-from papermeister.biblio import BiblioResult, load_ocr_pages, extract_first_pages
-from papermeister.biblio_eval import overall_score
 
 EVAL_SET_PATH = os.path.expanduser('~/.papermeister/eval_set.json')
 
@@ -120,7 +120,7 @@ def main():
         avg = sums[k] / counts if counts else 0
         print(f'  {k:>10}: {avg:.3f}')
 
-    print(f'\n=== Field hit rates ===')
+    print('\n=== Field hit rates ===')
     print(f'  DOI exact:    {field_hits["doi"]}/{counts} ({100*field_hits["doi"]/counts:.1f}%)')
     print(f'  Year exact:   {field_hits["year"]}/{counts} ({100*field_hits["year"]/counts:.1f}%)')
     print(f'  Title ≥0.8:   {field_hits["title>=0.8"]}/{counts} ({100*field_hits["title>=0.8"]/counts:.1f}%)')

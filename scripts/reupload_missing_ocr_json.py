@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Match the desktop app's SSL monkey-patch (institutional CAs trip pyzotero).
 import requests
 import urllib3
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 _original_request = requests.api.request
 def _no_verify_request(method, url, **kwargs):
@@ -35,7 +36,7 @@ def _no_verify_request(method, url, **kwargs):
 requests.api.request = _no_verify_request
 
 from papermeister.database import init_db
-from papermeister.models import Paper, PaperFile
+from papermeister.models import PaperFile
 from papermeister.preferences import get_pref
 from papermeister.text_extract import OCR_JSON_DIR
 from papermeister.zotero_client import ZoteroClient

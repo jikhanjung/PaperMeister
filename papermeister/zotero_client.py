@@ -3,10 +3,8 @@
 import json
 import os
 import re
-import tempfile
 
 from pyzotero import zotero
-
 
 # Fallback year extractor for the rare item where meta.parsedDate is missing.
 # Zotero's `data.date` is free-form: observed '2017', '2017-08-15', '08/2017',

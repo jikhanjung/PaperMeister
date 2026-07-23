@@ -14,7 +14,6 @@ Selection emits `selection_changed(kind, id_or_key)` with kind one of:
     'folder'  — folder id (int)
 """
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QLabel,
     QMenu,

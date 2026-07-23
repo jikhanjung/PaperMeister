@@ -549,7 +549,7 @@ def _compute_override_patch(overrides: dict, data: dict) -> dict:
 def _creators_equal(a: list[dict], b: list[dict]) -> bool:
     if len(a) != len(b):
         return False
-    for x, y in zip(a, b):
+    for x, y in zip(a, b, strict=False):
         ax = (
             (x.get('firstName') or '').strip(),
             (x.get('lastName') or '').strip(),

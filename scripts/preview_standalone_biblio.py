@@ -11,7 +11,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from papermeister.database import init_db
-from papermeister.models import Author, Paper, PaperFile, PaperBiblio
+from papermeister.models import Author, Paper, PaperBiblio, PaperFile
 
 
 def main():
@@ -60,7 +60,7 @@ def main():
             if b.notes:
                 print(f'    Notes:          {b.notes[:100]}')
         else:
-            print(f'    (no LLM extraction yet)')
+            print('    (no LLM extraction yet)')
 
 
 if __name__ == '__main__':

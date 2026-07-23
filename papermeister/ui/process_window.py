@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor, QCursor
+from PyQt6.QtGui import QCursor
 from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -60,6 +60,7 @@ class ProcessWorker(QThread):
         if self._fail_streak < self._FAIL_STOP or self._cancelled:
             return
         import time
+
         from ..ocr import is_ready
         try:
             if is_ready():
@@ -159,8 +160,8 @@ class ProcessWorker(QThread):
         )
 
         if is_wrapper_mode():
-            from ..preferences import get_pref
             from ..ocr import wrapper_get_stats
+            from ..preferences import get_pref
             # Resolve queue depth target. Explicit pref wins (user override);
             # otherwise follow the server's mode-aware recommendation.
             configured = get_pref('ocr_min_queued_pages', None)
@@ -201,7 +202,7 @@ class ProcessWorker(QThread):
         pool slot frees.
         """
         import time
-        from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+        from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
         processed = 0
         failed = 0
@@ -249,16 +250,19 @@ class ProcessWorker(QThread):
         to fill its concurrency slots (default 6).
         """
         import time
+
+        from ..file_utils import has_non_pdf_extension
+        from ..ingestion import hash_file
         from ..models import PaperFile
+        from ..ocr import wrapper_collect, wrapper_list_jobs, wrapper_poll, wrapper_submit
+        from ..preferences import get_client_id, get_pref
         from ..text_extract import (
-            _resolve_filepath, _load_ocr_json, _pages_from_raw,
-            _save_ocr_json, _try_fetch_sibling_json, OCR_JSON_DIR,
+            _load_ocr_json,
+            _resolve_filepath,
+            _save_ocr_json,
+            _try_fetch_sibling_json,
             process_paper_file,
         )
-        from ..ocr import wrapper_submit, wrapper_poll, wrapper_collect, wrapper_list_jobs
-        from ..ingestion import hash_file
-        from ..file_utils import has_non_pdf_extension
-        from ..preferences import get_pref, get_client_id
 
         processed = 0
         failed = 0
@@ -716,7 +720,7 @@ class ProcessWindow(QWidget):
         """Poll RunPod worker status in a background thread."""
         class _StatusPoller(QThread):
             result = pyqtSignal(str)
-            def run(self_inner):
+            def run(self_inner):  # noqa: N805 — distinct from the outer method's self
                 try:
                     from ..ocr import check_health
                     h = check_health()

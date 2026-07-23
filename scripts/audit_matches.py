@@ -115,7 +115,7 @@ def main():
         print(f'  {method:<14} {c:>8,}')
 
     # ---- FALSE POSITIVES: title matches that look shaky ----
-    print(f'\n--- Possible FALSE POSITIVES (title matches) ---')
+    print('\n--- Possible FALSE POSITIVES (title matches) ---')
     rows = cur.execute(
         'SELECT id, resolved_paper_id, title, year, authors_json, match_score '
         "FROM reference WHERE match_method = 'title' "
@@ -139,13 +139,13 @@ def main():
         if reasons:
             flagged.append((score or 0, rid, pid, rtitle, ptitle, reasons))
     print(f'flagged {len(flagged):,} of {len(rows):,} title matches')
-    for score, rid, pid, rtitle, ptitle, reasons in flagged[:args.sample]:
+    for _score, rid, pid, rtitle, ptitle, reasons in flagged[:args.sample]:
         print(f'  ref#{rid} -> paper#{pid}  [{", ".join(reasons)}]')
         print(f'      ref  : {(rtitle or "")[:70]}')
         print(f'      paper: {(ptitle or "")[:70]}')
 
     # ---- FALSE NEGATIVES: title matches a held paper but not linked ----
-    print(f'\n--- Possible FALSE NEGATIVES (unlinked but title matches a held paper) ---')
+    print('\n--- Possible FALSE NEGATIVES (unlinked but title matches a held paper) ---')
     key_map = {}
     for pid, title, year in cur.execute(
             'SELECT id, title, year FROM paper WHERE references_checked = 1 '

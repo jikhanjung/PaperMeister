@@ -108,7 +108,7 @@ def render(snap, prev, elapsed_label='since last run'):
     bar = '#' * filled + '-' * (bar_w - filled)
 
     lines = [
-        f"References extraction progress",
+        "References extraction progress",
         f"  [{bar}] {pct:5.1f}%",
         f"  papers checked : {snap['checked']:>7,} / {snap['eligible']:,} "
         f"(processed PDFs)",

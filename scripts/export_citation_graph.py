@@ -89,7 +89,7 @@ def build_external(con, min_cites):
         'WHERE resolved_work_id IS NOT NULL GROUP BY resolved_work_id '
         'HAVING c >= ?', (min_cites,)).fetchall()
     keep = {wid for wid, _ in rows}
-    cites = {wid: c for wid, c in rows}
+    cites = dict(rows)
     if not keep:
         return {}, []
     edge_rows = con.execute(

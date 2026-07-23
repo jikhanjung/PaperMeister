@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # a dry-run still fetches the item), so this is needed on the lab network.
 import requests
 import urllib3
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 _original_request = requests.api.request
 def _no_verify_request(method, url, **kwargs):
@@ -36,8 +37,8 @@ def _no_verify_request(method, url, **kwargs):
     return _original_request(method, url, **kwargs)
 requests.api.request = _no_verify_request
 
-from papermeister.database import init_db
 from papermeister import biblio_reflect
+from papermeister.database import init_db
 
 
 def _parse_args():

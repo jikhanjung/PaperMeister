@@ -24,10 +24,10 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from papermeister.database import init_db
-from papermeister.models import CitedWork, Reference
 from papermeister import references as refs
 from papermeister.biblio import llm_match_works
+from papermeister.database import init_db
+from papermeister.models import CitedWork
 
 
 def run_pass1(execute: bool) -> dict:
