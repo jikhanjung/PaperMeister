@@ -48,10 +48,7 @@ class MainWindow(QMainWindow):
         self._refs_window = None      # batch references progress window (lazy)
         self._refs_index = None       # held-paper resolution index (per-batch cache)
         self._refs_work_index = None  # external CitedWork dedup index (per-batch cache)
-        self._refs_fail_streak = 0    # consecutive incomplete parses (server-down guard)
-        self._refs_paused = False     # batch paused waiting for the LLM server
-        self._refs_poll_timer = None  # QTimer polling for server recovery
-        self._refs_poll_task = None   # in-flight recovery ping (off the UI thread)
+        self._refs_guard = self._make_refs_guard()  # server-down pause/resume
         self._cited_works_window = None  # Cited Works browser (lazy)
         self._sync_worker = None  # ZoteroSyncWorker
         self._scan_worker = None   # local-folder import worker (ScanWorker)
@@ -1166,8 +1163,7 @@ class MainWindow(QMainWindow):
         paper already in flight finish (its LLM call can't be safely killed)."""
         dropped = len(self._refs_queue)
         self._refs_queue.clear()
-        self._stop_refs_poll()          # in case we were paused waiting on the server
-        self._refs_paused = False
+        self._refs_guard.cancel()       # in case we were paused waiting on the server
         if self._refs_window:
             self._refs_window.mark_cancelling(dropped)
         running = bool(self._refs_task and self._refs_task.isRunning())
@@ -1183,7 +1179,7 @@ class MainWindow(QMainWindow):
 
     def _drain_refs_queue(self):
         """Start references extraction for the next queued item, if idle."""
-        if self._refs_paused:           # waiting for the LLM server to recover
+        if self._refs_guard.paused():   # waiting for the LLM server to recover
             return
         if self._refs_task and self._refs_task.isRunning():
             return
@@ -1250,11 +1246,9 @@ class MainWindow(QMainWindow):
             # outage would silently mark papers done with missing references.
             from papermeister.models import Paper
             if complete:
-                self._refs_fail_streak = 0
+                self._refs_guard.record_ok()
                 Paper.update(references_checked=True).where(
                     Paper.id == paper_id).execute()
-            else:
-                self._refs_fail_streak += 1
             title = self._biblio_title(paper_id)
             if not complete:
                 self.status_bar.set_task(
@@ -1276,7 +1270,7 @@ class MainWindow(QMainWindow):
                 if win:
                     win.record(f'{title} — no references section', 'empty')
             if not complete:
-                self._maybe_pause_refs()
+                self._refs_guard.record_fail()
         except Exception as e:
             self.status_bar.set_task(f'References error for paper {paper_id}: {e}')
             if win:
@@ -1289,73 +1283,33 @@ class MainWindow(QMainWindow):
         win = self._refs_window if (self._refs_window and self._refs_window.isVisible()) else None
         if win:
             win.record(f'{self._biblio_title(paper_id)} — failed: {msg}', 'error')
-        self._refs_fail_streak += 1
-        self._maybe_pause_refs()
+        self._refs_guard.record_fail()
         self._after_refs(paper_id)
 
-    # Consecutive incomplete parses before we probe the server, then poll cadence.
-    _REFS_FAIL_STOP = 3
-    _REFS_POLL_MS = 60_000
-
-    def _maybe_pause_refs(self):
-        """After a run of failed parses, confirm the LLM server is actually down
-        and, if so, PAUSE the batch (keep the queue) and poll for recovery to
-        auto-resume — instead of churning through the queue. A transient blip
-        (server still answers a ping) just resets the streak and continues."""
-        if (self._refs_paused or self._refs_fail_streak < self._REFS_FAIL_STOP
-                or not self._refs_queue):
-            return
+    def _make_refs_guard(self):
+        """ServerGuard for the references batch: pause on repeated LLM-server
+        failure, poll, auto-resume."""
         from papermeister.biblio import references_server_alive
-        if references_server_alive():
-            self._refs_fail_streak = 0   # false alarm — server is up, keep going
-            return
-        self._refs_paused = True
-        self._refs_fail_streak = 0
-        if self._refs_window:
-            self._refs_window.mark_paused(
-                len(self._refs_queue),
-                f'{self._REFS_FAIL_STOP} papers failed in a row and the LLM '
-                f'server did not answer a health check.')
-        self.status_bar.set_task(
-            'References paused — waiting for the LLM server to recover…')
-        self._start_refs_poll()
+        from desktop.workers.server_guard import ServerGuard
 
-    def _start_refs_poll(self):
-        from PyQt6.QtCore import QTimer
-        if self._refs_poll_timer is None:
-            self._refs_poll_timer = QTimer(self)
-            self._refs_poll_timer.setInterval(self._REFS_POLL_MS)
-            self._refs_poll_timer.timeout.connect(self._poll_refs_server)
-        self._refs_poll_timer.start()
+        def on_pause(remaining):
+            if self._refs_window:
+                self._refs_window.mark_paused(
+                    remaining, 'References parses kept failing and the LLM '
+                    'server did not answer a health check.')
+            self.status_bar.set_task(
+                'References paused — waiting for the LLM server to recover…')
 
-    def _stop_refs_poll(self):
-        if self._refs_poll_timer is not None:
-            self._refs_poll_timer.stop()
+        def on_resume(remaining):
+            if self._refs_window:
+                self._refs_window.mark_resumed(remaining)
+            self.status_bar.set_task('References server back — resuming…')
 
-    def _poll_refs_server(self):
-        """Ping the server off the UI thread; resume the queue when it answers."""
-        if not self._refs_paused:
-            self._stop_refs_poll()
-            return
-        if self._refs_poll_task and self._refs_poll_task.isRunning():
-            return   # previous ping still in flight — wait for the next tick
-        from desktop.workers.background import BackgroundTask
-        from papermeister.biblio import references_server_alive
-        task = BackgroundTask(references_server_alive)
-        task.done.connect(self._on_refs_poll_result)
-        self._refs_poll_task = task
-        task.start()
-
-    def _on_refs_poll_result(self, alive):
-        if not alive or not self._refs_paused:
-            return   # still down (or already cancelled) — keep polling
-        self._stop_refs_poll()
-        self._refs_paused = False
-        self._refs_fail_streak = 0
-        if self._refs_window:
-            self._refs_window.mark_resumed(len(self._refs_queue))
-        self.status_bar.set_task('References server back — resuming…')
-        self._drain_refs_queue()
+        return ServerGuard(
+            health_check=references_server_alive,
+            on_pause=on_pause, on_resume=on_resume,
+            on_drain=self._drain_refs_queue,
+            remaining=lambda: len(self._refs_queue), parent=self)
 
     def _after_refs(self, paper_id: int):
         """Shared tail: refresh detail if showing this paper, drain queue,
