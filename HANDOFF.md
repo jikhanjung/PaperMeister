@@ -217,7 +217,9 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
   - `scripts/citation_stats.py` (L0, `1d01402`) — held→held 그래프 통계(3,831노드/12,038엣지 @17.6%)
   - `scripts/export_citation_graph.py` (L1, `1d01402`) — nodes/edges CSV + GEXF(Gephi), `--with-external`
   - `scripts/audit_matches.py` (A2, `8ed8591`) — 매칭 감사. **실측 발견**: title 매칭 12,925 중 4,279 의심(FP, 예: "On Growth and Form" 오연결), 제목이 보유논문과 일치하는데 미연결 4,403(FN, 예: 완전일치인데 unresolved)
-- **⚠️ A2가 드러낸 것**: 문제는 임계값이 아니라 **`resolve_one` 스코어러** — (a) 짧은/일반 제목 토큰겹침 FP, (b) 정규화 제목 완전일치인데 year/저자 요건으로 놓침. **A1(증분 재-resolve) 전에 스코어러 보강 필요**(완전일치 강신호 우선 + 짧은제목 가드) → 재-resolve로 ~4,400 FN 회수. **사용자 결정 대기**
+- **A2 후속: `resolve_one` 스코어러 보강 완료** (`4f27773`): containment(inter/min) 단독 → **containment+Jaccard 블렌드**(짧은 제목이 긴 제목에 박혀 1.0 나던 FP 차단) + **near-exact 토큰셋 강신호**(year mismatch veto 면제, exact-title FN 회수). 오프라인 A/B(라이브 스냅샷, fresh 재-resolve 동반): held 9,339 유지 · **FP 3,225 제거** · 597 재연결 · **FN 7,697 회수**(일부는 재-resolve 효과). ⚠️ **라이브 추출은 OLD 코드 메모리 상주** — 새 스코어러는 **추출 재시작 후** 신규 논문에 적용, 기존 refs 반영엔 **재-resolve 패스(A1) 필요**
+- **references 진행창 Cancel 버튼 추가** (`7734da1`, 사용자 요청): 대기 큐 비우고 진행 중 1편만 마무리(LLM 호출 중단 불가). `ReferencesWindow.cancel_requested` 시그널 + `mark_cancelling`, main_window `_ensure_refs_window`/`_cancel_refs`. `_active` 플래그로 begin() extend 오판 수정. offscreen 스모크 통과
+- **다음(P14)**: **A1 — Windows에서 `resolve_references.py --reresolve --execute`** 로 기존 104k refs에 새 스코어러 적용(FP 제거 + FN 회수 실반영) → 이후 L0/L1로 네트워크 재확인. 그다음 증분 재-resolve 훅(sync 완료 콜백). L2/L3(인앱 ego-view / 공동인용)은 추출 더 찬 뒤
 - 참고: `.papermeister/papermeister.db.pre-p13-backup`(4.3GB, 6/26)는 검증 종료 후 삭제 가능
 
 **2026-06-25 (세션 49)** — [devlog P11](./devlog/20260625_P11_References_Extraction_Citation_Network.md)
