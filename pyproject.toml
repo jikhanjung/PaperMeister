@@ -37,6 +37,7 @@ ignore = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]   # put the repo root on sys.path so `pytest` (not just `python -m pytest`) imports the app
 addopts = "--strict-markers"
 markers = [
     "unit: pure-logic unit test (no GUI, no DB)",
