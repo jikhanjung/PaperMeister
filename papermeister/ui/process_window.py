@@ -31,6 +31,7 @@ class ProcessWorker(QThread):
         self._counter = 0
         self._counter_lock = None
         self._cancelled = False
+        self._fail_streak = 0   # consecutive failures (server-down pause guard)
         self._id_lock = threading.Lock()
 
     def _next_index(self):
@@ -40,6 +41,46 @@ class ProcessWorker(QThread):
 
     def cancel(self):
         self._cancelled = True
+
+    # Consecutive failures before we probe the server, then recovery poll cadence.
+    _FAIL_STOP = 3
+    _POLL_SECONDS = 30
+
+    def _note_ok(self):
+        self._fail_streak = 0
+
+    def _note_fail(self):
+        self._fail_streak += 1
+
+    def _pause_if_server_down(self):
+        """After repeated failures, if the OCR server is unreachable, block here
+        polling is_ready() until it recovers (or the user cancels) instead of
+        burning through the queue marking every file failed. Runs on the worker
+        thread, so blocking is fine — the UI stays responsive."""
+        if self._fail_streak < self._FAIL_STOP or self._cancelled:
+            return
+        import time
+        from ..ocr import is_ready
+        try:
+            if is_ready():
+                self._fail_streak = 0   # transient blip — server answers
+                return
+        except Exception:
+            pass
+        self.progress.emit(
+            f'OCR server unreachable ({self._fail_streak} failures in a row) — '
+            f'pausing; polling every {self._POLL_SECONDS}s for recovery…')
+        while not self._cancelled:
+            time.sleep(self._POLL_SECONDS)
+            if self._cancelled:
+                return
+            try:
+                if is_ready():
+                    self.progress.emit('OCR server back — resuming.')
+                    self._fail_streak = 0
+                    return
+            except Exception:
+                pass
 
     def enqueue(self, new_ids):
         """Append more PaperFile IDs to the active processing queue.
@@ -173,6 +214,11 @@ class ProcessWorker(QThread):
                     pool.shutdown(wait=False, cancel_futures=True)
                     break
 
+                self._pause_if_server_down()   # wait out an OCR-server outage
+                if self._cancelled:
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    break
+
                 while len(futures) < max_concurrent and submit_idx < len(self.paper_file_ids):
                     pf_id = self.paper_file_ids[submit_idx]
                     submit_idx += 1
@@ -190,8 +236,10 @@ class ProcessWorker(QThread):
                     del futures[fut]
                     if result is True:
                         processed += 1
+                        self._note_ok()
                     elif result is False:
                         failed += 1
+                        self._note_fail()
         return processed, failed
 
     def _run_wrapper_pipeline(self, min_queued_pages: int = 6):
@@ -289,6 +337,7 @@ class ProcessWorker(QThread):
                 pf.save()
                 self.file_done.emit(pf_id, 'failed')
                 failed += 1
+                self._note_fail()
                 return True
 
             name = os.path.basename(pf.path)
@@ -308,12 +357,14 @@ class ProcessWorker(QThread):
                     process_paper_file(pf)
                     self.file_done.emit(pf_id, pf.status)
                     processed += 1
+                    self._note_ok()
                 except Exception as e:
                     self.progress.emit(f'{prefix}   FAILED: {e}')
                     pf.status = 'failed'
                     pf.save()
                     self.file_done.emit(pf_id, 'failed')
                     failed += 1
+                    self._note_fail()
                 return True
 
             # Submit to wrapper
@@ -339,6 +390,7 @@ class ProcessWorker(QThread):
                 pf.save()
                 self.file_done.emit(pf_id, 'failed')
                 failed += 1
+                self._note_fail()
             return True
 
         # ── Pre-flight: wait for the server to clear other clients' jobs ─
@@ -387,6 +439,10 @@ class ProcessWorker(QThread):
             _submit_next()
 
         while True:
+            if self._cancelled:
+                break
+
+            self._pause_if_server_down()   # wait out an OCR-server outage
             if self._cancelled:
                 break
 
@@ -444,12 +500,14 @@ class ProcessWorker(QThread):
                         self.progress.emit(f'{prefix} {job_info["name"]} done ({tp} pages)')
                         self.file_done.emit(job_info['pf_id'], 'processed')
                         processed += 1
+                        self._note_ok()
                     except Exception as e:
                         self.progress.emit(f'{prefix} {job_info["name"]} FAILED: {e}')
                         pf.status = 'failed'
                         pf.save()
                         self.file_done.emit(job_info['pf_id'], 'failed')
                         failed += 1
+                        self._note_fail()
                 elif status == 'failed':
                     pf = job_info['pf']
                     pf.status = 'failed'
@@ -457,6 +515,7 @@ class ProcessWorker(QThread):
                     self.progress.emit(f'{job_info["prefix"]} {job_info["name"]} FAILED (server)')
                     self.file_done.emit(job_info['pf_id'], 'failed')
                     failed += 1
+                    self._note_fail()
                 else:
                     self.progress.emit(
                         f'{job_info["prefix"]} {job_info["name"]} OCR {dp}/{tp} pages')
