@@ -1,5 +1,8 @@
 """Application bootstrap for the new desktop app."""
+import logging
 import sys
+
+logger = logging.getLogger("papermeister")
 
 # Institutional networks with custom CAs cause SSL errors with pyzotero.
 # pyzotero calls requests.get/post directly (no Session), so we patch the
@@ -22,7 +25,31 @@ from desktop.windows.main_window import MainWindow
 from papermeister.database import init_db
 
 
+def _install_excepthook():
+    """Backstop for exceptions that escape a slot: log + show a non-fatal dialog
+    instead of letting the event loop abort the window silently. This sits behind
+    the per-task BackgroundTask.failed handlers and ServerGuard, not in place of
+    them."""
+    def _hook(exc_type, exc, tb):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc, tb)
+            return
+        logger.error("Unhandled exception", exc_info=(exc_type, exc, tb))
+        try:
+            from PyQt6.QtWidgets import QApplication, QMessageBox
+            if QApplication.instance() is not None:
+                QMessageBox.critical(
+                    None, "PaperMeister — unexpected error",
+                    f"{exc_type.__name__}: {exc}\n\n"
+                    "The app is still running and this was logged. "
+                    "If it keeps happening, please report it.")
+        except Exception:
+            pass  # never let the error handler itself crash the app
+    sys.excepthook = _hook
+
+
 def main() -> int:
+    _install_excepthook()
     init_db()
     app = QApplication(sys.argv)
     app.setApplicationName('PaperMeister')
