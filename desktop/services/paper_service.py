@@ -1,4 +1,5 @@
 """Paper list + paper detail queries."""
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -61,9 +62,15 @@ def _is_cjk_name(name: str) -> bool:
 
 
 def _cite_name(full_name: str) -> str:
-    """Display name for citation: full name for CJK, lastname for Western."""
+    """Display name for citation: surname-first joined for CJK (정직한), lastname
+    for Western (Smith).
+
+    Every stored CJK form has the surname first — "Last, First" (Zotero split),
+    legacy "Last First", or unspaced "정직한" — so dropping commas/spaces yields
+    LastnameFirstname per the Korean/Japanese convention (no separator).
+    """
     if _is_cjk_name(full_name):
-        return full_name.strip()
+        return re.sub(r'[\s,]+', '', full_name)
     from desktop.services.biblio_service import split_author_name
     _first, last = split_author_name(full_name)
     return last
