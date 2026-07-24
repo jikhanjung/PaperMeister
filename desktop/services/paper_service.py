@@ -652,59 +652,96 @@ def load_work_cociters(work_id: int, exclude_paper_id: int | None = None) -> lis
 
 @dataclass
 class EgoNode:
-    paper_id: int
-    label: str    # compact "Author Year" for the graph node
-    title: str    # full title (tooltip)
+    key: str              # "p{id}" (held paper) or "w{id}" (external CitedWork)
+    paper_id: int | None  # Paper.id if held (clickable to re-center), else None
+    label: str            # compact "Author Year" for the graph node
+    title: str            # full title (tooltip)
+    kind: str             # 'held_pdf' | 'held' | 'external'
 
 
-def load_ego_network(paper_id: int, hops: int = 1, max_nodes: int = 60):
-    """Held->held citation ego network around `paper_id`.
+def _pk(i: int) -> str:
+    return f"p{i}"
 
-    BFS over in-library citation edges (`reference.resolved_paper_id`) up to
-    `hops`, capped at `max_nodes`, then the induced subgraph's edges.
 
-    Returns (center_id, nodes: dict[pid -> EgoNode], edges: list[(src, dst)]).
+def _wk(i: int) -> str:
+    return f"w{i}"
+
+
+def load_ego_network(paper_id: int, hops: int = 1, max_nodes: int = 80):
+    """Full citation ego network around a held paper.
+
+    Includes both held papers (`reference.resolved_paper`) AND external cited
+    works (`reference.resolved_work` — references-extracted, not in the library).
+    Only held papers expand (we don't have external works' own reference lists);
+    external works are leaves. Held papers are prioritized under `max_nodes`.
+
+    Returns (center_key, nodes: dict[key -> EgoNode], edges: list[(src_key, dst_key)]).
     """
-    reached = {paper_id}
+    held = {paper_id}     # reached held Paper ids
+    works: set[int] = set()   # reached external CitedWork ids
     frontier = {paper_id}
+
     for _ in range(max(1, hops)):
-        if not frontier or len(reached) >= max_nodes:
+        if not frontier or (len(held) + len(works)) >= max_nodes:
             break
         ph = ",".join("?" * len(frontier))
-        params = list(frontier) + list(frontier)
-        rows = db.execute_sql(
+        fp = list(frontier)
+        hh = db.execute_sql(
             f"SELECT DISTINCT citing_paper_id, resolved_paper_id FROM reference "
-            f"WHERE resolved_paper_id IS NOT NULL "
-            f"AND resolved_paper_id <> citing_paper_id "
+            f"WHERE resolved_paper_id IS NOT NULL AND resolved_paper_id <> citing_paper_id "
             f"AND (citing_paper_id IN ({ph}) OR resolved_paper_id IN ({ph}))",
-            params).fetchall()
-        new = set()
-        for s, d in rows:
-            for n in (s, d):
-                if n not in reached:
-                    new.add(n)
-        # cap growth deterministically
-        for n in sorted(new):
-            if len(reached) >= max_nodes:
+            fp + fp).fetchall()
+        hw = db.execute_sql(
+            f"SELECT DISTINCT resolved_work_id FROM reference "
+            f"WHERE resolved_work_id IS NOT NULL AND citing_paper_id IN ({ph})",
+            fp).fetchall()
+        cand_held: set[int] = set()
+        for s, d in hh:
+            cand_held.update((s, d))
+        cand_work = {w for (w,) in hw}
+        new_held = sorted(cand_held - held)
+        for i in new_held:                       # held first (higher value)
+            if len(held) + len(works) >= max_nodes:
                 break
-            reached.add(n)
-        frontier = reached & new
+            held.add(i)
+        for i in sorted(cand_work - works):
+            if len(held) + len(works) >= max_nodes:
+                break
+            works.add(i)
+        frontier = held & set(new_held)          # only newly-added held expand
 
-    # Induced edges (both endpoints in the node set).
-    edges: list[tuple[int, int]] = []
-    if reached:
-        ph = ",".join("?" * len(reached))
-        node_params = list(reached)
-        rows = db.execute_sql(
-            f"SELECT DISTINCT citing_paper_id, resolved_paper_id FROM reference "
-            f"WHERE resolved_paper_id IS NOT NULL "
-            f"AND resolved_paper_id <> citing_paper_id "
-            f"AND citing_paper_id IN ({ph}) AND resolved_paper_id IN ({ph})",
-            node_params + node_params).fetchall()
-        edges = [(s, d) for s, d in rows]
+    # Induced edges among the node set.
+    edges: set[tuple[str, str]] = set()
+    if held:
+        ph = ",".join("?" * len(held))
+        hp = list(held)
+        for s, d in db.execute_sql(
+                f"SELECT DISTINCT citing_paper_id, resolved_paper_id FROM reference "
+                f"WHERE resolved_paper_id IS NOT NULL AND resolved_paper_id <> citing_paper_id "
+                f"AND citing_paper_id IN ({ph}) AND resolved_paper_id IN ({ph})",
+                hp + hp).fetchall():
+            edges.add((_pk(s), _pk(d)))
+        if works:
+            wph = ",".join("?" * len(works))
+            for s, w in db.execute_sql(
+                    f"SELECT DISTINCT citing_paper_id, resolved_work_id FROM reference "
+                    f"WHERE resolved_work_id IS NOT NULL AND citing_paper_id IN ({ph}) "
+                    f"AND resolved_work_id IN ({wph})",
+                    hp + list(works)).fetchall():
+                edges.add((_pk(s), _wk(w)))
 
-    nodes: dict[int, EgoNode] = {}
-    for pid in reached:
+    # Which held papers actually hold a PDF file.
+    pdf_pids: set[int] = set()
+    if held:
+        ph = ",".join("?" * len(held))
+        for (pid,) in db.execute_sql(
+                f"SELECT DISTINCT paper_id FROM paperfile "
+                f"WHERE paper_id IN ({ph}) AND lower(path) LIKE '%.pdf'",
+                list(held)).fetchall():
+            pdf_pids.add(pid)
+
+    nodes: dict[str, EgoNode] = {}
+    for pid in held:
         p = Paper.get_or_none(Paper.id == pid)
         title = (p.title if p else '') or '(untitled)'
         year = p.year if p else None
@@ -712,5 +749,15 @@ def load_ego_network(paper_id: int, hops: int = 1, max_nodes: int = 60):
                  .where(Author.paper == pid).order_by(Author.order).first())
         who = _cite_name(first.name) if first else '?'
         label = f"{who} {year}".strip() if year else who
-        nodes[pid] = EgoNode(paper_id=pid, label=label, title=title)
-    return paper_id, nodes, edges
+        kind = 'held_pdf' if pid in pdf_pids else 'held'
+        nodes[_pk(pid)] = EgoNode(key=_pk(pid), paper_id=pid, label=label,
+                                  title=title, kind=kind)
+    for wid in works:
+        w = CitedWork.get_or_none(CitedWork.id == wid)
+        title = (w.title if w else '') or '(untitled work)'
+        year = w.year if w else None
+        who = (w.first_surname if (w and w.first_surname) else '?')
+        label = f"{who} {year}".strip() if year else who
+        nodes[_wk(wid)] = EgoNode(key=_wk(wid), paper_id=None, label=label,
+                                  title=title, kind='external')
+    return _pk(paper_id), nodes, list(edges)
