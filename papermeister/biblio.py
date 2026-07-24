@@ -786,7 +786,8 @@ class _AdaptiveBatcher:
     # Tuned for a ~20 tok/s server with a large fixed per-call overhead, so
     # bigger batches amortize better. With `raw` no longer echoed, output is
     # ~80-130 tok/entry; a 20-entry call ≈ 2-3k tok ≈ 100-150s, safely under
-    # the 240s references read timeout. The controller still self-corrects.
+    # the references read timeout (default 360s, pref-tunable). The controller
+    # still self-corrects.
     MIN = 1
     MAX = 20
     TARGET_LO = 25.0    # under this → fast: warm up (exp) toward the ceiling
@@ -892,11 +893,19 @@ def extract_references_llm(
 
     entries = split_reference_entries(block)
 
+    read_timeout = 360
     if backend == 'qwen':
         from .preferences import get_pref
         url = base_url or get_pref('ocr_pod_url', '')
         if not url:
             raise RuntimeError('Server URL not configured in Preferences')
+        # Hard per-request cutoff. Generous headroom over the batcher's ~130s
+        # soft ceiling so an occasional slow batch (busy GPU) completes instead
+        # of hard-timing-out then shrink-retrying. Tunable via preferences.
+        try:
+            read_timeout = int(get_pref('qwen_read_timeout', 360) or 360)
+        except (TypeError, ValueError):
+            read_timeout = 360
 
     import requests as _req
     total = len(entries)
@@ -924,7 +933,7 @@ def extract_references_llm(
             mt = min(8192, max(len(batch) * 256, in_chars // 2) + 1024)
             t0 = time.monotonic()
             try:
-                raw = _call_qwen(prompt, url, max_tokens=mt, read_timeout=240,
+                raw = _call_qwen(prompt, url, max_tokens=mt, read_timeout=read_timeout,
                                  retries=0, label=label)
             except (_req.exceptions.Timeout, _req.exceptions.ConnectionError):
                 # Too slow at this size — shrink and retry the SAME refs, unless
