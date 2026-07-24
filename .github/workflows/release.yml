@@ -48,13 +48,38 @@ jobs:
           cd ..
           cat SHA256SUMS.txt
 
+      # Release body = the tag's own CHANGELOG.md section, extracted verbatim
+      # (single source of truth), plus the checksums. (Mirrors Modan2.)
       - name: Prepare release body
         id: release_body
         run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTES=$(awk -v hdr="## [$VERSION]" '
+            index($0, hdr) == 1 { found=1; next }
+            found && /^## \[/   { exit }
+            found               { print }
+          ' CHANGELOG.md | sed -e '/./,$!d' | tac | sed -e '/./,$!d' | tac)
+
+          if [ -n "$NOTES" ]; then
+            echo "Using CHANGELOG.md section for $VERSION"
+          else
+            echo "::warning::No CHANGELOG.md section for $VERSION; publishing checksums only"
+          fi
+
           {
             echo 'RELEASE_BODY<<GH_EOF'
-            echo "PaperMeister ${GITHUB_REF_NAME} — Windows (portable zip + installer), Linux (AppImage), macOS (DMG)"
+            echo "🚀 PaperMeister ${GITHUB_REF_NAME}"
             echo ""
+            echo "Windows (portable zip + installer), Linux (AppImage), macOS (DMG)."
+            echo ""
+            if [ -n "$NOTES" ]; then
+              echo "## What's changed"
+              echo ""
+              echo "$NOTES"
+              echo ""
+              echo "---"
+              echo ""
+            fi
             echo "## SHA256 Checksums"
             echo ""
             echo '```'
