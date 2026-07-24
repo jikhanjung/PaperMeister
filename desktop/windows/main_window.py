@@ -51,6 +51,7 @@ class MainWindow(QMainWindow):
         self._refs_work_index = None  # external CitedWork dedup index (per-batch cache)
         self._refs_guard = self._make_refs_guard()  # server-down pause/resume
         self._cited_works_window = None  # Cited Works browser (lazy)
+        self._network_window = None  # citation-network ego view (lazy)
         self._sync_worker = None  # ZoteroSyncWorker
         self._scan_worker = None   # local-folder import worker (ScanWorker)
         self._scan_window = None   # import progress window (lazy)
@@ -417,6 +418,16 @@ class MainWindow(QMainWindow):
         elif action == 'review_biblio':
             self.detail_panel.show_paper(paper_id)
             self.detail_panel._tabs.setCurrentIndex(0)  # Metadata tab (includes biblio)
+        elif action == 'network':
+            self._open_network(paper_id)
+
+    def _open_network(self, paper_id: int):
+        """Open the citation-network ego view centered on this paper."""
+        if getattr(self, '_network_window', None) is None:
+            from desktop.windows.network_window import NetworkWindow
+            self._network_window = NetworkWindow(self)
+            self._network_window.open_paper.connect(self._on_reference_navigate)
+        self._network_window.show_ego(paper_id)
 
     def _on_folder_action(self, action: str, folder_id: int):
         if action == 'process_folder':

@@ -355,6 +355,14 @@ class PaperListView(QTreeWidget):
             menu.addAction('Open PDF', lambda: self.context_action.emit('open_pdf', paper_id, file_id or 0))
         # pending/failed/none have no further actions beyond the OCR action above.
 
+        # Citation network — available for any paper (independent of OCR status).
+        if not menu.isEmpty():
+            menu.addSeparator()
+        menu.addAction(
+            'Show in citation network',
+            lambda: self.context_action.emit('network', paper_id, file_id or 0),
+        )
+
         if not menu.isEmpty():
             menu.exec(event.globalPos())
 

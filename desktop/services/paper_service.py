@@ -646,3 +646,71 @@ def load_work_cociters(work_id: int, exclude_paper_id: int | None = None) -> lis
         ))
     rows.sort(key=lambda r: (-(r.year or 0), r.title.lower()))
     return rows
+
+
+# ── Citation network (ego graph) ─────────────────────────────────
+
+@dataclass
+class EgoNode:
+    paper_id: int
+    label: str    # compact "Author Year" for the graph node
+    title: str    # full title (tooltip)
+
+
+def load_ego_network(paper_id: int, hops: int = 1, max_nodes: int = 60):
+    """Held->held citation ego network around `paper_id`.
+
+    BFS over in-library citation edges (`reference.resolved_paper_id`) up to
+    `hops`, capped at `max_nodes`, then the induced subgraph's edges.
+
+    Returns (center_id, nodes: dict[pid -> EgoNode], edges: list[(src, dst)]).
+    """
+    reached = {paper_id}
+    frontier = {paper_id}
+    for _ in range(max(1, hops)):
+        if not frontier or len(reached) >= max_nodes:
+            break
+        ph = ",".join("?" * len(frontier))
+        params = list(frontier) + list(frontier)
+        rows = db.execute_sql(
+            f"SELECT DISTINCT citing_paper_id, resolved_paper_id FROM reference "
+            f"WHERE resolved_paper_id IS NOT NULL "
+            f"AND resolved_paper_id <> citing_paper_id "
+            f"AND (citing_paper_id IN ({ph}) OR resolved_paper_id IN ({ph}))",
+            params).fetchall()
+        new = set()
+        for s, d in rows:
+            for n in (s, d):
+                if n not in reached:
+                    new.add(n)
+        # cap growth deterministically
+        for n in sorted(new):
+            if len(reached) >= max_nodes:
+                break
+            reached.add(n)
+        frontier = reached & new
+
+    # Induced edges (both endpoints in the node set).
+    edges: list[tuple[int, int]] = []
+    if reached:
+        ph = ",".join("?" * len(reached))
+        node_params = list(reached)
+        rows = db.execute_sql(
+            f"SELECT DISTINCT citing_paper_id, resolved_paper_id FROM reference "
+            f"WHERE resolved_paper_id IS NOT NULL "
+            f"AND resolved_paper_id <> citing_paper_id "
+            f"AND citing_paper_id IN ({ph}) AND resolved_paper_id IN ({ph})",
+            node_params + node_params).fetchall()
+        edges = [(s, d) for s, d in rows]
+
+    nodes: dict[int, EgoNode] = {}
+    for pid in reached:
+        p = Paper.get_or_none(Paper.id == pid)
+        title = (p.title if p else '') or '(untitled)'
+        year = p.year if p else None
+        first = (Author.select(Author.name)
+                 .where(Author.paper == pid).order_by(Author.order).first())
+        who = _cite_name(first.name) if first else '?'
+        label = f"{who} {year}".strip() if year else who
+        nodes[pid] = EgoNode(paper_id=pid, label=label, title=title)
+    return paper_id, nodes, edges
