@@ -22,8 +22,26 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install pip-audit
-      # Audit the shipped runtime deps. Fails if any resolved package has a known
-      # vulnerability. Currently clean; if an unfixable advisory appears, add
-      # `--ignore-vuln <ID>` with a comment rather than dropping the gate.
+      # Audit the shipped runtime deps at their exact locked versions —
+      # requirements.lock is what the release build installs, so this audits
+      # precisely what ships. Fails if any pinned package has a known
+      # vulnerability; if an unfixable advisory appears, add `--ignore-vuln <ID>`
+      # with a comment rather than dropping the gate.
       - name: Audit runtime dependencies
-        run: pip-audit -r requirements.txt
+        run: pip-audit -r requirements.lock
+
+  lock-check:
+    name: Lockfiles up to date
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install uv
+      # Regenerates the locks from requirements.txt / requirements-dev.txt and
+      # diffs against the committed files (see Makefile). A dependency edit that
+      # forgets to re-lock fails here instead of silently drifting.
+      - name: make lock-check
+        run: make lock-check

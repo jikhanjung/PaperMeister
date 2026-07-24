@@ -55,6 +55,19 @@ when frozen" gaps (bundled data files, native libs) that source tests can't prov
 - [ ] **Text** (OCR) tab renders — image handling / Pillow
 - [ ] SVG rail icons show — the one source-relative data dir (`desktop/theme/icons`)
 
+## Dependencies (lockfiles)
+
+CI and release builds install from **hash-pinned lockfiles** (`requirements.lock`,
+`requirements-dev.lock`) so the shipped installer is provably built from the
+packages CI tested. After editing `requirements.txt` / `requirements-dev.txt`:
+
+```
+make lock      # regenerate both locks (needs `uv`), then commit them
+```
+
+`make lock-check` (run in CI's Security workflow) fails if the committed locks
+drift from the requirements files.
+
 ## Future
 - App icon / version metadata stamped on the exe.
 - macOS **codesigning + notarization** (Apple Developer account) — the DMG builds
