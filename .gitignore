@@ -14,3 +14,7 @@ Trilobite Shape/
 # Inno Setup — generated installer output (template is tracked)
 /installer/Output/
 /installer/PaperMeister.iss
+
+# Linux AppImage build (generated)
+/build_linux/
+/AppDir/

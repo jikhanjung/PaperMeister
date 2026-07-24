@@ -13,13 +13,18 @@ is guarded by `os.path.isdir`, so it no-ops on the CI runner.
    git tag -a v0.1.1 -m "PaperMeister v0.1.1"
    git push origin v0.1.1
    ```
-3. `release.yml` runs: **test** (ruff + mypy + Linux/Windows pytest) → **build**
-   (windows-latest: `pyinstaller PaperMeister.spec` → **portable zip** +
-   **Inno Setup installer** from `installer/PaperMeister.iss.template`) →
-   **GitHub Release** with the zip, the installer `.exe`, and `SHA256SUMS.txt`.
+3. `release.yml` runs: **test** (ruff + mypy + Linux/Windows pytest) → **build** →
+   **GitHub Release** with all artifacts + `SHA256SUMS.txt`. Build outputs:
+   - **Windows** (windows-latest): `pyinstaller PaperMeister.spec` → **portable zip**
+     + **Inno Setup installer** (`installer/PaperMeister.iss.template`).
+   - **Linux** (ubuntu-latest): PyInstaller onedir wrapped as an **AppImage**
+     (`packaging/linux/create_appimage.sh`).
    - Pre-release: use a `-alpha` / `-beta` / `-rc` suffix (auto-marked prerelease).
-   - The installer is a **per-user** install (no admin) into
+   - The Windows installer is a **per-user** install (no admin) into
      `%LocalAppData%\Programs\PaperMeister`, with Start-Menu (+ optional desktop) icons.
+   - The Linux AppImage bundles Qt but not host system libs, so a target machine may
+     still need the xcb runtime libs; run with `--appimage-extract-and-run` if FUSE
+     is unavailable.
 
 On-demand build **without** a release: Actions → **Build** → *Run workflow*
 (uploads the zip artifact only, no Release).
@@ -48,5 +53,7 @@ when frozen" gaps (bundled data files, native libs) that source tests can't prov
 
 ## Future
 - App icon / version metadata stamped on the exe.
-- macOS / Linux legs — add to `reusable_build.yml` the same way as Modan2.
+- macOS leg (DMG) — add to `reusable_build.yml`; needs codesigning + notarization
+  for Gatekeeper (Apple Developer account). Linux (AppImage) is done.
+- A real app icon (the AppImage currently ships a generated placeholder).
 - CHANGELOG.md-sourced release notes — currently checksums + commit SHA only.
