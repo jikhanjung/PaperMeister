@@ -18,3 +18,7 @@ Trilobite Shape/
 # Linux AppImage build (generated)
 /build_linux/
 /AppDir/
+
+# macOS build (generated)
+/PaperMeister-macOS-*.dmg
+/dist/PaperMeister.app/

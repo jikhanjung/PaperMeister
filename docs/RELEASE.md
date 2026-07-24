@@ -19,6 +19,10 @@ is guarded by `os.path.isdir`, so it no-ops on the CI runner.
      + **Inno Setup installer** (`installer/PaperMeister.iss.template`).
    - **Linux** (ubuntu-latest): PyInstaller onedir wrapped as an **AppImage**
      (`packaging/linux/create_appimage.sh`).
+   - **macOS** (macos-latest, arm64): PyInstaller onedir → `.app` → **`.dmg`**
+     (`packaging/macos/create_dmg.sh`, via `hdiutil`). **Not code-signed/notarized**
+     — Gatekeeper warns on first launch; right-click → Open, or
+     `xattr -dr com.apple.quarantine PaperMeister.app`.
    - Pre-release: use a `-alpha` / `-beta` / `-rc` suffix (auto-marked prerelease).
    - The Windows installer is a **per-user** install (no admin) into
      `%LocalAppData%\Programs\PaperMeister`, with Start-Menu (+ optional desktop) icons.
@@ -53,7 +57,8 @@ when frozen" gaps (bundled data files, native libs) that source tests can't prov
 
 ## Future
 - App icon / version metadata stamped on the exe.
-- macOS leg (DMG) — add to `reusable_build.yml`; needs codesigning + notarization
-  for Gatekeeper (Apple Developer account). Linux (AppImage) is done.
-- A real app icon (the AppImage currently ships a generated placeholder).
+- macOS **codesigning + notarization** (Apple Developer account) — the DMG builds
+  but is unsigned, so Gatekeeper warns. Until then, users open via right-click.
+- A real app icon (the AppImage/macOS build currently ship a generated placeholder /
+  no custom icon).
 - CHANGELOG.md-sourced release notes — currently checksums + commit SHA only.

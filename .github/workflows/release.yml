@@ -44,7 +44,7 @@ jobs:
       - name: Generate SHA256 checksums
         run: |
           cd release-files
-          find . -type f \( -name "*.zip" -o -name "*.exe" -o -name "*.AppImage" \) -exec sha256sum {} \; > ../SHA256SUMS.txt
+          find . -type f \( -name "*.zip" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.dmg" \) -exec sha256sum {} \; > ../SHA256SUMS.txt
           cd ..
           cat SHA256SUMS.txt
 
@@ -53,7 +53,7 @@ jobs:
         run: |
           {
             echo 'RELEASE_BODY<<GH_EOF'
-            echo "PaperMeister ${GITHUB_REF_NAME} — Windows (portable zip + installer) & Linux (AppImage)"
+            echo "PaperMeister ${GITHUB_REF_NAME} — Windows (portable zip + installer), Linux (AppImage), macOS (DMG)"
             echo ""
             echo "## SHA256 Checksums"
             echo ""
@@ -76,6 +76,7 @@ jobs:
             release-files/papermeister-windows/*.zip
             release-files/papermeister-windows/*.exe
             release-files/papermeister-linux/*.AppImage
+            release-files/papermeister-macos/*.dmg
             SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

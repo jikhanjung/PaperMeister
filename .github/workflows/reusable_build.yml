@@ -126,3 +126,39 @@ jobs:
         with:
           name: papermeister-linux
           path: build_linux/PaperMeister-Linux-*.AppImage
+
+  # macOS leg — PyInstaller onedir → .app → .dmg (hdiutil). NOT notarized/signed,
+  # so Gatekeeper warns on first launch (right-click → Open). First CI run also
+  # confirms PyQt6 / PyMuPDF ship arm64 macOS wheels for the pinned versions.
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Get version
+        id: get_version
+        run: echo "VERSION=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+
+      - name: Build (PyInstaller onedir)
+        run: pyinstaller PaperMeister.spec
+
+      - name: Create .app + .dmg
+        run: |
+          chmod +x packaging/macos/create_dmg.sh
+          packaging/macos/create_dmg.sh v${{ steps.get_version.outputs.VERSION }}-build${{ inputs.build_number }} ${{ steps.get_version.outputs.VERSION }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: papermeister-macos
+          path: PaperMeister-macOS-*.dmg
