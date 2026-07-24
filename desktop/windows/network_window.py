@@ -22,8 +22,11 @@ from PyQt6.QtWidgets import (
 
 _BG = QColor('#16181d')
 _EDGE = QColor('#4a4f5a')
-_NODE = QColor('#2a2d34')
-_NODE_CENTER = QColor('#3a8ee6')
+_NODE = QColor('#2a2d34')            # 2-hop / not directly linked to center
+_NODE_CENTER = QColor('#3a8ee6')     # the focused paper
+_NODE_CITEDBY = QColor('#4ade80')    # green — papers that CITE the center
+_NODE_CITES = QColor('#fbbf24')      # amber — papers the center CITES
+_NODE_BOTH = QColor('#22d3ee')       # cyan — mutual citation
 _NODE_BORDER = QColor('#5a6069')
 _TEXT = QColor('#d7dae0')
 _R = 9          # neighbour node radius
@@ -138,15 +141,30 @@ class _NetworkView(QGraphicsView):
             x2, y2 = pos[t]
             scene.addLine(x1, y1, x2, y2, pen)
             self._arrow(scene, x1, y1, x2, y2)
+        # Classify each node by its direct relationship to the center so the
+        # papers that CITE this one (incoming) are visually distinct from the
+        # ones this paper cites (outgoing).
+        cites = {d for s, d in edges if s == center_id}      # center -> d
+        citedby = {s for s, d in edges if d == center_id}    # s -> center
         # nodes
         for pid, (x, y) in pos.items():
             info = nodes.get(pid)
             is_center = pid == center_id
             r = _RC if is_center else _R
+            if is_center:
+                fill = _NODE_CENTER
+            elif pid in cites and pid in citedby:
+                fill = _NODE_BOTH
+            elif pid in citedby:
+                fill = _NODE_CITEDBY
+            elif pid in cites:
+                fill = _NODE_CITES
+            else:
+                fill = _NODE
             ell = scene.addEllipse(
                 QRectF(x - r, y - r, 2 * r, 2 * r),
                 QPen(_NODE_BORDER, 1.5),
-                QBrush(_NODE_CENTER if is_center else _NODE))
+                QBrush(fill))
             ell.setData(0, pid)
             ell.setZValue(2)
             if info is not None:
@@ -260,7 +278,12 @@ class NetworkWindow(QWidget):
         self.title_label.setText(info.title if info else f'Paper {center}')
         pos = spring_layout(set(nodes), edges, center)
         self.view.render_graph(center, nodes, edges, pos)
-        neighbours = len(nodes) - 1
+        n_cites = len({d for s, d in edges if s == center})     # center cites
+        n_citedby = len({s for s, d in edges if d == center})   # cite the center
         self.status.setText(
-            f'{neighbours} connected paper(s), {len(edges)} citation edge(s) '
-            f'within {hops} hop(s). Click a node to re-center; drag to pan.')
+            f'<span style="color:#4ade80">●</span> cites this ({n_citedby}) &nbsp; '
+            f'<span style="color:#fbbf24">●</span> this cites ({n_cites}) &nbsp; '
+            f'<span style="color:#22d3ee">●</span> both &nbsp; '
+            f'<span style="color:#8a919c">●</span> 2-hop &nbsp;·&nbsp; '
+            f'{len(nodes) - 1} papers, {len(edges)} edges within {hops} hop(s) '
+            f'· click a node to re-center, drag to pan')
