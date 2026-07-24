@@ -236,7 +236,12 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
   - **Phase 5 (deps 보안 + mypy 코어, vulture 제외)** `592996b`: pip-audit로 Pillow 10(CVE 다수)·requests 2.31·python-dotenv 발견 → **python-dotenv 제거**(미사용—main.py가 .env를 plain open()으로 읽음), Pillow≥12.3.0·requests≥2.33.0 버전업(pip-audit clean). `security.yml`(pip-audit push/PR/주간, Modan2 미러). mypy 설정 + **references/search/biblio 3모듈 mypy-clean → CI lint 게이트**(점진 확장). ⚠️ **사용자: Windows env에서 `pip install -r requirements.txt --upgrade` 후 OCR 이미지(Pillow) 동작 확인 필요**
   - **Phase 6 (인코딩 + 패키징 체크리스트)** `c9e5441`: 텍스트 `open()` 잔여 3곳(main.py .env, refs_progress state json)에 `encoding='utf-8'` — 이제 미명시 text open() 0건. `docs/RELEASE.md`(릴리스 런북 + 프로즌 아티팩트 스모크 체크리스트)
   - **✅ P15 전 6단계 완료**. **미실행(의도적)**: `ruff format` 대량-diff 커밋, vulture(데드코드, 사용자 제외), 엄격 coverage gate/Dependabot/코드사이닝(1인 도구 과잉)
-  - **P15 후속 추가** `8cc7fd7`: `scripts/verify_image.py`(OCR Pillow 경로 1-커맨드 검증, Pillow 10→12 확인용) + **Inno Setup 설치본**(`installer/PaperMeister.iss.template`, per-user 설치). reusable_build가 portable zip + installer .exe 둘 다 생성, release가 둘 다 첨부. **CI에서 인스톨러 컴파일 검증 완료**. 릴리스 후속 잔여: 앱 아이콘/버전정보, mac·Linux 레그, CHANGELOG 소싱 릴리스노트
+  - **P15 후속 추가**: `scripts/verify_image.py`(OCR Pillow 경로 1-커맨드 검증 — Windows Pillow 12.3.0 PASS 확인) + **크로스플랫폼 패키징 3레그 완성** (`8cc7fd7` Inno Setup, `47b584b` Linux AppImage, `b6c563f` macOS DMG):
+    - **Windows**: portable zip + Inno Setup 설치본(`installer/*.iss.template`, per-user)
+    - **Linux**: AppImage(`packaging/linux/create_appimage.sh`, appimagetool `EXTRACT_AND_RUN`)
+    - **macOS**: DMG(`packaging/macos/create_dmg.sh`, onedir→.app→hdiutil, **미공증**)
+    - reusable_build 3 job, release가 4종(zip/exe/AppImage/dmg)+SHA256 첨부. **수동 Build로 3플랫폼 전부 빌드 검증 완료**
+  - 릴리스 후속 잔여(저순위): 앱 아이콘, macOS 코드사이닝/공증, CHANGELOG 소싱 릴리스노트
 - **A1 재-resolve + 정규화 라이브 실행 완료** (Windows, 앱 닫은 상태): `resolve_references.py --reresolve --execute` → `normalize_works.py --pass 1 --execute` → `--pass 2 --execute`(~61분, LLM 병합). **효과(라이브 DB 실측)**: unresolved **31.7%→4.3%** 급감, held 13,123→**17,671**, external 58,473→**83,388**, held→held 엣지 12,038→**17,089**, active CitedWork 49,728→**59,963**(pass1이 미분류 인용을 canonicalize → 순증, pass2가 near-dup 5,989 제거). `quick_check=ok`
   - **병합 품질 spot-check 통과**: `match_method='work-llm'` 7,955 refs 샘플 검사 — 전부 같은 문헌의 OCR/철자/음차 변형(키릴 혼입까지 정상 병합), Hupé 1953/1955 Part1/2를 연도로 구분 유지(과대병합 없음). borderline 1건(work#20427 Whittington), out-degree 이상치 1건(Education 2005, 367)만 관찰 대상
   - **다음**: PaperMeister 재시작(새 스코어러 + Cancel 버튼 반영) → 추출 재개. 추출이 더 진행되면 재-resolve 한 번 더(멱등). 증분 재-resolve 훅(sync 콜백)·L2/L3(인앱 ego-view / 공동인용)은 이후
