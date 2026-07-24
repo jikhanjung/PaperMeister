@@ -49,8 +49,30 @@ jobs:
             echo "ERROR: dist/PaperMeister not found"; exit 1
           }
 
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          # Pin the installer at a GitHub release asset (jrsoftware.org only keeps
+          # the latest 6.x, so point releases start 404-ing).
+          $url = "https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe"
+          Invoke-WebRequest -Uri $url -OutFile inno.exe
+          Start-Process -FilePath inno.exe -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.get_version.outputs.VERSION }}"
+          $tpl = Get-Content "installer/PaperMeister.iss.template" -Raw
+          $tpl = $tpl.Replace("{{VERSION}}", $ver).Replace("{{DIST_PATH}}", "$PWD\dist").Replace("{{OUTPUT_DIR}}", "$PWD\installer\Output")
+          Set-Content -Path "installer/PaperMeister.iss" -Value $tpl
+          $env:BUILD_NUMBER = "${{ inputs.build_number }}"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer/PaperMeister.iss"
+          echo "=== installer output ==="; Get-ChildItem "installer/Output" -Name
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: papermeister-windows
-          path: PaperMeister-Windows-*.zip
+          path: |
+            PaperMeister-Windows-*.zip
+            installer/Output/*.exe

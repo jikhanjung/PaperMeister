@@ -10,3 +10,7 @@ Trilobite Shape/
 /build/
 /dist/
 /.build-venv/
+
+# Inno Setup — generated installer output (template is tracked)
+/installer/Output/
+/installer/PaperMeister.iss

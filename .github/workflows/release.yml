@@ -44,7 +44,7 @@ jobs:
       - name: Generate SHA256 checksums
         run: |
           cd release-files
-          find . -type f -name "*.zip" -exec sha256sum {} \; > ../SHA256SUMS.txt
+          find . -type f \( -name "*.zip" -o -name "*.exe" \) -exec sha256sum {} \; > ../SHA256SUMS.txt
           cd ..
           cat SHA256SUMS.txt
 
@@ -74,6 +74,7 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
           files: |
             release-files/papermeister-windows/*.zip
+            release-files/papermeister-windows/*.exe
             SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

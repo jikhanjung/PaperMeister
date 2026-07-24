@@ -14,9 +14,12 @@ is guarded by `os.path.isdir`, so it no-ops on the CI runner.
    git push origin v0.1.1
    ```
 3. `release.yml` runs: **test** (ruff + mypy + Linux/Windows pytest) → **build**
-   (windows-latest: `pyinstaller PaperMeister.spec` → portable zip) →
-   **GitHub Release** with the zip + `SHA256SUMS.txt`.
+   (windows-latest: `pyinstaller PaperMeister.spec` → **portable zip** +
+   **Inno Setup installer** from `installer/PaperMeister.iss.template`) →
+   **GitHub Release** with the zip, the installer `.exe`, and `SHA256SUMS.txt`.
    - Pre-release: use a `-alpha` / `-beta` / `-rc` suffix (auto-marked prerelease).
+   - The installer is a **per-user** install (no admin) into
+     `%LocalAppData%\Programs\PaperMeister`, with Start-Menu (+ optional desktop) icons.
 
 On-demand build **without** a release: Actions → **Build** → *Run workflow*
 (uploads the zip artifact only, no Release).
@@ -44,7 +47,6 @@ when frozen" gaps (bundled data files, native libs) that source tests can't prov
 - [ ] SVG rail icons show — the one source-relative data dir (`desktop/theme/icons`)
 
 ## Future
-- Installer (Inno Setup) — currently portable zip only.
 - App icon / version metadata stamped on the exe.
 - macOS / Linux legs — add to `reusable_build.yml` the same way as Modan2.
 - CHANGELOG.md-sourced release notes — currently checksums + commit SHA only.

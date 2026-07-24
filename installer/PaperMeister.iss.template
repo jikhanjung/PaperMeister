@@ -1,0 +1,29 @@
+; Inno Setup script template for PaperMeister (Windows installer).
+; CI (reusable_build.yml) fills {{VERSION}} / {{DIST_PATH}} / {{OUTPUT_DIR}} and
+; runs ISCC. Per-user install (no admin) into LocalAppData\Programs.
+#define AppVersion "{{VERSION}}"
+#define BuildNumber GetEnv('BUILD_NUMBER')
+
+[Setup]
+AppName=PaperMeister
+AppVersion={#AppVersion}
+DefaultDirName={localappdata}\Programs\PaperMeister
+PrivilegesRequired=lowest
+DisableProgramGroupPage=yes
+OutputDir={{OUTPUT_DIR}}
+Compression=lzma/normal
+SolidCompression=no
+OutputBaseFilename=PaperMeister_v{#AppVersion}_build{#BuildNumber}_Installer
+
+[Files]
+Source: "{{DIST_PATH}}\PaperMeister\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
+
+[Icons]
+Name: "{userprograms}\PaperMeister"; Filename: "{app}\PaperMeister.exe"
+Name: "{userdesktop}\PaperMeister"; Filename: "{app}\PaperMeister.exe"; Tasks: desktopicon
+
+[Tasks]
+Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
+
+[Run]
+Filename: "{app}\PaperMeister.exe"; Description: "Launch PaperMeister"; Flags: postinstall shellexec nowait skipifsilent
