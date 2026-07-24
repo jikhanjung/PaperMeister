@@ -35,6 +35,13 @@ ignore = [
 "desktop/app.py" = ["E402"]      # the requests SSL monkeypatch must run before Qt/pyzotero imports
 "tests/*" = ["S101"]             # asserts are the point of tests
 
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true   # peewee / PyMuPDF / pyzotero / PyQt6 ship no stubs
+warn_unused_ignores = true
+# Incremental: CI type-checks only the modules already at zero errors (see the
+# `mypy` step in test.yml). Expand that list as more modules are cleaned.
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]   # put the repo root on sys.path so `pytest` (not just `python -m pytest`) imports the app

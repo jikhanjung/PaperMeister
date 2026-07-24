@@ -120,7 +120,7 @@ def build_resolution_index() -> dict:
         if pid in papers:
             papers[pid]['surname'] = surname(name)
 
-    doi_map = {}
+    doi_map: dict[str, int] = {}
     for p in Paper.select(Paper.id, Paper.doi).where(Paper.doi != ''):
         nd = normalize_doi(p.doi)
         if nd:
@@ -222,7 +222,7 @@ def resolve_paper_references(paper_id, index=None, work_index=None,
     """
     if index is None:
         index = build_resolution_index()
-    counts = {}
+    counts: dict[str, int] = {}
     rows = list(Reference.select().where(Reference.citing_paper == paper_id))
     with db.atomic():
         for r in rows:
@@ -276,7 +276,8 @@ def build_work_index() -> dict:
     Mutated in place by canonicalize_reference so a batch dedupes against works
     it just created. Excludes promoted (merged_into_paper) tombstones.
     """
-    doi_map, key_map = {}, {}
+    doi_map: dict[str, int] = {}
+    key_map: dict[tuple, int] = {}
     for w in CitedWork.select(
             CitedWork.id, CitedWork.doi, CitedWork.title_key, CitedWork.year
     ).where(CitedWork.merged_into_paper.is_null(True)):

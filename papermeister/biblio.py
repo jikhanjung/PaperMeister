@@ -226,7 +226,7 @@ def _call_qwen(prompt: str, base_url: str, max_tokens: int = 2048,
     import requests as req
     url = f'{base_url.rstrip("/")}/llm/v1/chat/completions'
     logger.debug('Qwen request: POST %s', url)
-    last_exc = None
+    last_exc: Exception | None = None
     for attempt in range(retries + 1):
         try:
             resp = req.post(url, json={
@@ -247,7 +247,9 @@ def _call_qwen(prompt: str, base_url: str, max_tokens: int = 2048,
         resp.raise_for_status()
         data = resp.json()
         return data['choices'][0]['message']['content'].strip()
-    raise last_exc
+    # The loop only falls through here after an attempt set last_exc; the `or`
+    # is a provably-non-None fallback that also satisfies the type checker.
+    raise last_exc or RuntimeError('Qwen request failed')
 
 
 def references_server_alive(base_url: str = '', timeout: int = 6) -> bool:
@@ -674,7 +676,9 @@ def split_reference_entries(block: str) -> list:
     block = block.strip()
     if len(block) <= 1500:
         return [block]
-    groups, cur, cur_len = [], [], 0
+    groups: list = []
+    cur: list = []
+    cur_len = 0
     for ln in block.split('\n'):
         if cur and cur_len + len(ln) > 1200:
             groups.append('\n'.join(cur))
@@ -840,7 +844,8 @@ def _chunk_entries(entries: list, max_chars: int = 4500,
     A single oversized entry still becomes its own chunk.
     """
     chunks = []
-    cur, cur_len = [], 0
+    cur: list = []
+    cur_len = 0
     for e in entries:
         if cur and (len(cur) >= max_entries or cur_len + len(e) > max_chars):
             chunks.append(cur)
@@ -901,7 +906,8 @@ def extract_references_llm(
     while i < total:
         # Take up to the current adaptive batch size, also bounded by chars.
         size = _refs_batcher.size
-        batch, chars = [], 0
+        batch: list = []
+        chars = 0
         while (i + len(batch) < total and len(batch) < size
                and (not batch or chars + len(entries[i + len(batch)])
                     <= _AdaptiveBatcher.MAX_CHARS)):

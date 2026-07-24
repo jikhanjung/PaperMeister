@@ -1,0 +1,29 @@
+name: Security
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Weekly (Mon 06:00 UTC) so newly-disclosed CVEs in already-pinned
+    # dependencies surface even without a commit.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  pip-audit:
+    name: pip-audit (dependency CVEs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install pip-audit
+      # Audit the shipped runtime deps. Fails if any resolved package has a known
+      # vulnerability. Currently clean; if an unfixable advisory appears, add
+      # `--ignore-vuln <ID>` with a comment rather than dropping the gate.
+      - name: Audit runtime dependencies
+        run: pip-audit -r requirements.txt

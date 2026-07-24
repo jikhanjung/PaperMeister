@@ -23,9 +23,14 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - run: pip install ruff
+      - run: pip install ruff mypy
       - name: ruff check
         run: ruff check . --output-format=github
+      # Type checking is incremental: gate only the modules already at zero mypy
+      # errors. Expand this list as more modules are cleaned (config in
+      # pyproject.toml [tool.mypy]).
+      - name: mypy (typed core modules)
+        run: mypy papermeister/references.py papermeister/search.py papermeister/biblio.py
 
   # --------------------------------------------------------------------------
   # Tests — Linux + Windows (the platforms that matter here: WSL-dev, Windows-run).
