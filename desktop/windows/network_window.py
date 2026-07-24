@@ -106,14 +106,25 @@ class _NetworkView(QGraphicsView):
         factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
         self.scale(factor, factor)
 
-    def mouseDoubleClickEvent(self, event):
-        item = self.itemAt(event.pos())
+    def _node_at(self, viewpos):
+        item = self.itemAt(viewpos)
         while item is not None and item.data(0) is None:
             item = item.parentItem()
-        if item is not None:
-            self.node_activated.emit(int(item.data(0)))
-            return
-        super().mouseDoubleClickEvent(event)
+        return None if item is None else int(item.data(0))
+
+    def mousePressEvent(self, event):
+        # Remember the node under the press so a plain click (not a pan-drag)
+        # re-centers on release.
+        self._press_pos = event.pos()
+        self._press_pid = self._node_at(event.pos())
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        super().mouseReleaseEvent(event)
+        pid = getattr(self, '_press_pid', None)
+        moved = (event.pos() - getattr(self, '_press_pos', event.pos())).manhattanLength()
+        if pid is not None and moved < 5 and self._node_at(event.pos()) == pid:
+            self.node_activated.emit(pid)   # single click on a node → explore
 
     def render_graph(self, center_id, nodes, edges, pos):
         scene = self.scene()
@@ -252,4 +263,4 @@ class NetworkWindow(QWidget):
         neighbours = len(nodes) - 1
         self.status.setText(
             f'{neighbours} connected paper(s), {len(edges)} citation edge(s) '
-            f'within {hops} hop(s). Double-click a node to explore.')
+            f'within {hops} hop(s). Click a node to re-center; drag to pan.')

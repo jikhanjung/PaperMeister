@@ -17,15 +17,16 @@ held→held 인용 그래프는 라이브러리 전체로는 수천 노드 → �
   - `spring_layout()` — Fruchterman–Reingold force-directed, **순수 함수**(RNG 없이 원형 시드 →
     결정적, 테스트 가능), center 노드 고정. O(n²·iter)이지만 ego는 n≤60이라 즉시.
   - `_NetworkView(QGraphicsView)` — 줌(휠)·팬(drag), 방향 화살표 엣지, center 노드 강조,
-    노드 툴팁=제목. **더블클릭=재중심**(그래프 탐색).
+    노드 툴팁=제목. **클릭=재중심**(그래프 탐색; 팬과 구분: press·release 같은 노드+이동<5px).
   - `NetworkWindow` — 헤더(Back 히스토리 / 제목 / Hops 1·2 / "Open in list") + 뷰. 이웃
-    더블클릭 → 재중심(히스토리 push), Open → `open_paper` 시그널로 메인 리스트 reveal.
+    클릭 → 재중심(히스토리 push), Open → `open_paper` 시그널로 메인 리스트 reveal.
 - **배선**: PaperList 우클릭 "Show in citation network"(status 무관) → main_window
   `_open_network` → `open_paper`를 `_on_reference_navigate`에 연결.
 
 ## UX
-클릭으로 그래프를 걸어다니고(더블클릭 재중심), 원하는 논문에서 "Open in list"로 점프. 단일/더블
-클릭 모호성 회피: 탐색은 더블클릭, 리스트 열기는 버튼.
+노드를 **클릭하면 그 논문 중심으로 재구성**(그래프 걸어다니기), 원하는 논문에서 "Open in list"로
+점프. 리스트 열기가 버튼이라 단일 클릭=재중심에 모호성 없음. 팬(드래그)과는 press·release 같은
+노드 + 이동<5px로 구분.
 
 ## 검증
 `spring_layout` 회귀 테스트(center 고정/경계/결정성), offscreen 렌더 스모크, import 스모크.
