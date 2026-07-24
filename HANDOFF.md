@@ -241,7 +241,10 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
     - **Linux**: AppImage(`packaging/linux/create_appimage.sh`, appimagetool `EXTRACT_AND_RUN`)
     - **macOS**: DMG(`packaging/macos/create_dmg.sh`, onedir→.app→hdiutil, **미공증**)
     - reusable_build 3 job, release가 4종(zip/exe/AppImage/dmg)+SHA256 첨부. **수동 Build로 3플랫폼 전부 빌드 검증 완료**
-  - 릴리스 후속 잔여(저순위): 앱 아이콘, macOS 코드사이닝/공증, CHANGELOG 소싱 릴리스노트
+  - **인용 네트워크 그래프 시각화** (P14 L2, [devlog 072](./devlog/20260724_072_Citation_Network_Ego_Graph.md), `828bb4e` 등): 논문 우클릭 "Show in citation network" → ego-network(선택 논문 1~2홉) `QGraphicsView` force-directed. **전체 네트워크**(held `resolved_paper` + 외부 `CitedWork` `resolved_work`). 2채널: **채움색=방향**(피인용 초록/인용 앰버/상호 시안/2홉 회색), **테두리=보유**(굵은실선 PDF보유/얇은실선 held/점선 external). 클릭=재중심(held만), Open in list=리스트 reveal. `paper_service.load_ego_network`. 라이브 확인 대기
+  - **v0.1.1 릴리스** (`e49fa39` + 태그 `v0.1.1`): `CHANGELOG.md`(Keep a Changelog) 신설 + release.yml이 **CHANGELOG 섹션을 awk 추출해 릴리스 노트로** (Modan2 방식). 3-OS 아티팩트 + 노트로 **release 파이프라인 end-to-end 검증 완료**. 다음 릴리스: CHANGELOG 섹션 추가 → version.py 범프 → 태그 push
+  - **구현 기록**: [069](./devlog/20260723_069_Citation_Matching_And_Network_Implementation.md)(P14) · [070](./devlog/20260723_070_Server_Down_Resilience.md)(서버 복원력) · [071](./devlog/20260724_071_Code_Quality_And_Cross_Platform_Release.md)(P15+릴리스) · [072](./devlog/20260724_072_Citation_Network_Ego_Graph.md)(그래프)
+  - 릴리스 후속 잔여(저순위): 앱 아이콘, macOS 코드사이닝/공증. 다음 실질 작업: **references 추출 완주**(진행 중) → 완료 후 재-resolve/normalize 재실행
 - **A1 재-resolve + 정규화 라이브 실행 완료** (Windows, 앱 닫은 상태): `resolve_references.py --reresolve --execute` → `normalize_works.py --pass 1 --execute` → `--pass 2 --execute`(~61분, LLM 병합). **효과(라이브 DB 실측)**: unresolved **31.7%→4.3%** 급감, held 13,123→**17,671**, external 58,473→**83,388**, held→held 엣지 12,038→**17,089**, active CitedWork 49,728→**59,963**(pass1이 미분류 인용을 canonicalize → 순증, pass2가 near-dup 5,989 제거). `quick_check=ok`
   - **병합 품질 spot-check 통과**: `match_method='work-llm'` 7,955 refs 샘플 검사 — 전부 같은 문헌의 OCR/철자/음차 변형(키릴 혼입까지 정상 병합), Hupé 1953/1955 Part1/2를 연도로 구분 유지(과대병합 없음). borderline 1건(work#20427 Whittington), out-degree 이상치 1건(Education 2005, 367)만 관찰 대상
   - **다음**: PaperMeister 재시작(새 스코어러 + Cancel 버튼 반영) → 추출 재개. 추출이 더 진행되면 재-resolve 한 번 더(멱등). 증분 재-resolve 훅(sync 콜백)·L2/L3(인앱 ego-view / 공동인용)은 이후
