@@ -15,7 +15,7 @@ def _migrate_env_to_prefs():
     env_path = os.path.join(os.path.dirname(__file__), '.env')
     if not os.path.exists(env_path):
         return
-    with open(env_path) as f:
+    with open(env_path, encoding='utf-8') as f:
         for line in f:
             line = line.strip()
             if '=' in line and not line.startswith('#'):

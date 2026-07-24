@@ -74,7 +74,7 @@ def snapshot(con):
 
 def load_state():
     try:
-        with open(STATE_FILE) as f:
+        with open(STATE_FILE, encoding='utf-8') as f:
             return json.load(f)
     except (OSError, ValueError):
         return None
@@ -82,7 +82,7 @@ def load_state():
 
 def save_state(snap):
     try:
-        with open(STATE_FILE, 'w') as f:
+        with open(STATE_FILE, 'w', encoding='utf-8') as f:
             json.dump(snap, f)
     except OSError:
         pass  # state is a convenience; never fail the monitor over it
