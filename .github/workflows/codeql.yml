@@ -35,7 +35,7 @@ jobs:
       # CodeQL's Python extraction does not need the dependencies installed;
       # skipping the heavy PyQt6 install keeps this fast.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: python
           queries: +security-extended,security-and-quality
@@ -50,6 +50,6 @@ jobs:
               - '.build-venv/**'
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:python"
