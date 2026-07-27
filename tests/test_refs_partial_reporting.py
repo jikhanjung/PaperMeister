@@ -35,8 +35,12 @@ def one_batch_at_a_time(monkeypatch):
     """Two references, a fresh batcher (starts at 1), and a stubbed server.
 
     `confidence` is settable because it decides whether an unparseable answer
-    means "this failed" or "this document has no bibliography".
+    means "this failed" or "this document has no bibliography". The block is
+    realistically sized, because block length is the other half of that decision
+    — a heading match over a few dozen characters is not evidence of a
+    bibliography (see test_a_tiny_located_block_may_legitimately_be_empty).
     """
+    block = 'Smith, J. 1999. A paper about things. Journal of Things 4: 1-20. ' * 5
     monkeypatch.setattr(biblio, 'load_ocr_pages', lambda h: [{'markdown': 'x'}])
     monkeypatch.setattr(biblio, 'split_reference_entries', lambda b: ['ref one', 'ref two'])
     monkeypatch.setattr(biblio, '_refs_batcher', biblio._AdaptiveBatcher())
@@ -45,7 +49,7 @@ def one_batch_at_a_time(monkeypatch):
 
     def set_confidence(confidence):
         monkeypatch.setattr(biblio, 'extract_references_block',
-                            lambda p: ('block', confidence))
+                            lambda p: (block, confidence))
 
     set_confidence('high')
     return set_confidence
@@ -321,3 +325,40 @@ def test_a_chars_capped_batch_shrinks_on_the_first_retry(monkeypatch):
     assert max(sent) >= 3                      # it really did hit the cap
     assert sent.count(max(sent)) == 1          # attempted once, not repeatedly
     assert min(sent) < max(sent)               # and the retry was smaller
+
+
+@pytest.mark.unit
+def test_a_tiny_located_block_may_legitimately_be_empty(one_batch_at_a_time,
+                                                        monkeypatch):
+    """`confidence='high'` means a heading matched, not that the region has
+    content. Live case: a course guidebook whose "references section" was 46
+    chars of table of contents — 'Professor Biographies .....iCourse Scope.....1'.
+    The model's [] was correct; treating it as a contradiction put the paper at
+    the head of every batch to be re-asked the same question forever.
+    """
+    monkeypatch.setattr(biblio, 'extract_references_block',
+                        lambda p: ('Professor Biographies .....iCourse Scope.....1', 'high'))
+    monkeypatch.setattr(biblio, 'split_reference_entries', lambda b: [b])
+    monkeypatch.setattr(biblio, '_call_qwen', lambda *a, **k: '[]')
+
+    entries, _, _, complete, skipped = biblio.extract_references_llm('h')
+
+    assert entries == [] and complete is True     # settles as "none", not a loop
+    assert skipped == biblio._no_skips()
+
+
+@pytest.mark.unit
+def test_a_substantial_located_block_must_not_come_back_empty(one_batch_at_a_time,
+                                                              monkeypatch):
+    """The guard still holds where it was meant to: a real bibliography that
+    yields nothing is a contradiction, not a finding."""
+    block = 'Smith, J. 1999. A paper about things. Journal of Things 4: 1-20. ' * 5
+    monkeypatch.setattr(biblio, 'extract_references_block', lambda p: (block, 'high'))
+    monkeypatch.setattr(biblio, 'split_reference_entries', lambda b: [b])
+    monkeypatch.setattr(biblio, '_call_qwen', lambda *a, **k: '[]')
+
+    assert len(block) >= biblio._SUBSTANTIAL_BLOCK_CHARS
+    _, _, _, complete, skipped = biblio.extract_references_llm('h')
+
+    assert complete is False
+    assert skipped['empty_result'] == 1

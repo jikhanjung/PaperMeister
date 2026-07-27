@@ -976,6 +976,19 @@ _MT_CEILING = 8192
 # from 4 x 369s to a single wait.
 _REFS_READ_TIMEOUT = 480
 
+# Below this many characters, a located "references section" is too small to
+# hold even one reference, so an empty answer from the model is credible rather
+# than a contradiction.
+#
+# `confidence='high'` only means a heading pattern matched — NOT that the region
+# has content. Live case: a course guidebook whose block was 46 characters of
+# table of contents, `'Professor Biographies .....iCourse Scope.....1'`. The
+# model correctly returned [], the contradiction guard called that impossible,
+# and the paper led every batch being re-asked the same question forever. A real
+# entry runs 100-300 chars, so 200 keeps genuinely short bibliographies inside
+# the guard while letting heading false-positives settle as "none".
+_SUBSTANTIAL_BLOCK_CHARS = 200
+
 
 def _no_skips() -> dict:
     """Zeroed skip tally — the shape `extract_references_llm` always returns.
@@ -1071,7 +1084,8 @@ def extract_references_llm(
     # Position whose batch has already been retried at the token ceiling, so a
     # second truncation there escalates to splitting instead of looping.
     boost_at = -1
-    logger.info('%srefs: block confidence=%s, %d entries', tag, confidence, total)
+    logger.info('%srefs: block confidence=%s, %d entries, %d chars',
+                tag, confidence, total, len(block))
     i = 0
     while i < total:
         # Take up to the current adaptive batch size, also bounded by chars.
@@ -1215,10 +1229,11 @@ def extract_references_llm(
     # only costs a retry. Observed live: a Korean paper whose block split into
     # 47 entries came back [] for every batch in under a second each — far too
     # fast to have parsed anything — and was stamped "no references section".
-    if complete and not parsed and confidence != 'low':
-        logger.warning('%srefs: located a %s-confidence section with %d entries but '
-                       'the model returned nothing → leaving UNCHECKED for retry',
-                       tag, confidence, total)
+    if (complete and not parsed and confidence != 'low'
+            and len(block) >= _SUBSTANTIAL_BLOCK_CHARS):
+        logger.warning('%srefs: located a %s-confidence section with %d entries / '
+                       '%d chars but the model returned nothing → leaving '
+                       'UNCHECKED for retry', tag, confidence, total, len(block))
         complete = False
         skipped['empty_result'] += 1
 

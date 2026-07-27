@@ -207,3 +207,49 @@ def shrink_below(self, n):
 
 다음 작업 후보: `low` 블록에서 `split_reference_entries`가 많은 엔트리를 만들어냈다면
 (= 블록이 목록처럼 생겼다면) `[]`를 믿지 않는 추가 가드, 또는 헤딩 사전 확장.
+
+
+---
+
+## (d) 가드의 전제가 틀렸다 — `high` confidence ≠ 내용이 있다
+
+재기동 후 **첫 논문**이 바로 그 케이스로 돌아왔다:
+
+```
+[2026-07-27 18:11:37] [1/6082] Major Transitions in Evolution - Course Guidebook
+    — 0 refs PARTIAL (model returned nothing for a located section), left to retry
+```
+
+새로 넣은 로그가 힌트를 줬다: `block confidence=high, 1 entries`. OCR 캐시로 직접
+재현해봤다:
+
+```
+pages=128  confidence=high  block_chars=46  entries=1
+block = 'Professor Biographies .....iCourse Scope.....1'
+```
+
+**46자짜리 목차 조각**이다. 헤딩 매처가 **TOC 줄**을 참고문헌 헤딩으로 오인해 집어온
+것이고, 모델의 `[]`는 **정답이었다**. 그런데 (b)의 가드가 그 정답을 "모순"으로 판정해
+매 배치 선두에서 같은 질문을 영원히 반복시켰다.
+
+전제가 틀렸다. **`confidence='high'`는 "헤딩 패턴이 매치됐다"는 뜻일 뿐, 그 영역에
+내용이 있다는 보장이 아니다.**
+
+### 수정: 블록 크기로 게이팅
+
+`_SUBSTANTIAL_BLOCK_CHARS = 200`. 레퍼런스 1건이 보통 100~300자이므로, 그보다 짧은
+블록은 **서지를 한 건도 담을 수 없다** → 그 경우 `[]`는 모순이 아니라 타당한 답이다.
+200자 이상일 때만 모순 가드를 적용한다.
+
+LLM 호출 자체는 막지 않았다 — 46자 블록에 0.2초 드는 정도라 싸고, 진짜로 짧은 서지가
+있으면 건질 수 있다. 막는 것은 **"영원히 재시도"로 가는 경로**뿐이다.
+
+로그에 블록 문자 수도 추가했다(`block confidence=high, 1 entries, 46 chars`) — 이번에도
+그 값이 없어서 OCR 캐시를 직접 열어봐야 했다.
+
+### 진짜 남은 문제
+
+이 건의 근본 원인은 가드가 아니라 **헤딩 탐지가 목차 줄을 매치한 것**이다. (c)에서 적은
+"헤딩 탐지 실패"와 같은 뿌리다 — 한쪽은 못 찾고(→low fallback), 한쪽은 엉뚱한 걸 찾는다.
+탐지기 개선이 다음 순서다. 목차 줄 배제(점선 리더 `.....`+페이지번호 패턴), 매치된 블록의
+최소 크기 요구 등이 후보.
