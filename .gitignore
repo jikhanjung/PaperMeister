@@ -22,3 +22,6 @@ Trilobite Shape/
 # macOS build (generated)
 /PaperMeister-macOS-*.dmg
 /dist/PaperMeister.app/
+
+# Sphinx manual build output
+docs/manual/_build/

@@ -1,0 +1,223 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, Jikhan Jung
+# This file is distributed under the same license as the PaperMeister
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PaperMeister 0.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-27 19:14+0900\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: ko\n"
+"Language-Team: ko <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../quick_start.rst:2
+msgid "Quick Start"
+msgstr ""
+
+#: ../../quick_start.rst:4
+msgid ""
+"This walks a Zotero library from nothing to searchable full text and a "
+"citation network. Each step is resumable — interrupting a batch and re-"
+"running it picks up where it stopped."
+msgstr ""
+
+#: ../../quick_start.rst:9
+msgid "1. Connect Zotero"
+msgstr ""
+
+#: ../../quick_start.rst:11
+msgid "Settings → **Zotero** tab → enter ``user_id`` and API key → OK."
+msgstr ""
+
+#: ../../quick_start.rst:13
+msgid ""
+"The app syncs on startup and whenever you press **Sync** in the left "
+"rail. Collections appear as a tree under the *My Library* tab; papers "
+"show in the middle list."
+msgstr ""
+
+#: ../../quick_start.rst:17
+msgid ""
+"The first sync only fetches metadata. PDFs stay in Zotero until they are "
+"needed."
+msgstr ""
+
+#: ../../quick_start.rst:20
+msgid "2. Run OCR"
+msgstr ""
+
+#: ../../quick_start.rst:22
+msgid ""
+"Right-click a collection → **Process Folder (OCR → Biblio)**, or right-"
+"click *My Library* → **Process All** for the whole library."
+msgstr ""
+
+#: ../../quick_start.rst:25
+msgid ""
+"The Process window shows progress per file. Each PDF is downloaded, sent "
+"to the OCR backend, and its text stored page by page. Results are cached "
+"in ``~/.papermeister/ocr_json/``, so re-processing a paper is free."
+msgstr ""
+
+#: ../../quick_start.rst:29
+msgid "Watch the status pill in the paper list:"
+msgstr ""
+
+#: ../../quick_start.rst:35
+msgid "Pill"
+msgstr ""
+
+#: ../../quick_start.rst:36
+msgid "Meaning"
+msgstr ""
+
+#: ../../quick_start.rst:37
+msgid "``wait``"
+msgstr ""
+
+#: ../../quick_start.rst:38
+msgid "PDF present, not processed yet"
+msgstr ""
+
+#: ../../quick_start.rst:39
+msgid "``OCR``"
+msgstr ""
+
+#: ../../quick_start.rst:40
+msgid "text extracted, no bibliographic data yet"
+msgstr ""
+
+#: ../../quick_start.rst:41
+msgid "``done``"
+msgstr ""
+
+#: ../../quick_start.rst:42
+msgid "metadata extracted and applied"
+msgstr ""
+
+#: ../../quick_start.rst:43
+msgid "``rev``"
+msgstr ""
+
+#: ../../quick_start.rst:44
+msgid "extracted metadata disagrees with Zotero — needs your review"
+msgstr ""
+
+#: ../../quick_start.rst:45
+msgid "``err``"
+msgstr ""
+
+#: ../../quick_start.rst:46
+msgid "processing failed"
+msgstr ""
+
+#: ../../quick_start.rst:47
+msgid "``skip``"
+msgstr ""
+
+#: ../../quick_start.rst:48
+msgid "not a PDF (supplementary file, link attachment)"
+msgstr ""
+
+#: ../../quick_start.rst:49
+msgid "``—``"
+msgstr ""
+
+#: ../../quick_start.rst:50
+msgid "no PDF attached"
+msgstr ""
+
+#: ../../quick_start.rst:53
+msgid "3. Extract bibliographic data"
+msgstr ""
+
+#: ../../quick_start.rst:55
+msgid ""
+"If automatic extraction is on, this follows OCR without any action. "
+"Otherwise right-click a paper → **Extract Biblio**."
+msgstr ""
+
+#: ../../quick_start.rst:58
+msgid ""
+"The result is stored in a separate table, never written over your Zotero "
+"data directly. When the extraction agrees with what Zotero already has, "
+"or fills empty fields only, it is applied automatically. When it "
+"conflicts, the paper is marked ``rev`` and waits for you."
+msgstr ""
+
+#: ../../quick_start.rst:63
+msgid ""
+"To review: select the paper, open the **Metadata** tab, and compare the "
+"two columns field by field. Pick a side per row, edit the value if "
+"neither is right, then **Apply**."
+msgstr ""
+
+#: ../../quick_start.rst:68
+msgid "4. Parse reference lists"
+msgstr ""
+
+#: ../../quick_start.rst:70
+msgid ""
+"Right-click a paper, a collection, or *My Library* → **Extract "
+"References**."
+msgstr ""
+
+#: ../../quick_start.rst:72
+msgid ""
+"Each paper's bibliography is located, split into entries, and parsed into"
+" structured fields. Entries are then matched against papers you already "
+"hold — by DOI first, then by title with author and year as corroboration."
+" Everything else becomes an external *cited work*."
+msgstr ""
+
+#: ../../quick_start.rst:77
+msgid ""
+"The **References** tab of a paper shows both directions: works it cites, "
+"and papers in your library that cite it."
+msgstr ""
+
+#: ../../quick_start.rst:81
+msgid "5. Search"
+msgstr ""
+
+#: ../../quick_start.rst:83
+msgid ""
+"Type in the search box and press Enter. Search covers the full OCR text "
+"of every page, plus titles and author names, so a paper is findable by a "
+"term that never appears in its body."
+msgstr ""
+
+#: ../../quick_start.rst:87
+msgid ""
+"Results show a snippet with the matched words in bold; opening a result "
+"highlights the matches inside the **Text** tab."
+msgstr ""
+
+#: ../../quick_start.rst:91
+msgid "6. See the citation network"
+msgstr ""
+
+#: ../../quick_start.rst:93
+msgid ""
+"Right-click a paper → **Show in citation network** for an interactive "
+"graph centred on it: what it cites, what cites it, and the external works"
+" it cites. Click any node to re-centre."
+msgstr ""
+
+#: ../../quick_start.rst:97
+msgid ""
+"The rail's **Cited Works** view lists external works by how often your "
+"library cites them — a direct answer to \"what do I keep citing but not "
+"own?\""
+msgstr ""
+

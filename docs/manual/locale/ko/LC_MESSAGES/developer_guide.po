@@ -1,0 +1,279 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, Jikhan Jung
+# This file is distributed under the same license as the PaperMeister
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PaperMeister 0.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-27 19:14+0900\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: ko\n"
+"Language-Team: ko <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../developer_guide.rst:2
+msgid "Developer Guide"
+msgstr ""
+
+#: ../../developer_guide.rst:5
+msgid "Layout"
+msgstr ""
+
+#: ../../developer_guide.rst:11
+msgid "Path"
+msgstr ""
+
+#: ../../developer_guide.rst:12
+msgid "Contents"
+msgstr ""
+
+#: ../../developer_guide.rst:13
+msgid "``papermeister/``"
+msgstr ""
+
+#: ../../developer_guide.rst:14
+msgid "Core: models, database, ingestion, OCR, extraction, search, Zotero"
+msgstr ""
+
+#: ../../developer_guide.rst:15
+msgid "``desktop/``"
+msgstr ""
+
+#: ../../developer_guide.rst:16
+msgid ""
+"The current app — ``views/``, ``services/``, ``components/``, "
+"``workers/``, ``windows/``, ``theme/``"
+msgstr ""
+
+#: ../../developer_guide.rst:18
+msgid "``papermeister/ui/``"
+msgstr ""
+
+#: ../../developer_guide.rst:19
+msgid "The older GUI. Frozen; two dialogs are still reused by the new app"
+msgstr ""
+
+#: ../../developer_guide.rst:20
+msgid "``scripts/``"
+msgstr ""
+
+#: ../../developer_guide.rst:21
+msgid "Operational one-offs (migrations, bulk re-processing, audits)"
+msgstr ""
+
+#: ../../developer_guide.rst:22
+msgid "``tests/``"
+msgstr ""
+
+#: ../../developer_guide.rst:23
+msgid "pytest suite"
+msgstr ""
+
+#: ../../developer_guide.rst:24
+msgid "``devlog/``"
+msgstr ""
+
+#: ../../developer_guide.rst:25
+msgid "Design notes, plans and implementation records"
+msgstr ""
+
+#: ../../developer_guide.rst:28
+msgid "Data model"
+msgstr ""
+
+#: ../../developer_guide.rst:38
+msgid ""
+"``Paper`` is one document. ``PaperFile`` is an attachment of it. "
+"``Passage`` is one page of OCR text. ``PaperBiblio`` holds extracted "
+"metadata separately from the curated fields, tagged by source model. A "
+"``Reference`` resolves to either a held ``Paper`` or an external "
+"``CitedWork`` — never both, and neither means it could not be identified."
+msgstr ""
+
+#: ../../developer_guide.rst:44
+msgid ""
+"Full-text search uses two FTS5 indexes: ``passage_fts`` over page text "
+"(external-content, so the text is not duplicated) and ``paper_fts`` over "
+"titles and authors. Both are maintained by triggers — never write to them"
+" directly."
+msgstr ""
+
+#: ../../developer_guide.rst:49
+msgid "Running things"
+msgstr ""
+
+#: ../../developer_guide.rst:60
+msgid "Conventions"
+msgstr ""
+
+#: ../../developer_guide.rst:62
+msgid ""
+"**Scripts that change data take** ``--execute``. Without it they print a "
+"dry-run preview. There is no ``--dry-run`` flag; dry run is the default."
+msgstr ""
+
+#: ../../developer_guide.rst:65
+msgid ""
+"**Every fix gets a regression test.** The test should fail against the "
+"old behaviour — verify that, rather than assuming it."
+msgstr ""
+
+#: ../../developer_guide.rst:68
+msgid ""
+"**devlog files** record the reasoning, not the diff — git already has the"
+" diff. Naming: ``YYYYMMDD_P##_title.md`` for plans, "
+"``YYYYMMDD_R##_title.md`` for reviews and audits, "
+"``YYYYMMDD_###_title.md`` for implementation records."
+msgstr ""
+
+#: ../../developer_guide.rst:72
+msgid ""
+"**HANDOFF.md** is the state of play between sessions. Read it first; "
+"update it last."
+msgstr ""
+
+#: ../../developer_guide.rst:76
+msgid "Dependencies"
+msgstr ""
+
+#: ../../developer_guide.rst:78
+msgid ""
+"``requirements.txt`` and ``requirements-dev.txt`` declare ranges; "
+"``requirements.lock`` and ``requirements-dev.lock`` pin exact versions "
+"with hashes. CI and release builds install from the locks, so a shipped "
+"build contains exactly what CI tested."
+msgstr ""
+
+#: ../../developer_guide.rst:89
+msgid ""
+"``make lock`` keeps existing pins as preferences and moves only what must"
+" move, so an unrelated upstream release does not churn the lock."
+msgstr ""
+
+#: ../../developer_guide.rst:93
+msgid "Continuous integration"
+msgstr ""
+
+#: ../../developer_guide.rst:99
+msgid "Workflow"
+msgstr ""
+
+#: ../../developer_guide.rst:100
+msgid "Purpose"
+msgstr ""
+
+#: ../../developer_guide.rst:101
+msgid "``test.yml``"
+msgstr ""
+
+#: ../../developer_guide.rst:102
+msgid ""
+"ruff and mypy, then the suite on Linux and Windows. Coverage is measured "
+"on Linux with a ratchet floor"
+msgstr ""
+
+#: ../../developer_guide.rst:104
+msgid "``security.yml``"
+msgstr ""
+
+#: ../../developer_guide.rst:105
+msgid "pip-audit against the lockfile, plus the lock-check gate. Also weekly"
+msgstr ""
+
+#: ../../developer_guide.rst:106
+msgid "``codeql.yml``"
+msgstr ""
+
+#: ../../developer_guide.rst:107
+msgid "Static analysis of our own code, on push and weekly"
+msgstr ""
+
+#: ../../developer_guide.rst:108
+msgid "``build.yml``"
+msgstr ""
+
+#: ../../developer_guide.rst:109
+msgid "Manual packaging run for all three platforms"
+msgstr ""
+
+#: ../../developer_guide.rst:110
+msgid "``release.yml``"
+msgstr ""
+
+#: ../../developer_guide.rst:111
+msgid "Tag ``v*.*.*`` → test, build, publish with checksums"
+msgstr ""
+
+#: ../../developer_guide.rst:112
+msgid "``manual-release.yml``"
+msgstr ""
+
+#: ../../developer_guide.rst:113
+msgid "Same, triggered by hand, for pre-releases and re-cuts"
+msgstr ""
+
+#: ../../developer_guide.rst:114
+msgid "``dependabot-lock-refresh.yml``"
+msgstr ""
+
+#: ../../developer_guide.rst:115
+msgid "Regenerates the locks on a Dependabot PR so its checks can pass"
+msgstr ""
+
+#: ../../developer_guide.rst:116
+msgid "``docs.yml``"
+msgstr ""
+
+#: ../../developer_guide.rst:117
+msgid "Builds this manual and deploys it to GitHub Pages"
+msgstr ""
+
+#: ../../developer_guide.rst:119
+msgid ""
+"mypy runs against a list of modules that are already clean, and the list "
+"grows as more are cleaned — it is a ratchet, not a blanket check."
+msgstr ""
+
+#: ../../developer_guide.rst:123
+msgid "Releasing"
+msgstr ""
+
+#: ../../developer_guide.rst:125
+msgid "Add a section to ``CHANGELOG.md`` for the version"
+msgstr ""
+
+#: ../../developer_guide.rst:126
+msgid "Bump ``version.py``"
+msgstr ""
+
+#: ../../developer_guide.rst:127
+msgid "Tag ``vX.Y.Z`` and push"
+msgstr ""
+
+#: ../../developer_guide.rst:129
+msgid ""
+"``release.yml`` runs the tests, builds all three platforms, and publishes"
+" a release whose notes are the CHANGELOG section for that version — so "
+"the changelog stays the single source of truth. Build numbers come from "
+"the commit count, which keeps tagged and manual builds consistent."
+msgstr ""
+
+#: ../../developer_guide.rst:135
+msgid "Building the manual"
+msgstr ""
+
+#: ../../developer_guide.rst:142
+msgid ""
+"Korean translations live in ``locale/ko/LC_MESSAGES/``. Refresh the "
+"catalogs after changing English text:"
+msgstr ""
+

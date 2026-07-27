@@ -1,0 +1,291 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, Jikhan Jung
+# This file is distributed under the same license as the PaperMeister
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PaperMeister 0.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-27 19:14+0900\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: ko\n"
+"Language-Team: ko <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../user_guide.rst:2
+msgid "User Guide"
+msgstr ""
+
+#: ../../user_guide.rst:5
+msgid "The window"
+msgstr ""
+
+#: ../../user_guide.rst:7
+msgid "Four regions, left to right."
+msgstr ""
+
+#: ../../user_guide.rst:9
+msgid "**Rail** (icon bar)"
+msgstr ""
+
+#: ../../user_guide.rst:10
+msgid ""
+"Mode buttons — *Library* and *Search* — plus one-shot actions: *Sync*, "
+"*Process*, *Import folder*, *Cited Works*, *Settings*."
+msgstr ""
+
+#: ../../user_guide.rst:13
+msgid "**Sources**"
+msgstr ""
+
+#: ../../user_guide.rst:14
+msgid ""
+"One tab per source. Zotero appears as *My Library*; each imported local "
+"folder gets its own tab. Inside a tab: library-wide filters at the top "
+"(All Papers, Needs Review, Recent, Trash) and the collection tree below."
+msgstr ""
+
+#: ../../user_guide.rst:18
+msgid "**Paper list**"
+msgstr ""
+
+#: ../../user_guide.rst:19
+msgid ""
+"Status, authors, year and title. Click a column header to sort. "
+"Ctrl+click a row to reveal which collection it lives in. Right-click for "
+"the actions that apply to that paper's current state."
+msgstr ""
+
+#: ../../user_guide.rst:23
+msgid "**Detail panel**"
+msgstr ""
+
+#: ../../user_guide.rst:24
+msgid ""
+"Four tabs — *Metadata*, *PDF*, *Text*, *References*. Each keeps its own "
+"scroll position, and the tab you were on is restored when you switch "
+"papers."
+msgstr ""
+
+#: ../../user_guide.rst:28
+msgid "Sources"
+msgstr ""
+
+#: ../../user_guide.rst:31 ../../user_guide.rst:133
+msgid "Zotero"
+msgstr ""
+
+#: ../../user_guide.rst:33
+msgid ""
+"Sync is incremental: only what changed since the last run is fetched. "
+"Right-click the *My Library* tab for a **Full Sync** when you want "
+"everything re-read."
+msgstr ""
+
+#: ../../user_guide.rst:36
+msgid ""
+"Sync mirrors Zotero in both directions of removal — items you move to the"
+" trash are hidden, items you delete permanently are removed locally too. "
+"Collection membership is currently additive: a paper removed from a "
+"collection in Zotero keeps its old link here until a full sync."
+msgstr ""
+
+#: ../../user_guide.rst:42
+msgid "Local folders"
+msgstr ""
+
+#: ../../user_guide.rst:44
+msgid ""
+"Rail → **Import folder** scans a directory tree for PDFs and creates a "
+"source tab for it. Files are identified by SHA256, so a PDF already in "
+"your Zotero library is linked rather than duplicated — the same paper "
+"simply appears under both tabs."
+msgstr ""
+
+#: ../../user_guide.rst:49
+msgid ""
+"Right-click a local folder tab → **Remove** to detach it. Papers that "
+"exist only in that folder are deleted from the database; papers shared "
+"with Zotero just lose the folder link. Files on disk and the OCR cache "
+"are never touched."
+msgstr ""
+
+#: ../../user_guide.rst:54
+msgid "Processing"
+msgstr ""
+
+#: ../../user_guide.rst:56
+msgid ""
+"OCR runs against one of three backends, chosen in Settings: RunPod "
+"serverless, a direct vLLM pod, or the wrapper API. The wrapper mode keeps"
+" the server's queue filled rather than sending one file at a time, and "
+"follows the server's own recommendation for how deep to keep that queue."
+msgstr ""
+
+#: ../../user_guide.rst:61
+msgid ""
+"Every PDF is OCR'd, even those with a text layer, so that the corpus is "
+"uniform and the results are directly comparable."
+msgstr ""
+
+#: ../../user_guide.rst:64
+msgid ""
+"Files that are not PDFs — supplementary material, link-only attachments —"
+" are marked ``skip`` rather than failing."
+msgstr ""
+
+#: ../../user_guide.rst:67
+msgid ""
+"If the OCR server becomes unreachable mid-batch, processing pauses rather"
+" than failing every remaining file, polls until the server returns, and "
+"resumes. The same applies to the extraction batches."
+msgstr ""
+
+#: ../../user_guide.rst:72
+msgid "Bibliographic data"
+msgstr ""
+
+#: ../../user_guide.rst:74
+msgid ""
+"Extraction never overwrites your curated metadata in place. Results live "
+"in their own table, tagged with the model that produced them, so you can "
+"re-run with a different model and compare."
+msgstr ""
+
+#: ../../user_guide.rst:78
+msgid ""
+"What happens after extraction depends on how the result compares with "
+"Zotero:"
+msgstr ""
+
+#: ../../user_guide.rst:80
+msgid "**Fills gaps only** — applied automatically"
+msgstr ""
+
+#: ../../user_guide.rst:81
+msgid "**Agrees with what is there** — recorded as confirmed, no change"
+msgstr ""
+
+#: ../../user_guide.rst:82
+msgid "**Disagrees** — the paper is flagged ``rev`` and waits for review"
+msgstr ""
+
+#: ../../user_guide.rst:84
+msgid ""
+"The review UI is the **Metadata** tab: differing fields get a radio "
+"button per side and an editable box, so you can take Zotero's value, take"
+" the extracted one, or type a third. Authors are one per line, "
+"``Lastname, Firstname``."
+msgstr ""
+
+#: ../../user_guide.rst:88
+msgid ""
+"If Zotero write-back is enabled, applying pushes the result to Zotero. "
+"With it off, changes stay local — and may be overwritten by a later pull "
+"sync."
+msgstr ""
+
+#: ../../user_guide.rst:92
+msgid "References and the citation network"
+msgstr ""
+
+#: ../../user_guide.rst:94
+msgid ""
+"Reference extraction locates the bibliography, splits it into entries, "
+"and parses each into fields. Entries are then resolved:"
+msgstr ""
+
+#: ../../user_guide.rst:97
+msgid "an entry matching a paper you hold becomes a **held** link"
+msgstr ""
+
+#: ../../user_guide.rst:98
+msgid ""
+"everything else is canonicalised into a **cited work** node, so the same "
+"external paper cited by ten of your papers is one node, not ten rows"
+msgstr ""
+
+#: ../../user_guide.rst:101
+msgid ""
+"The **References** tab shows outgoing references and incoming citations "
+"together. Held references are clickable and navigate to the paper. "
+"External ones carry a badge showing how many of your papers cite the same"
+" work."
+msgstr ""
+
+#: ../../user_guide.rst:105
+msgid ""
+"Rail → **Cited Works** ranks external works by citation count, with the "
+"citing papers listed for each. Right-click a paper → **Show in citation "
+"network** for the interactive ego graph: node fill shows direction "
+"relative to the focused paper, the border shows whether it is held with a"
+" PDF, held without one, or external."
+msgstr ""
+
+#: ../../user_guide.rst:112
+msgid "Search"
+msgstr ""
+
+#: ../../user_guide.rst:114
+msgid ""
+"Search runs over the OCR text of every page, and separately over titles "
+"and author names, then merges the two. Papers whose *title* matches all "
+"your terms rank above papers that merely mention them often — a search "
+"for a taxon name finds the monograph about it, not the hundred papers "
+"that cite it in passing."
+msgstr ""
+
+#: ../../user_guide.rst:119
+msgid "Both plain terms and phrases in quotes work."
+msgstr ""
+
+#: ../../user_guide.rst:122
+msgid "Settings"
+msgstr ""
+
+#: ../../user_guide.rst:124
+msgid "Four tabs."
+msgstr ""
+
+#: ../../user_guide.rst:126
+msgid "OCR"
+msgstr ""
+
+#: ../../user_guide.rst:127
+msgid ""
+"Backend selection and credentials; queue depth; whether to wait when "
+"another machine is already using the server."
+msgstr ""
+
+#: ../../user_guide.rst:130
+msgid "Biblio"
+msgstr ""
+
+#: ../../user_guide.rst:131
+msgid ""
+"Automatic and manual extraction toggles (independent), and the LLM "
+"backend."
+msgstr ""
+
+#: ../../user_guide.rst:134
+msgid ""
+"Credentials; write-back on/off; OCR JSON upload on/off; automatic parent-"
+"item creation for standalone PDFs."
+msgstr ""
+
+#: ../../user_guide.rst:137
+msgid "About"
+msgstr ""
+
+#: ../../user_guide.rst:138
+msgid "Version and the per-install client ID used to identify your OCR jobs."
+msgstr ""
+

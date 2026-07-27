@@ -1,0 +1,91 @@
+name: Build and Deploy Documentation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/manual/**'
+      - '.github/workflows/docs.yml'
+      # conf.py single-sources the version from version.py, so a version bump
+      # changes the rendered docs and must redeploy them.
+      - 'version.py'
+      # changelog.rst includes the root CHANGELOG.md rather than copying it.
+      - 'CHANGELOG.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time.
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install documentation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r docs/manual/requirements.txt
+
+      - name: Build English documentation
+        run: |
+          cd docs/manual
+          sphinx-build -b html -D language=en . _build/html/en
+
+      # Korean falls back to the English string wherever locale/ko has no
+      # translation yet, so this always produces a complete site.
+      - name: Build Korean documentation
+        run: |
+          cd docs/manual
+          sphinx-build -b html -D language=ko . _build/html/ko
+
+      - name: Create index redirect
+        run: |
+          cat > docs/manual/_build/html/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <meta http-equiv="refresh" content="0; url=en/index.html">
+            <link rel="canonical" href="en/index.html">
+            <title>Redirecting to PaperMeister Documentation...</title>
+          </head>
+          <body>
+            <p>Redirecting to <a href="en/index.html">English documentation</a>...</p>
+            <p>또는 <a href="ko/index.html">한국어 문서</a>로 이동</p>
+          </body>
+          </html>
+          EOF
+
+      # Without this, GitHub Pages runs the output through Jekyll and drops
+      # the underscore-prefixed directories Sphinx emits (_static, _sources).
+      - name: Create .nojekyll file
+        run: touch docs/manual/_build/html/.nojekyll
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs/manual/_build/html'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

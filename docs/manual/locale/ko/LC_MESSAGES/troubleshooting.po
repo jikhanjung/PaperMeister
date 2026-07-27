@@ -1,0 +1,192 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, Jikhan Jung
+# This file is distributed under the same license as the PaperMeister
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PaperMeister 0.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-27 19:14+0900\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: ko\n"
+"Language-Team: ko <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../troubleshooting.rst:2
+msgid "Troubleshooting"
+msgstr ""
+
+#: ../../troubleshooting.rst:4
+msgid ""
+"Each entry below describes something that has actually happened, and how "
+"it presents."
+msgstr ""
+
+#: ../../troubleshooting.rst:8
+msgid "OCR or extraction stops making progress"
+msgstr ""
+
+#: ../../troubleshooting.rst:10
+msgid ""
+"**Symptom** — the progress window sits still, or the log fills with ``502"
+" upstream: All connection attempts failed`` and ``500 EngineCore "
+"encountered an issue``."
+msgstr ""
+
+#: ../../troubleshooting.rst:14
+msgid ""
+"**Cause** — the 502 is a symptom, not the fault: the front proxy is "
+"answering, but the model worker behind it died and is restarting. The 500"
+" is that worker on its way out. Repeating in a cycle means it is crash-"
+"looping, usually out of GPU memory."
+msgstr ""
+
+#: ../../troubleshooting.rst:19
+msgid ""
+"**What the app does** — brief outages are absorbed by a short retry. A "
+"sustained one pauses the batch, polls the server, and resumes "
+"automatically when it comes back, keeping the queue intact."
+msgstr ""
+
+#: ../../troubleshooting.rst:23
+msgid ""
+"**What to check** — the server's own log for the actual crash (out of "
+"memory, a CUDA fault). Running OCR and the language model on the same GPU"
+" makes this more likely."
+msgstr ""
+
+#: ../../troubleshooting.rst:28
+msgid "A paper comes back \"PARTIAL\""
+msgstr ""
+
+#: ../../troubleshooting.rst:30
+msgid ""
+"Part of the bibliography was parsed and the rest was not. The parsed "
+"entries are saved; the paper stays unchecked so a later run replaces "
+"them. Nothing is lost, and re-running is safe — references are written "
+"per source, replacing the previous set rather than accumulating."
+msgstr ""
+
+#: ../../troubleshooting.rst:35
+msgid "The progress line names the reason:"
+msgstr ""
+
+#: ../../troubleshooting.rst:37
+msgid "``bad JSON``"
+msgstr ""
+
+#: ../../troubleshooting.rst:38
+msgid ""
+"The model's answer was cut off. The batch is retried with a larger "
+"budget, then split, before being given up on."
+msgstr ""
+
+#: ../../troubleshooting.rst:41
+msgid "``no array``"
+msgstr ""
+
+#: ../../troubleshooting.rst:42
+msgid ""
+"The model answered in prose rather than data — usually because the text "
+"it was handed is not a bibliography."
+msgstr ""
+
+#: ../../troubleshooting.rst:45
+msgid "``timeout``"
+msgstr ""
+
+#: ../../troubleshooting.rst:46
+msgid "No answer within the time limit. The batch is split and retried."
+msgstr ""
+
+#: ../../troubleshooting.rst:48
+msgid ""
+"Details, including the offending response, go to "
+"``~/.papermeister/logs/biblio_YYYYMMDD.log``."
+msgstr ""
+
+#: ../../troubleshooting.rst:52
+msgid "Zotero write-back fails with 403"
+msgstr ""
+
+#: ../../troubleshooting.rst:54
+msgid ""
+"The API key is read-only. Either issue a key with write permission on the"
+" library, or turn write-back off in Settings → Zotero and keep changes "
+"local."
+msgstr ""
+
+#: ../../troubleshooting.rst:58
+msgid "Zotero rejects an update with 400"
+msgstr ""
+
+#: ../../troubleshooting.rst:60
+msgid ""
+"Usually a field that does not exist on that item type — for example a "
+"journal name on a ``bookSection``. The app maps journal-like fields per "
+"item type and will say which field was refused. For a standalone PDF with"
+" no parent item, promote it to a real item first."
+msgstr ""
+
+#: ../../troubleshooting.rst:66
+msgid "A PDF will not download"
+msgstr ""
+
+#: ../../troubleshooting.rst:68
+msgid ""
+"If the attachment record exists but the file is not in Zotero's storage, "
+"the download returns 404 and the paper is marked failed. Check whether "
+"the file opens in Zotero itself; if it only exists on your local disk, it"
+" needs to be uploaded to Zotero first."
+msgstr ""
+
+#: ../../troubleshooting.rst:74
+msgid "The frozen app fails to start on Windows"
+msgstr ""
+
+#: ../../troubleshooting.rst:76
+msgid ""
+"If you built it yourself: build in a clean virtual environment with conda"
+" **off** the PATH. Building inside a conda shell mixes conda's Qt "
+"libraries into the bundle, and the frozen app then dies with a missing-"
+"procedure error. ``build_desktop_clean.bat`` does this correctly."
+msgstr ""
+
+#: ../../troubleshooting.rst:82
+msgid "The database is damaged"
+msgstr ""
+
+#: ../../troubleshooting.rst:84
+msgid ""
+"Do not run scripts against the live database from WSL while the Windows "
+"app is writing to it — the two disagree about file locking and can "
+"desynchronise an index."
+msgstr ""
+
+#: ../../troubleshooting.rst:88
+msgid ""
+"Recovery is usually cheap, because index damage does not lose rows: copy "
+"the database somewhere local, ``REINDEX`` the affected index, and confirm"
+" with ``PRAGMA integrity_check``. Take a backup with ``VACUUM INTO`` "
+"before any bulk operation."
+msgstr ""
+
+#: ../../troubleshooting.rst:94
+msgid "Search finds nothing for a word I can see"
+msgstr ""
+
+#: ../../troubleshooting.rst:96
+msgid ""
+"Check the **Text** tab: if the page is blank there, OCR did not capture "
+"it and the paper needs reprocessing. Search reads the stored text, not "
+"the PDF."
+msgstr ""
+

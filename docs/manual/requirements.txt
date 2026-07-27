@@ -1,0 +1,9 @@
+# Sphinx documentation requirements (docs/manual only — not app dependencies).
+sphinx>=8.0.0
+sphinx_rtd_theme>=3.0.0
+sphinx-intl>=2.3.0
+sphinx-autobuild>=2024.10.3
+
+# Only so changelog.rst can include the repository-root CHANGELOG.md, which
+# stays the single source of truth for release notes.
+myst-parser>=4.0.0

@@ -1,0 +1,144 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, Jikhan Jung
+# This file is distributed under the same license as the PaperMeister
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PaperMeister 0.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-27 19:14+0900\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: ko\n"
+"Language-Team: ko <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../../../CHANGELOG.md:1 ../../changelog.rst:2
+msgid "Changelog"
+msgstr ""
+
+#: ../../changelog.rst:4
+msgid ""
+"Release notes are maintained in ``CHANGELOG.md`` at the repository root, "
+"which is also what the GitHub release pages quote. It is included here "
+"rather than copied, so the two can never drift apart."
+msgstr ""
+
+#: ../../../../CHANGELOG.md:3
+msgid "All notable changes to this project will be documented in this file."
+msgstr ""
+
+#: ../../../../CHANGELOG.md:5
+msgid ""
+"The format is based on [Keep a "
+"Changelog](https://keepachangelog.com/en/1.0.0/), and this project "
+"adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)."
+msgstr ""
+
+#: ../../../../CHANGELOG.md:11
+msgid "[0.1.1] - 2026-07-24"
+msgstr ""
+
+#: ../../../../CHANGELOG.md:13
+msgid ""
+"Citation-network visualization, installers for all three desktop "
+"platforms, and dependency-security hardening."
+msgstr ""
+
+#: ../../../../CHANGELOG.md:16 ../../../../CHANGELOG.md:44
+msgid "Added"
+msgstr ""
+
+#: ../../../../CHANGELOG.md:17
+msgid ""
+"**Citation network graph.** Right-click a paper → an interactive ego-"
+"network of its citations: the papers it cites, the papers that cite it, "
+"and the external works it cites that aren't in the library. Node fill "
+"shows the direction relative to the focused paper; the border marks "
+"whether a paper is held with a PDF, held without one, or external (cited-"
+"only). Click a node to re-center and walk the graph."
+msgstr ""
+
+#: ../../../../CHANGELOG.md:23
+msgid ""
+"**Installers for every platform.** In addition to the Windows portable "
+"zip, releases now include a Windows installer (Inno Setup), a Linux "
+"**AppImage**, and a macOS **DMG** — all built and published by CI on a "
+"tag."
+msgstr ""
+
+#: ../../../../CHANGELOG.md:26
+msgid ""
+"**Global crash handler.** An unexpected error now surfaces as a dialog "
+"and is logged, instead of silently closing the window."
+msgstr ""
+
+#: ../../../../CHANGELOG.md:29
+msgid "Changed"
+msgstr ""
+
+#: ../../../../CHANGELOG.md:30
+msgid ""
+"The references (Qwen) read timeout was raised from 240 s to 360 s and "
+"made adjustable via a preference, so an occasional busy-GPU spike no "
+"longer aborts a batch."
+msgstr ""
+
+#: ../../../../CHANGELOG.md:34
+msgid "Security"
+msgstr ""
+
+#: ../../../../CHANGELOG.md:35
+msgid ""
+"Removed the unused `python-dotenv` dependency and updated Pillow (→ 12.3)"
+" and requests (→ 2.33) to versions without known advisories; CI now runs "
+"`pip-audit` on every push and weekly."
+msgstr ""
+
+#: ../../../../CHANGELOG.md:40
+msgid "[0.1.0] - 2026-07-23"
+msgstr ""
+
+#: ../../../../CHANGELOG.md:42
+msgid "Initial tagged release of the PaperMeister desktop app."
+msgstr ""
+
+#: ../../../../CHANGELOG.md:45
+msgid ""
+"Turn a PDF paper collection into a searchable knowledge base: PDF library"
+" with Zotero sync, OCR (RunPod / Chandra2), LLM bibliographic extraction,"
+" and full-text (FTS5) search with title-boosted ranking and match "
+"highlighting."
+msgstr ""
+
+#: ../../../../CHANGELOG.md:48
+msgid ""
+"**References & citation network.** Parse each paper's reference list, "
+"resolve citations to held papers, and normalize external cited works into"
+" canonical nodes — the foundation of the citation network."
+msgstr ""
+
+#: ../../../../CHANGELOG.md:51
+msgid ""
+"**Server-outage resilience.** References / biblio / OCR batches pause and"
+" auto-resume when the LLM or OCR server goes down, instead of failing "
+"every remaining item."
+msgstr ""
+
+#: ../../../../CHANGELOG.md:54
+msgid "CJK author names shown surname-first joined (정직한) in the paper list."
+msgstr ""
+
+#: ../../../../CHANGELOG.md:55
+msgid ""
+"Windows portable build (PyInstaller) produced by CI, with a cross-"
+"platform test suite (ruff + mypy + pytest on Linux and Windows)."
+msgstr ""
+

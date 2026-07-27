@@ -1,0 +1,145 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, Jikhan Jung
+# This file is distributed under the same license as the PaperMeister
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PaperMeister 0.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-27 19:14+0900\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: ko\n"
+"Language-Team: ko <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../index.rst:13
+msgid "Contents:"
+msgstr ""
+
+#: ../../index.rst:2
+msgid "PaperMeister Documentation"
+msgstr ""
+
+#: ../../index.rst:4
+msgid ""
+"PaperMeister turns a collection of academic PDFs into a searchable, "
+"linked knowledge base. It reads your papers with OCR, extracts their "
+"bibliographic metadata and reference lists, and connects them into a "
+"citation network — while keeping Zotero as the library you already "
+"curate."
+msgstr ""
+
+#: ../../index.rst:9
+msgid ""
+"The guiding principle is **store first, understand later**: the OCR full "
+"text is the source of truth, and everything else — metadata, references, "
+"citation links — is a derived layer that can be regenerated at any time."
+msgstr ""
+
+#: ../../index.rst:26
+msgid "Features"
+msgstr ""
+
+#: ../../index.rst:28
+msgid ""
+"**Zotero as the library** — collections, items and attachments sync both "
+"ways; extracted metadata can be written back to Zotero, or kept local"
+msgstr ""
+
+#: ../../index.rst:30
+msgid ""
+"**OCR everything** — every PDF goes through OCR regardless of whether it "
+"has a text layer, so the corpus is uniform. Raw OCR JSON is cached and "
+"reusable"
+msgstr ""
+
+#: ../../index.rst:32
+msgid ""
+"**Bibliographic extraction** — an LLM reads the first pages and proposes "
+"title, authors, year, journal, volume/issue/pages and DOI, stored "
+"separately from your curated data so nothing is overwritten silently"
+msgstr ""
+
+#: ../../index.rst:35
+msgid ""
+"**Reference lists and a citation network** — reference sections are "
+"parsed into structured entries, matched against papers you hold, and de-"
+"duplicated into canonical nodes for the works you don't"
+msgstr ""
+
+#: ../../index.rst:38
+msgid ""
+"**Full-text search** — SQLite FTS5 over every page, with title/author "
+"boosting and match highlighting"
+msgstr ""
+
+#: ../../index.rst:40
+msgid ""
+"**Local folders too** — a directory of PDFs can be imported alongside "
+"Zotero"
+msgstr ""
+
+#: ../../index.rst:43
+msgid "Where things live"
+msgstr ""
+
+#: ../../index.rst:49
+msgid "Path"
+msgstr ""
+
+#: ../../index.rst:50
+msgid "Contents"
+msgstr ""
+
+#: ../../index.rst:51
+msgid "``~/.papermeister/papermeister.db``"
+msgstr ""
+
+#: ../../index.rst:52
+msgid "SQLite database (papers, authors, passages, references)"
+msgstr ""
+
+#: ../../index.rst:53
+msgid "``~/.papermeister/ocr_json/``"
+msgstr ""
+
+#: ../../index.rst:54
+msgid "Cached OCR output, one file per PDF"
+msgstr ""
+
+#: ../../index.rst:55
+msgid "``~/.papermeister/preferences.json``"
+msgstr ""
+
+#: ../../index.rst:56
+msgid "Credentials and settings"
+msgstr ""
+
+#: ../../index.rst:57
+msgid "``~/.papermeister/logs/``"
+msgstr ""
+
+#: ../../index.rst:58
+msgid "OCR, sync and extraction logs"
+msgstr ""
+
+#: ../../index.rst:61
+msgid "Indices and tables"
+msgstr ""
+
+#: ../../index.rst:63
+msgid ":ref:`genindex`"
+msgstr ""
+
+#: ../../index.rst:64
+msgid ":ref:`search`"
+msgstr ""
+
