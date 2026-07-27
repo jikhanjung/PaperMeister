@@ -925,7 +925,7 @@ def _no_skips() -> dict:
     all usually means the model was handed text that isn't a bibliography and
     answered in prose. Only the second one can mean "this paper has none".
     """
-    return {'timeout': 0, 'bad_json': 0, 'no_array': 0, 'refs_lost': 0}
+    return {'timeout': 0, 'bad_json': 0, 'no_array': 0, 'entries_lost': 0}
 
 
 def describe_skips(skipped: dict) -> str:
@@ -942,8 +942,8 @@ def describe_skips(skipped: dict) -> str:
         parts.append(f"timeout x{skipped['timeout']}")
     if not parts:
         return ''
-    if skipped.get('refs_lost'):
-        parts.append(f"{skipped['refs_lost']} refs lost")
+    if skipped.get('entries_lost'):
+        parts.append(f"{skipped['entries_lost']} entries lost")
     return ', '.join(parts)
 
 
@@ -967,7 +967,7 @@ def extract_references_llm(
         floor, or malformed JSON): the returned entries are PARTIAL and worth
         saving, but the caller should leave the paper unchecked so a later run
         can re-parse it. `skipped` breaks that down —
-        `{'timeout': n, 'bad_json': n, 'refs_lost': n}` — so the caller can say
+        `{'timeout': n, 'bad_json': n, 'entries_lost': n}` — so the caller can say
         WHY a paper came back partial instead of just that it did; it is all
         zeros when `complete` is True. Raises ValueError only when the OCR text
         itself is missing (genuine error — retry after OCR), or RuntimeError on
@@ -1061,7 +1061,7 @@ def extract_references_llm(
                                len(batch), len(batch))
                 complete = False
                 skipped['timeout'] += 1
-                skipped['refs_lost'] += len(batch)
+                skipped['entries_lost'] += len(batch)
                 i += len(batch)
                 continue
             dt = time.monotonic() - t0
@@ -1112,7 +1112,7 @@ def extract_references_llm(
                            len(batch), str(ex)[:60], len(batch))
             complete = False
             skipped[kind] += 1
-            skipped['refs_lost'] += len(batch)
+            skipped['entries_lost'] += len(batch)
             i += len(batch)
             continue
         # We split the entries ourselves, so attach the original text as `raw`

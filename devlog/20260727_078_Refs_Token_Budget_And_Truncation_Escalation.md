@@ -78,6 +78,29 @@ mt = min(8192, max(len(batch) * 256, in_chars // 2) + 1024)   # → 2322
 
 `ruff` clean, `mypy`(게이트 3모듈) clean, 전체 **97 passed**, headless desktop import OK.
 
+## 라이브 검증 — 같은 논문이 통과했다
+
+재기동 후 첫 논문이 바로 그 DETR이었다.
+
+```
+before: [1/6024] End-to-End Object Detection ... — 34 refs PARTIAL (bad JSON x1, 3 refs lost)
+after:  [1/6023] End-to-End Object Detection ... — 53 references, 6 in library
+```
+
+**+19개.** "3 refs lost"로 보고됐던 손실이 실제로는 레퍼런스 19개였다. 잃은 배치의
+*엔트리* 3개가 각각 번호 분할이 안 된 blob이라 레퍼런스를 6~7개씩 품고 있었던 것 —
+절단된 응답 6,544자 ≈ 레퍼런스 22개 분량과도 맞는다. **blob 가설이 실측으로 확정**됐고,
+동시에 토큰 예산이 왜 그렇게까지 빗나갔는지도 설명된다.
+
+### 그래서 지표 이름을 고쳤다: `refs_lost` → `entries_lost`
+
+077에서 넣은 `refs_lost`는 실제로 **배치 엔트리 수**를 센다. 위 사례에서 "3 refs lost"는
+진짜로는 19개 손실이었으니 **심각도를 6배 축소 보고**한 셈이다. PARTIAL 로그를 보고
+대응 우선순위를 정하게 될 텐데 그 판단을 왜곡한다.
+
+표시도 `3 entries lost`로 바꿨다. 실제 손실 레퍼런스 수는 파싱을 못 했으니 **애초에 알 수
+없고**, 아는 척하는 것보다 "엔트리 3개(= 레퍼런스 몇 개인지는 미상)"가 정직하다.
+
 ## 관찰 메모
 
 같은 로그의 배처 거동이 건강하다: `1건 42.7s → 1건 5.5s → 2건 8.8s → 4건 14.4s →

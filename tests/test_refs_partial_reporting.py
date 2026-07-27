@@ -22,12 +22,12 @@ def test_describe_skips_is_empty_when_nothing_skipped():
 @pytest.mark.unit
 def test_describe_skips_names_the_cause_and_the_cost():
     assert biblio.describe_skips(
-        {'bad_json': 2, 'refs_lost': 17}) == 'bad JSON x2, 17 refs lost'
+        {'bad_json': 2, 'entries_lost': 17}) == 'bad JSON x2, 17 entries lost'
     assert biblio.describe_skips(
-        {'timeout': 1, 'refs_lost': 1}) == 'timeout x1, 1 refs lost'
+        {'timeout': 1, 'entries_lost': 1}) == 'timeout x1, 1 entries lost'
     assert biblio.describe_skips(
-        {'bad_json': 1, 'no_array': 1, 'timeout': 1, 'refs_lost': 4}
-    ) == 'bad JSON x1, no array x1, timeout x1, 4 refs lost'
+        {'bad_json': 1, 'no_array': 1, 'timeout': 1, 'entries_lost': 4}
+    ) == 'bad JSON x1, no array x1, timeout x1, 4 entries lost'
 
 
 @pytest.fixture
@@ -122,7 +122,7 @@ def test_prose_answer_on_a_found_section_stays_partial(one_batch_at_a_time, monk
     assert complete is False           # stays unchecked → retried
     assert skipped['no_array'] == 2    # batcher starts at 1 → one call per reference
     assert skipped['bad_json'] == 0 and skipped['timeout'] == 0
-    assert biblio.describe_skips(skipped) == 'no array x2, 2 refs lost'
+    assert biblio.describe_skips(skipped) == 'no array x2, 2 entries lost'
 
 
 @pytest.mark.unit
