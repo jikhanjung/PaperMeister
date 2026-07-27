@@ -280,3 +280,44 @@ def test_read_timeout_default_and_override(one_batch_at_a_time, monkeypatch):
                                            'qwen_read_timeout': 900}.get(k, d))
     biblio.extract_references_llm('h')
     assert seen[0] == 900
+
+
+@pytest.mark.unit
+def test_a_chars_capped_batch_shrinks_on_the_first_retry(monkeypatch):
+    """The observed waste, reproduced: a batch capped by MAX_CHARS is shorter
+    than the controller's size, so backing off in BACKOFF_STEP increments from
+    the controller's own number rebuilds the identical batch until it finally
+    drops below the batch length. Live, that walked 20 -> 17 -> 14 -> 11 -> 8 ->
+    5 while the batch stayed at 4 entries — five identical 9,517-token calls,
+    369s each. The retry must shorten the batch immediately instead.
+    """
+    monkeypatch.setattr(biblio, 'load_ocr_pages', lambda h: [{'markdown': 'x'}])
+    monkeypatch.setattr(biblio, 'extract_references_block', lambda p: ('block', 'high'))
+    # Five entries; the first four fill MAX_CHARS, so the batch caps at 4 no
+    # matter how high the controller sits.
+    big = 'x' * (biblio._AdaptiveBatcher.MAX_CHARS // 4)
+    monkeypatch.setattr(biblio, 'split_reference_entries',
+                        lambda b: [big] * 6)
+    monkeypatch.setattr(biblio, '_refs_batcher', biblio._AdaptiveBatcher(size=20))
+    monkeypatch.setattr('papermeister.preferences.get_pref',
+                        lambda k, d=None: 'http://server' if k == 'ocr_pod_url' else d)
+
+    sent = []
+
+    def fake(prompt, url, max_tokens=0, **k):
+        import requests
+        n = prompt.count(big)
+        sent.append(n)
+        if n >= 3:                     # the chars-capped batch always times out
+            raise requests.exceptions.Timeout()
+        return '[{"title": "ok"}]'
+
+    monkeypatch.setattr(biblio, '_call_qwen', fake)
+
+    biblio.extract_references_llm('h')
+
+    # The controller starts at 20 and the batch caps well below that, so the
+    # old code retried the same size once per BACKOFF_STEP on the way down.
+    assert max(sent) >= 3                      # it really did hit the cap
+    assert sent.count(max(sent)) == 1          # attempted once, not repeatedly
+    assert min(sent) < max(sent)               # and the retry was smaller
