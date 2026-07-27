@@ -668,7 +668,9 @@ class ProcessWindow(QWidget):
         self.raise_()
 
     def _log_message(self, msg, color=None):
-        ts = datetime.now().strftime('%H:%M:%S')
+        # Full date: these batches routinely run past midnight for days, so a
+        # bare clock time makes a pasted log ambiguous about which day it is.
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         if color:
             self.log.append(f'<span style="color:{color}">[{ts}] {msg}</span>')
         else:

@@ -123,5 +123,7 @@ class ScanWindow(QWidget):
         self.close_btn.setEnabled(True)
 
     def _log(self, msg: str):
-        ts = datetime.now().strftime('%H:%M:%S')
+        # Full date: these batches routinely run past midnight for days, so a
+        # bare clock time makes a pasted log ambiguous about which day it is.
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         self.log.append(f'[{ts}] {msg}')
