@@ -260,3 +260,23 @@ def test_shrink_below_forces_a_strictly_smaller_batch():
     b = biblio._AdaptiveBatcher(size=8)
     b.shrink_below(2)                 # the batch that failed held 2 entries
     assert b.size < 2
+
+
+@pytest.mark.unit
+def test_read_timeout_default_and_override(one_batch_at_a_time, monkeypatch):
+    """The cutoff must be generous enough not to discard work the server
+    finished (369.4s answers were being thrown away at 360s), and still be
+    overridable per install."""
+    seen = []
+    monkeypatch.setattr(biblio, '_call_qwen',
+                        lambda *a, **k: seen.append(k.get('read_timeout')) or '[]')
+
+    biblio.extract_references_llm('h')
+    assert seen[0] == biblio._REFS_READ_TIMEOUT >= 480
+
+    seen.clear()
+    monkeypatch.setattr('papermeister.preferences.get_pref',
+                        lambda k, d=None: {'ocr_pod_url': 'http://server',
+                                           'qwen_read_timeout': 900}.get(k, d))
+    biblio.extract_references_llm('h')
+    assert seen[0] == 900

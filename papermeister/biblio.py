@@ -964,6 +964,18 @@ def _chunk_entries(entries: list, max_chars: int = 4500,
 # wrong estimate plus a rare retry at this ceiling, not a bigger default.
 _MT_CEILING = 8192
 
+# Hard per-request cutoff for a references call, with generous headroom over the
+# batcher's ~130s soft ceiling so a slow batch on a busy GPU finishes instead of
+# being abandoned. Overridable with the `qwen_read_timeout` preference.
+#
+# Raised from 360s on live evidence: one oversized entry was answered by the
+# server in 369.4s — nine seconds past the cutoff — so the completed work was
+# thrown away, four times in a row. Being generous here got cheaper at the same
+# time, because a batch that cannot be split is now attempted once instead of
+# being re-sent until the controller reaches its floor: worst case per batch went
+# from 4 x 369s to a single wait.
+_REFS_READ_TIMEOUT = 480
+
 
 def _no_skips() -> dict:
     """Zeroed skip tally — the shape `extract_references_llm` always returns.
@@ -1038,19 +1050,17 @@ def extract_references_llm(
 
     entries = split_reference_entries(block)
 
-    read_timeout = 360
+    read_timeout = _REFS_READ_TIMEOUT
     if backend == 'qwen':
         from .preferences import get_pref
         url = base_url or get_pref('ocr_pod_url', '')
         if not url:
             raise RuntimeError('Server URL not configured in Preferences')
-        # Hard per-request cutoff. Generous headroom over the batcher's ~130s
-        # soft ceiling so an occasional slow batch (busy GPU) completes instead
-        # of hard-timing-out then shrink-retrying. Tunable via preferences.
         try:
-            read_timeout = int(get_pref('qwen_read_timeout', 360) or 360)
+            read_timeout = int(get_pref('qwen_read_timeout', _REFS_READ_TIMEOUT)
+                               or _REFS_READ_TIMEOUT)
         except (TypeError, ValueError):
-            read_timeout = 360
+            read_timeout = _REFS_READ_TIMEOUT
 
     import requests as _req
     total = len(entries)
