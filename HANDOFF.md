@@ -207,6 +207,14 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 
 ## 최근 세션 요약
 
+**2026-07-27 (세션 52, 이어서)** — **Modan2/CTHarvester 프로세스 정렬** — [devlog 080](./devlog/20260727_080_CI_Docs_Parity_With_Sibling_Repos.md)
+- 사용자 요청: 두 형제 리포의 테스트·CI·릴리스 프로세스를 충실히 따를 것 + 매뉴얼도 만들 것. 073에서 한 번 맞춘 뒤 벌어진 **격차 차분** 작업
+- **CI 추가** (`bdcd3d2`): `dependabot.yml`(pip+actions 주간) / `dependabot-lock-refresh.yml`(requirements 변경 PR에서 lock 자동 재생성 → lock-check 통과) / `manual-release.yml`(workflow_dispatch 릴리스, 프리릴리스·재컷용, 커밋수 build number 일관) / **커버리지 최초 측정 19.6% + floor 18% ratchet**(Linux leg, `papermeister`+`desktop` 스코프, coverage.xml 아티팩트) / C901 복잡도 리포트(비게이팅)
+  - **P15 판단 뒤집음**: Dependabot을 "1인 도구 과잉"으로 뺐었는데, 오늘 그 부재로 pytz lock 드리프트가 CI를 red로 만듦(074) → 채택. Modan2와 달리 우리는 `--universal` lock 2개라 워크플로 조정
+  - **미채택(근거 기록)**: `test-full.yml`(전체 111개가 2초라 분리할 느린 테스트 없음, 주간 스케줄은 security/codeql이 이미 담당) / `ruff format --check`(대량 format 커밋 선행 필요, P15부터 보류 중)
+- **Sphinx 매뉴얼 + Pages 배포** (`6a0989e`): `docs/manual/`(index/installation/quick_start/user_guide/faq/troubleshooting/developer_guide/changelog) + `docs.yml`(en/ko 빌드 → Pages). **내용은 새로 작성** — troubleshooting은 이 프로젝트가 실제 겪은 장애(502/500 크래시 루프, PARTIAL 사유 읽기, Zotero 403/400, conda DLL, WSL 라이브 DB 인덱스 손상)로 구성. `conf.py`가 `version.py`에서 버전 읽음 + `changelog.rst`가 루트 CHANGELOG.md include → **둘 다 single-source**. 한국어는 sphinx-intl 스캐폴딩(미번역 시 영어 폴백이라 ko 빌드도 완전), en/ko 로컬 빌드 확인
+  - **후속**: ko `.po` 번역 / **GitHub 저장소 설정에서 Pages source를 "GitHub Actions"로 지정 필요**(안 하면 첫 배포 실패) / `LOCK_REFRESH_TOKEN` 시크릿(선택)
+
 **2026-07-27 (세션 52)** — 상태 점검 + CI 그린 복구 — [devlog 074](./devlog/20260727_074_Lock_Check_Pin_Preference_Fix.md)
 - 상태 점검: main clean, `pytest` 81 passed, v0.1.1 릴리스 완료. **본체로 남은 건 references 추출 완주** (마지막 실측 1,733/9,889편, 17.5%). 라이브 DB는 오늘도 쓰이는 중 — WSL에서 read-only 조회는 WAL/NTFS로 `disk I/O error`라 현재 수치 미확인, Windows에서 `scripts/refs_progress.py`로 볼 것
 - **`make lock-check`가 upstream 릴리스마다 red 되던 문제 수정**: `lock`은 기존 lock 파일을 핀 선호로 읽는데 `lock-check`는 빈 temp에 컴파일해 전부 fresh 해석 → pytz가 7/25에 2026.3.post1을 내자 소스 변경 0인데 실패. temp를 커밋된 lock으로 seed해 양쪽 해석 조건을 일치시킴 + 의도적 업그레이드용 `make lock-upgrade` 분리. **lock 파일 자체는 stale하지 않아 손대지 않음**. 검증: lock-check 통과 + `tabulate` 임시 추가 시 정상 실패(게이트 살아있음)
