@@ -22,38 +22,92 @@ def test_describe_skips_is_empty_when_nothing_skipped():
 @pytest.mark.unit
 def test_describe_skips_names_the_cause_and_the_cost():
     assert biblio.describe_skips(
-        {'bad_json': 2, 'timeout': 0, 'refs_lost': 17}) == 'bad JSON x2, 17 refs lost'
+        {'bad_json': 2, 'refs_lost': 17}) == 'bad JSON x2, 17 refs lost'
     assert biblio.describe_skips(
-        {'bad_json': 0, 'timeout': 1, 'refs_lost': 1}) == 'timeout x1, 1 refs lost'
+        {'timeout': 1, 'refs_lost': 1}) == 'timeout x1, 1 refs lost'
     assert biblio.describe_skips(
-        {'bad_json': 1, 'timeout': 1, 'refs_lost': 4}
-    ) == 'bad JSON x1, timeout x1, 4 refs lost'
+        {'bad_json': 1, 'no_array': 1, 'timeout': 1, 'refs_lost': 4}
+    ) == 'bad JSON x1, no array x1, timeout x1, 4 refs lost'
 
 
 @pytest.fixture
 def one_batch_at_a_time(monkeypatch):
-    """Two references, a fresh batcher (starts at 1), and a stubbed server."""
+    """Two references, a fresh batcher (starts at 1), and a stubbed server.
+
+    `confidence` is settable because it decides whether an unparseable answer
+    means "this failed" or "this document has no bibliography".
+    """
     monkeypatch.setattr(biblio, 'load_ocr_pages', lambda h: [{'markdown': 'x'}])
-    monkeypatch.setattr(biblio, 'extract_references_block', lambda p: ('block', 'high'))
     monkeypatch.setattr(biblio, 'split_reference_entries', lambda b: ['ref one', 'ref two'])
     monkeypatch.setattr(biblio, '_refs_batcher', biblio._AdaptiveBatcher())
     monkeypatch.setattr('papermeister.preferences.get_pref',
                         lambda k, d=None: 'http://server' if k == 'ocr_pod_url' else d)
 
+    def set_confidence(confidence):
+        monkeypatch.setattr(biblio, 'extract_references_block',
+                            lambda p: ('block', confidence))
+
+    set_confidence('high')
+    return set_confidence
+
 
 @pytest.mark.unit
-def test_unparseable_response_is_counted_as_bad_json(one_batch_at_a_time, monkeypatch):
-    """A 200 carrying prose instead of a JSON array: partial, attributed, counted."""
+def test_truncated_array_is_bad_json_not_a_missing_one(one_batch_at_a_time, monkeypatch):
+    """A cut-off array is a real failure — the response was lost, so retry."""
+    monkeypatch.setattr(biblio, '_call_qwen', lambda *a, **k: '[{"title": "A pap')
+
+    _, _, _, complete, skipped = biblio.extract_references_llm('h')
+
+    assert complete is False
+    assert skipped['bad_json'] == 2 and skipped['no_array'] == 0
+
+
+@pytest.mark.unit
+def test_prose_answer_on_a_found_section_stays_partial(one_batch_at_a_time, monkeypatch):
+    """We DID find a references heading, so prose back is a failure, not proof
+    that the paper has no bibliography."""
     monkeypatch.setattr(biblio, '_call_qwen', lambda *a, **k: 'I could not find any')
 
     entries, _, _, complete, skipped = biblio.extract_references_llm('h')
 
     assert entries == []
-    assert complete is False           # so the paper stays unchecked and is retried
-    assert skipped['bad_json'] == 2    # batcher starts at 1 → one call per reference
-    assert skipped['timeout'] == 0
-    assert skipped['refs_lost'] == 2
-    assert biblio.describe_skips(skipped) == 'bad JSON x2, 2 refs lost'
+    assert complete is False           # stays unchecked → retried
+    assert skipped['no_array'] == 2    # batcher starts at 1 → one call per reference
+    assert skipped['bad_json'] == 0 and skipped['timeout'] == 0
+    assert biblio.describe_skips(skipped) == 'no array x2, 2 refs lost'
+
+
+@pytest.mark.unit
+def test_fallback_block_with_no_array_is_checked_empty(one_batch_at_a_time, monkeypatch):
+    """The letter / abstract case: no references heading was found, the fallback
+    block isn't a bibliography, and the model says so. That is "checked, none" —
+    marking it PARTIAL would put the paper at the head of every future batch
+    forever, failing identically each time."""
+    one_batch_at_a_time('low')
+    monkeypatch.setattr(biblio, '_call_qwen', lambda *a, **k: 'There are no references')
+
+    entries, _, _, complete, skipped = biblio.extract_references_llm('h')
+
+    assert entries == []
+    assert complete is True            # → caller stamps references_checked
+    assert skipped == biblio._no_skips()
+
+
+@pytest.mark.unit
+def test_fallback_block_that_timed_out_is_not_called_empty(one_batch_at_a_time,
+                                                           monkeypatch):
+    """A fallback block we never got an answer for proves nothing about whether
+    the paper has references — that must stay retryable."""
+    import requests
+
+    one_batch_at_a_time('low')
+    monkeypatch.setattr(biblio, '_call_qwen',
+                        lambda *a, **k: (_ for _ in ()).throw(requests.exceptions.Timeout()))
+
+    _, _, _, complete, skipped = biblio.extract_references_llm('h')
+
+    assert complete is False
+    assert skipped['timeout'] > 0
 
 
 @pytest.mark.unit

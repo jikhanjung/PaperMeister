@@ -789,6 +789,9 @@ _REFS_PROMPT = (
     "- `year`: the publication year only.\n"
     "- Return one object per input entry; if an entry is not a real reference, "
     "use type \"unknown\" with empty fields (do not drop it).\n"
+    "- If the text contains NO bibliographic references at all — it is body "
+    "prose, a letter, an abstract, acknowledgements, or similar — output an "
+    "empty array [] and nothing else. Never answer in prose.\n"
     "- Output ONLY the JSON array.\n\n"
 )
 
@@ -907,8 +910,14 @@ def _chunk_entries(entries: list, max_chars: int = 4500,
 
 
 def _no_skips() -> dict:
-    """Zeroed skip tally — the shape `extract_references_llm` always returns."""
-    return {'timeout': 0, 'bad_json': 0, 'refs_lost': 0}
+    """Zeroed skip tally — the shape `extract_references_llm` always returns.
+
+    `bad_json` and `no_array` are deliberately separate: a truncated array means
+    the response was cut off (a real failure worth retrying), while no array at
+    all usually means the model was handed text that isn't a bibliography and
+    answered in prose. Only the second one can mean "this paper has none".
+    """
+    return {'timeout': 0, 'bad_json': 0, 'no_array': 0, 'refs_lost': 0}
 
 
 def describe_skips(skipped: dict) -> str:
@@ -919,6 +928,8 @@ def describe_skips(skipped: dict) -> str:
     parts = []
     if skipped.get('bad_json'):
         parts.append(f"bad JSON x{skipped['bad_json']}")
+    if skipped.get('no_array'):
+        parts.append(f"no array x{skipped['no_array']}")
     if skipped.get('timeout'):
         parts.append(f"timeout x{skipped['timeout']}")
     if not parts:
@@ -987,6 +998,7 @@ def extract_references_llm(
     parsed = []
     complete = True   # flips False if any batch is skipped (timeout / bad JSON)
     skipped = _no_skips()
+    tag = f'{label} ' if label else ''
     i = 0
     while i < total:
         # Take up to the current adaptive batch size, also bounded by chars.
@@ -1000,7 +1012,6 @@ def extract_references_llm(
             batch.append(entries[i + len(batch)])
 
         prompt = _REFS_PROMPT + '--- REFERENCES TEXT ---\n' + '\n\n'.join(batch)
-        tag = f'{label} ' if label else ''
         mt = 0   # qwen-only token cap; 0 on the claude path (logged on bad JSON)
         if backend == 'qwen':
             # Scale by INPUT size, not just entry count: a single un-split blob
@@ -1042,13 +1053,17 @@ def extract_references_llm(
 
         try:
             items = [it for it in _parse_llm_json_array(raw) if isinstance(it, dict)]
-        except (json.JSONDecodeError, ValueError) as ex:
-            # The model returned malformed / truncated JSON for this batch. Skip
-            # just this batch — keep the references parsed from the other batches
-            # — instead of losing the whole paper. Flag the result incomplete.
-            logger.warning('%srefs %d/%d: bad JSON for batch %d (%s) → skipping %d refs',
-                           tag, i + len(batch), total, len(batch),
-                           str(ex)[:60], len(batch))
+        except ValueError as ex:
+            # JSONDecodeError subclasses ValueError, so test for it explicitly
+            # rather than relying on except-clause order.
+            kind = 'bad_json' if isinstance(ex, json.JSONDecodeError) else 'no_array'
+            # The model returned unusable output for this batch. Skip just this
+            # batch — keep the references parsed from the other batches —
+            # instead of losing the whole paper. Flag the result incomplete.
+            logger.warning('%srefs %d/%d: %s for batch %d (%s) → skipping %d refs',
+                           tag, i + len(batch), total,
+                           'bad JSON' if kind == 'bad_json' else 'no JSON array',
+                           len(batch), str(ex)[:60], len(batch))
             # The exception message alone can't distinguish "the model wandered
             # off" from "the response was cut mid-array" (truncation is the
             # working hypothesis). Head+tail of the actual body settles it: a cut
@@ -1057,7 +1072,7 @@ def extract_references_llm(
                          '  head: %r\n  tail: %r',
                          tag, len(raw), mt, raw[:400], raw[-400:])
             complete = False
-            skipped['bad_json'] += 1
+            skipped[kind] += 1
             skipped['refs_lost'] += len(batch)
             i += len(batch)
             continue
@@ -1071,6 +1086,28 @@ def extract_references_llm(
             item.setdefault('parse_confidence', confidence)
             parsed.append(item)
         i += len(batch)
+
+    # A 'low' confidence block is the last-2-pages fallback: no references
+    # heading was ever found, so what we sent may not be a bibliography at all.
+    # If nothing parsed AND every skip was "the model didn't return an array"
+    # (no timeout, no truncation), that is the document telling us it has no
+    # references section — a letter, an abstract, supplementary material. That's
+    # a valid "checked, none" outcome, not a failure worth retrying.
+    #
+    # This matters beyond tidiness: a PARTIAL paper keeps references_checked
+    # unset and _refs_targets walks paper.desc(), so such a paper would lead
+    # every future batch forever, failing identically each time.
+    #
+    # Conservative on purpose — a high-confidence block (we DID find a
+    # references section) that won't parse is a real failure, and so is a
+    # partially-parsed fallback block. Both stay PARTIAL.
+    if (not complete and confidence == 'low' and not parsed
+            and skipped['no_array'] and not skipped['timeout']
+            and not skipped['bad_json']):
+        logger.info('%srefs: fallback block returned no array in %d batch(es) and '
+                    'nothing parsed → treating as "no references section"',
+                    tag, skipped['no_array'])
+        return [], source, model_version, True, _no_skips()
 
     if not complete:
         logger.warning('%srefs done: PARTIAL — %s', tag, describe_skips(skipped))

@@ -219,7 +219,8 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
   - 가설(미확정, **근거 약화됨**): 생성 도중 vLLM 엔진이 죽으면 프록시가 **부분 응답을 200으로** 반환 → 잘린 JSON = B. 단 위 정정으로 "급증"이라는 설명할 현상 자체가 사라져, 서버 동작 변화보다 **그 논문들 고유 성질**(레퍼런스 블록 구조/언어/OCR 품질 — 목록에 독일어 대문자 제목, 합자 섞인 제목 등)이 더 유력. `max_tokens` 산식상 단순 토큰 초과로도 설명이 약함
   - ✅ **후속 구현 완료** — [devlog 077](./devlog/20260727_077_Biblio_Log_And_Partial_Attribution.md): (a) `biblio` 로거에 `ocr.py`와 같은 파일 핸들러(`~/.papermeister/logs/biblio.log`, DEBUG, 즉시 flush) (b) `extract_references_llm` 반환 4-tuple → **5-tuple**(`skipped={'timeout','bad_json','refs_lost'}`), 호출자 2곳(desktop 워커·`scripts/extract_references.py`) 갱신, `describe_skips()` 헬퍼 → 진행창이 `34 refs PARTIAL (bad JSON x2, 17 refs lost)`로 표시 (c) 파싱 실패 시 **응답 본문 head/tail 400자 + max_tokens를 DEBUG로 기록** — 잘린 응답인지 딴소리인지 구분용 (d) 두 스킵 로그 INFO→WARNING. `tests/test_refs_partial_reporting.py` 5케이스, **92 passed**
   - **재현 절차 불필요**: PARTIAL 논문이 다음 배치 선두에 다시 오므로, 로그 켠 채 다음 배치를 돌리면 바로 원인 확정됨. 데이터 유실은 없으나(unchecked로 남아 재파싱) 버려진 배치만큼 재작업이 쌓이는 중
-  - **미해결**: 재시도 give-up 조건 없음(076). 원인 확정 후 판단 — 구조적 파싱 불가면 give-up 필요, 서버 문제면 불필요
+  - ✅ **레퍼런스 없는 문서의 영구 PARTIAL 루프 수정**(077 §4): `0 refs PARTIAL` 관측(`SVP-Letter-to-Editors` 등, **88초/243초로 끝나 타임아웃일 수 없음**) → 원인은 **레퍼런스가 애초에 없는 문서**. 헤딩 미검출 → 마지막 2p fallback(산문) → 프롬프트에 "없으면 `[]`" 지시가 없어 모델이 산문 응답 → 파싱 실패 → PARTIAL → checked 안 찍혀 **매 배치 선두에 영구 재등장**(서버가 건강해도 영원히 수렴 안 함). 수정: (1) 프롬프트에 "참고문헌 없으면 빈 배열, 산문 금지" (2) `no_array`(배열 부재) vs `bad_json`(배열 절단) **분리 집계** — `JSONDecodeError`가 `ValueError` 서브클래스라 `isinstance`로 명시 판별 (3) **fallback(low) + 배열부재 + 파싱 0 + 타임아웃/절단 없음** 네 조건 모두 만족 시 `complete=True`(checked-empty). high-confidence 블록·부분 파싱·타임아웃은 전부 PARTIAL 유지(보수적)
+  - **미해결**: 일반적 재시도 give-up 카운터는 여전히 없음. 위 수정이 최대 원인을 제거하므로 새 로그로 잔류분 규모를 본 뒤 필요성 판단
 - 라이브러리 정리: `papermeister.db.corrupt-20260625` / `.pre-p13-backup` 삭제(사용자, ~9GB 회수)
 - 미반영이던 **devlog 073**(lockfile + CodeQL + 버전 일치 테스트, Modan2 CI 패리티)을 HANDOFF에 편입
 
