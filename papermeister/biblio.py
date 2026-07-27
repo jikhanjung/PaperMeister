@@ -909,6 +909,14 @@ def _chunk_entries(entries: list, max_chars: int = 4500,
     return chunks
 
 
+# Hard ceiling on a single references call's output budget. Deliberately NOT
+# raised while the vLLM engine is crashing: max_tokens feeds the server's KV
+# cache headroom, so a bigger ceiling on every call would add memory pressure
+# exactly where OOM is already suspected (devlog 075/076). The fix is a less
+# wrong estimate plus a rare retry at this ceiling, not a bigger default.
+_MT_CEILING = 8192
+
+
 def _no_skips() -> dict:
     """Zeroed skip tally — the shape `extract_references_llm` always returns.
 
@@ -999,6 +1007,9 @@ def extract_references_llm(
     complete = True   # flips False if any batch is skipped (timeout / bad JSON)
     skipped = _no_skips()
     tag = f'{label} ' if label else ''
+    # Position whose batch has already been retried at the token ceiling, so a
+    # second truncation there escalates to splitting instead of looping.
+    boost_at = -1
     i = 0
     while i < total:
         # Take up to the current adaptive batch size, also bounded by chars.
@@ -1017,8 +1028,17 @@ def extract_references_llm(
             # Scale by INPUT size, not just entry count: a single un-split blob
             # is one "entry" but yields many reference objects — sizing by count
             # alone (≈712) truncated the JSON ('Unterminated string').
+            #
+            # The coefficient is measured, not guessed. A truncation captured in
+            # biblio.log: 2,596 input chars, max_tokens 2,322, cut off after
+            # 6,544 chars of output. That is 2.8 chars/token for this JSON (it is
+            # punctuation-dense: {"family": ..., "given": ...}), and ~300 output
+            # chars ≈ 107 tokens per reference, matching the 80-130 tok/entry
+            # above. So output tokens run to roughly 0.87 x input chars — the old
+            # in_chars//2 budgeted barely half of what was needed.
             in_chars = sum(len(b) for b in batch)
-            mt = min(8192, max(len(batch) * 256, in_chars // 2) + 1024)
+            mt = (_MT_CEILING if i == boost_at
+                  else min(_MT_CEILING, max(len(batch) * 256, in_chars) + 1024))
             t0 = time.monotonic()
             try:
                 raw = _call_qwen(prompt, url, max_tokens=mt, read_timeout=read_timeout,
@@ -1057,20 +1077,39 @@ def extract_references_llm(
             # JSONDecodeError subclasses ValueError, so test for it explicitly
             # rather than relying on except-clause order.
             kind = 'bad_json' if isinstance(ex, json.JSONDecodeError) else 'no_array'
-            # The model returned unusable output for this batch. Skip just this
-            # batch — keep the references parsed from the other batches —
-            # instead of losing the whole paper. Flag the result incomplete.
+            # The exception message alone can't distinguish "the model wandered
+            # off" from "the response was cut mid-array". Head+tail of the actual
+            # body settles it: a cut response ends mid-token with no closing
+            # bracket. (Confirmed in the field — see the coefficient note above.)
+            logger.debug('%sbad JSON body (%d chars, max_tokens=%d)\n'
+                         '  head: %r\n  tail: %r',
+                         tag, len(raw), mt, raw[:400], raw[-400:])
+
+            # A truncated array means the budget was too small, and both the
+            # batching and the budget are deterministic in the input — so simply
+            # skipping would fail identically on every future run, leaving the
+            # paper PARTIAL forever. Escalate instead: first retry this same
+            # batch at the ceiling, then split it.
+            if kind == 'bad_json' and mt and i != boost_at and mt < _MT_CEILING:
+                boost_at = i
+                logger.warning('%srefs %d/%d: truncated at max_tokens=%d → retrying '
+                               'same batch at ceiling %d', tag, i + len(batch), total,
+                               mt, _MT_CEILING)
+                continue
+            if kind == 'bad_json' and _refs_batcher.size > _AdaptiveBatcher.MIN:
+                _refs_batcher.shrink()
+                logger.warning('%srefs %d/%d: still truncated at the ceiling → '
+                               'shrink to %d, retrying', tag, i + len(batch), total,
+                               _refs_batcher.size)
+                continue
+
+            # Out of moves: a single entry that won't fit even at the ceiling, or
+            # a non-array answer. Skip just this batch — keep what the other
+            # batches parsed — instead of losing the whole paper.
             logger.warning('%srefs %d/%d: %s for batch %d (%s) → skipping %d refs',
                            tag, i + len(batch), total,
                            'bad JSON' if kind == 'bad_json' else 'no JSON array',
                            len(batch), str(ex)[:60], len(batch))
-            # The exception message alone can't distinguish "the model wandered
-            # off" from "the response was cut mid-array" (truncation is the
-            # working hypothesis). Head+tail of the actual body settles it: a cut
-            # response ends mid-token with no closing bracket.
-            logger.debug('%sbad JSON body (%d chars, max_tokens=%d)\n'
-                         '  head: %r\n  tail: %r',
-                         tag, len(raw), mt, raw[:400], raw[-400:])
             complete = False
             skipped[kind] += 1
             skipped['refs_lost'] += len(batch)

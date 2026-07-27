@@ -63,6 +63,54 @@ def test_truncated_array_is_bad_json_not_a_missing_one(one_batch_at_a_time, monk
 
 
 @pytest.mark.unit
+def test_truncation_retries_the_same_batch_at_the_token_ceiling(one_batch_at_a_time,
+                                                                monkeypatch):
+    """Budget too small is recoverable: the same batch, more room. Skipping
+    instead would fail identically forever — batching and budget are both
+    deterministic in the input."""
+    seen = []
+
+    def fake(prompt, url, max_tokens=0, **k):
+        seen.append(max_tokens)
+        # Truncated while the budget is an estimate; fine once at the ceiling.
+        return '[{"title": "cut off' if max_tokens < biblio._MT_CEILING else '[{"t": 1}]'
+
+    monkeypatch.setattr(biblio, '_call_qwen', fake)
+
+    _, _, _, complete, skipped = biblio.extract_references_llm('h')
+
+    assert complete is True                      # recovered, nothing lost
+    assert skipped == biblio._no_skips()
+    assert biblio._MT_CEILING in seen            # escalated rather than skipping
+    assert seen[0] < biblio._MT_CEILING          # first attempt used the estimate
+
+
+@pytest.mark.unit
+def test_truncation_at_the_ceiling_splits_the_batch(monkeypatch):
+    """Still too big at the ceiling → shrink the batch. Only when that also
+    fails (a lone entry that cannot fit) is the batch finally dropped."""
+    monkeypatch.setattr(biblio, 'load_ocr_pages', lambda h: [{'markdown': 'x'}])
+    monkeypatch.setattr(biblio, 'extract_references_block', lambda p: ('block', 'high'))
+    monkeypatch.setattr(biblio, 'split_reference_entries', lambda b: ['a', 'b', 'c', 'd'])
+    monkeypatch.setattr(biblio, '_refs_batcher', biblio._AdaptiveBatcher(size=4))
+    monkeypatch.setattr('papermeister.preferences.get_pref',
+                        lambda k, d=None: 'http://server' if k == 'ocr_pod_url' else d)
+    sizes = []
+
+    def fake(prompt, url, max_tokens=0, **k):
+        sizes.append(prompt.count('\n\n'))   # entries joined by a blank line
+        return '[{"title": "cut off'          # never parses, at any size
+
+    monkeypatch.setattr(biblio, '_call_qwen', fake)
+
+    _, _, _, complete, skipped = biblio.extract_references_llm('h')
+
+    assert complete is False                 # genuinely unrecoverable → PARTIAL
+    assert skipped['bad_json'] > 0
+    assert biblio._refs_batcher.size == biblio._AdaptiveBatcher.MIN  # shrank to the floor
+
+
+@pytest.mark.unit
 def test_prose_answer_on_a_found_section_stays_partial(one_batch_at_a_time, monkeypatch):
     """We DID find a references heading, so prose back is a failure, not proof
     that the paper has no bibliography."""
