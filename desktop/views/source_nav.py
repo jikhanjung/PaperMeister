@@ -149,7 +149,21 @@ class SourceNav(QWidget):
 
     def refresh(self):
         """Rebuild all tabs from scratch. Cheap — runs on startup and on
-        `apply_completed` (counts may have shifted)."""
+        `apply_completed` (counts may have shifted).
+
+        Keeps the user on the tab they were looking at. This matters most on
+        startup: the Zotero sync finishes seconds later and refreshes, and
+        without this the tab bar would snap back to the first tab under someone
+        who had already navigated elsewhere.
+
+        Matched on source identity rather than tab index, because the whole
+        reason to rebuild is that the set of sources may have changed — a sync
+        can add one, and a local folder can be removed. Restoring index 3 could
+        land on a different source. If the source is gone, or the previous tab
+        was the sourceless placeholder, the default first tab stands.
+        """
+        keep = self._tab_sources.get(self.tabs.currentIndex())
+
         self.tabs.blockSignals(True)
         self.tabs.clear()
         self._trees.clear()
@@ -176,6 +190,12 @@ class SourceNav(QWidget):
             idx = self.tabs.addTab(tree, tab_label)
             self._trees[idx] = tree
             self._tab_sources[idx] = (src.id, src.source_type)
+
+        if keep is not None:
+            for idx, key in self._tab_sources.items():
+                if key == keep:
+                    self.tabs.setCurrentIndex(idx)
+                    break
 
         self.tabs.blockSignals(False)
         self._status_panel.populate()
