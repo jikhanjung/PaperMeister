@@ -17,13 +17,44 @@ logger = logging.getLogger('biblio')
 # offending response body is captured too; this is a diagnostic log, not a hot path.
 _LOG_DIR = os.path.join(os.path.expanduser('~'), '.papermeister', 'logs')
 os.makedirs(_LOG_DIR, exist_ok=True)
+
+
+class _DailyFlushHandler(logging.FileHandler):
+    """One file per calendar day (`biblio_YYYYMMDD.log`), flushed per record.
+
+    The day is re-checked on every record rather than fixed at construction: the
+    handler is built once when this module is imported, but a references batch
+    runs for days without restarting, so a name chosen up front would pin the
+    whole run to the day it started — which is exactly what dating the file is
+    meant to avoid.
+
+    Reopens by swapping the stream directly instead of calling `close()`, which
+    would also unregister the handler from logging's shutdown flush.
+    """
+
+    def __init__(self, log_dir: str, stem: str):
+        self._dir, self._stem = log_dir, stem
+        self._day = time.strftime('%Y%m%d')
+        super().__init__(self._path(self._day), encoding='utf-8')
+
+    def _path(self, day: str) -> str:
+        return os.path.join(self._dir, f'{self._stem}_{day}.log')
+
+    def emit(self, record):
+        day = time.strftime('%Y%m%d')
+        if day != self._day:
+            self._day = day
+            if self.stream:
+                self.stream.close()
+            self.baseFilename = os.path.abspath(self._path(day))
+            self.stream = self._open()
+        super().emit(record)
+        self.stream.flush()
+
+
 logger.setLevel(logging.DEBUG)
 if not logger.handlers:
-    class _FlushHandler(logging.FileHandler):
-        def emit(self, record):
-            super().emit(record)
-            self.stream.flush()
-    _fh = _FlushHandler(os.path.join(_LOG_DIR, 'biblio.log'), encoding='utf-8')
+    _fh = _DailyFlushHandler(_LOG_DIR, 'biblio')
     _fh.setFormatter(logging.Formatter(
         '%(asctime)s %(levelname)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
     ))
