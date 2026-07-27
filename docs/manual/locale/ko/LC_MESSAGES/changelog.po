@@ -12,17 +12,17 @@ msgstr ""
 "POT-Creation-Date: 2026-07-27 19:14+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: ko\n"
 "Language-Team: ko <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: ko\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.18.0\n"
 
 #: ../../../../CHANGELOG.md:1 ../../changelog.rst:2
 msgid "Changelog"
-msgstr ""
+msgstr "변경 이력"
 
 #: ../../changelog.rst:4
 msgid ""
@@ -30,17 +30,21 @@ msgid ""
 "which is also what the GitHub release pages quote. It is included here "
 "rather than copied, so the two can never drift apart."
 msgstr ""
+"릴리스 노트는 저장소 루트의 ``CHANGELOG.md`` 에서 관리하며, GitHub 릴리스 페이지도 같은 내용을 인용합니다. 여기서는"
+" 복사하지 않고 그대로 포함하므로 둘이 어긋날 수 없습니다."
 
 #: ../../../../CHANGELOG.md:3
 msgid "All notable changes to this project will be documented in this file."
-msgstr ""
+msgstr "이 프로젝트의 주요 변경 사항을 이 파일에 기록합니다."
 
 #: ../../../../CHANGELOG.md:5
 msgid ""
 "The format is based on [Keep a "
-"Changelog](https://keepachangelog.com/en/1.0.0/), and this project "
-"adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)."
+"Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres "
+"to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)."
 msgstr ""
+"형식은 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)를 따르며, 버전 체계는 "
+"[유의적 버전(Semantic Versioning)](https://semver.org/spec/v2.0.0.html)을 따릅니다."
 
 #: ../../../../CHANGELOG.md:11
 msgid "[0.1.1] - 2026-07-24"
@@ -48,59 +52,68 @@ msgstr ""
 
 #: ../../../../CHANGELOG.md:13
 msgid ""
-"Citation-network visualization, installers for all three desktop "
-"platforms, and dependency-security hardening."
-msgstr ""
+"Citation-network visualization, installers for all three desktop platforms, "
+"and dependency-security hardening."
+msgstr "인용 네트워크 시각화, 세 데스크톱 플랫폼 모두를 위한 설치본, 의존성 보안 강화."
 
 #: ../../../../CHANGELOG.md:16 ../../../../CHANGELOG.md:44
 msgid "Added"
-msgstr ""
+msgstr "추가"
 
 #: ../../../../CHANGELOG.md:17
 msgid ""
-"**Citation network graph.** Right-click a paper → an interactive ego-"
-"network of its citations: the papers it cites, the papers that cite it, "
-"and the external works it cites that aren't in the library. Node fill "
-"shows the direction relative to the focused paper; the border marks "
-"whether a paper is held with a PDF, held without one, or external (cited-"
-"only). Click a node to re-center and walk the graph."
+"**Citation network graph.** Right-click a paper → an interactive ego-network"
+" of its citations: the papers it cites, the papers that cite it, and the "
+"external works it cites that aren't in the library. Node fill shows the "
+"direction relative to the focused paper; the border marks whether a paper is"
+" held with a PDF, held without one, or external (cited-only). Click a node "
+"to re-center and walk the graph."
 msgstr ""
+"**인용 네트워크 그래프.** 논문 우클릭 → 해당 논문을 중심으로 한 대화형 에고 네트워크 — 이 논문이 인용한 논문, 이 논문을 "
+"인용한 논문, 그리고 라이브러리에 없는 외부 인용 문헌. 노드 채움색은 중심 논문 기준 인용 방향을, 테두리는 PDF까지 "
+"보유했는지·PDF 없이 보유했는지·외부 문헌(인용만)인지를 나타냅니다. 노드를 클릭하면 그 노드를 중심으로 다시 그리며 그래프를 따라갈 "
+"수 있습니다."
 
 #: ../../../../CHANGELOG.md:23
 msgid ""
-"**Installers for every platform.** In addition to the Windows portable "
-"zip, releases now include a Windows installer (Inno Setup), a Linux "
-"**AppImage**, and a macOS **DMG** — all built and published by CI on a "
-"tag."
+"**Installers for every platform.** In addition to the Windows portable zip, "
+"releases now include a Windows installer (Inno Setup), a Linux **AppImage**,"
+" and a macOS **DMG** — all built and published by CI on a tag."
 msgstr ""
+"**모든 플랫폼용 설치본.** Windows 포터블 zip에 더해, 이제 릴리스에 Windows 설치본(Inno Setup), Linux"
+" **AppImage**, macOS **DMG** 가 포함됩니다 — 모두 태그를 붙이면 CI가 빌드해 발행합니다."
 
 #: ../../../../CHANGELOG.md:26
 msgid ""
-"**Global crash handler.** An unexpected error now surfaces as a dialog "
-"and is logged, instead of silently closing the window."
-msgstr ""
+"**Global crash handler.** An unexpected error now surfaces as a dialog and "
+"is logged, instead of silently closing the window."
+msgstr "**전역 크래시 핸들러.** 예기치 못한 오류가 창을 조용히 닫는 대신 다이얼로그로 표시되고 로그에 기록됩니다."
 
 #: ../../../../CHANGELOG.md:29
 msgid "Changed"
-msgstr ""
+msgstr "변경"
 
 #: ../../../../CHANGELOG.md:30
 msgid ""
-"The references (Qwen) read timeout was raised from 240 s to 360 s and "
-"made adjustable via a preference, so an occasional busy-GPU spike no "
-"longer aborts a batch."
+"The references (Qwen) read timeout was raised from 240 s to 360 s and made "
+"adjustable via a preference, so an occasional busy-GPU spike no longer "
+"aborts a batch."
 msgstr ""
+"참고문헌 추출(Qwen)의 읽기 타임아웃을 240초에서 360초로 올리고 설정으로 조절할 수 있게 했습니다. GPU가 일시적으로 바빠도 "
+"작업이 중단되지 않습니다."
 
 #: ../../../../CHANGELOG.md:34
 msgid "Security"
-msgstr ""
+msgstr "보안"
 
 #: ../../../../CHANGELOG.md:35
 msgid ""
-"Removed the unused `python-dotenv` dependency and updated Pillow (→ 12.3)"
-" and requests (→ 2.33) to versions without known advisories; CI now runs "
+"Removed the unused `python-dotenv` dependency and updated Pillow (→ 12.3) "
+"and requests (→ 2.33) to versions without known advisories; CI now runs "
 "`pip-audit` on every push and weekly."
 msgstr ""
+"사용하지 않던 `python-dotenv` 의존성을 제거하고, Pillow(→ 12.3)와 requests(→ 2.33)를 알려진 "
+"취약점이 없는 버전으로 올렸습니다. CI가 push마다, 그리고 주간으로 `pip-audit` 을 실행합니다."
 
 #: ../../../../CHANGELOG.md:40
 msgid "[0.1.0] - 2026-07-23"
@@ -108,37 +121,43 @@ msgstr ""
 
 #: ../../../../CHANGELOG.md:42
 msgid "Initial tagged release of the PaperMeister desktop app."
-msgstr ""
+msgstr "PaperMeister 데스크톱 앱의 첫 태그 릴리스."
 
 #: ../../../../CHANGELOG.md:45
 msgid ""
-"Turn a PDF paper collection into a searchable knowledge base: PDF library"
-" with Zotero sync, OCR (RunPod / Chandra2), LLM bibliographic extraction,"
-" and full-text (FTS5) search with title-boosted ranking and match "
-"highlighting."
+"Turn a PDF paper collection into a searchable knowledge base: PDF library "
+"with Zotero sync, OCR (RunPod / Chandra2), LLM bibliographic extraction, and"
+" full-text (FTS5) search with title-boosted ranking and match highlighting."
 msgstr ""
+"PDF 논문 모음을 검색 가능한 지식 베이스로 — Zotero 동기화가 되는 PDF 라이브러리, OCR(RunPod / "
+"Chandra2), LLM 서지 정보 추출, 제목 가중치 순위와 일치 부분 강조를 갖춘 전문 검색(FTS5)."
 
 #: ../../../../CHANGELOG.md:48
 msgid ""
 "**References & citation network.** Parse each paper's reference list, "
-"resolve citations to held papers, and normalize external cited works into"
-" canonical nodes — the foundation of the citation network."
+"resolve citations to held papers, and normalize external cited works into "
+"canonical nodes — the foundation of the citation network."
 msgstr ""
+"**참고문헌과 인용 네트워크.** 각 논문의 참고문헌 목록을 파싱하고, 보유 중인 논문으로 인용을 해소하며, 외부 인용 문헌을 대표 "
+"노드로 정규화합니다 — 인용 네트워크의 토대입니다."
 
 #: ../../../../CHANGELOG.md:51
 msgid ""
-"**Server-outage resilience.** References / biblio / OCR batches pause and"
-" auto-resume when the LLM or OCR server goes down, instead of failing "
-"every remaining item."
+"**Server-outage resilience.** References / biblio / OCR batches pause and "
+"auto-resume when the LLM or OCR server goes down, instead of failing every "
+"remaining item."
 msgstr ""
+"**서버 장애 복원력.** LLM이나 OCR 서버가 내려가면 참고문헌·서지·OCR 작업이 남은 항목을 모두 실패 처리하는 대신 "
+"일시정지했다가 자동으로 재개합니다."
 
 #: ../../../../CHANGELOG.md:54
 msgid "CJK author names shown surname-first joined (정직한) in the paper list."
-msgstr ""
+msgstr "논문 목록에서 CJK 저자명을 성-이름 순으로 붙여 표시(예: 정직한)."
 
 #: ../../../../CHANGELOG.md:55
 msgid ""
-"Windows portable build (PyInstaller) produced by CI, with a cross-"
-"platform test suite (ruff + mypy + pytest on Linux and Windows)."
+"Windows portable build (PyInstaller) produced by CI, with a cross-platform "
+"test suite (ruff + mypy + pytest on Linux and Windows)."
 msgstr ""
-
+"CI가 만드는 Windows 포터블 빌드(PyInstaller), 그리고 크로스 플랫폼 테스트 모음(Linux·Windows에서 ruff"
+" + mypy + pytest)."

@@ -12,21 +12,21 @@ msgstr ""
 "POT-Creation-Date: 2026-07-27 19:14+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: ko\n"
 "Language-Team: ko <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: ko\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.18.0\n"
 
 #: ../../installation.rst:2
 msgid "Installation"
-msgstr ""
+msgstr "설치"
 
 #: ../../installation.rst:5
 msgid "Download a release"
-msgstr ""
+msgstr "릴리스 내려받기"
 
 #: ../../installation.rst:7
 msgid ""
@@ -34,69 +34,78 @@ msgid ""
 "<https://github.com/jikhanjung/PaperMeister/releases>`_ for every tagged "
 "version, with SHA256 checksums."
 msgstr ""
+"태그가 붙은 버전마다 `릴리스 페이지 <https://github.com/jikhanjung/PaperMeister/releases>`_"
+" 에 미리 빌드된 패키지가 SHA256 체크섬과 함께 올라옵니다."
 
 #: ../../installation.rst:11
 msgid "Windows"
-msgstr ""
+msgstr "Windows"
 
 #: ../../installation.rst:12
 msgid ""
 "Download the portable ``.zip`` and run ``PaperMeister.exe`` from the "
 "extracted folder, or use the installer (``.exe``) for a per-user install."
 msgstr ""
+"포터블 ``.zip`` 을 받아 압축을 푼 폴더에서 ``PaperMeister.exe`` 를 실행하거나, 사용자 단위 설치를 원하면 "
+"설치본(``.exe``)을 사용하세요."
 
 #: ../../installation.rst:15
 msgid "Linux"
-msgstr ""
+msgstr "Linux"
 
 #: ../../installation.rst:16
-msgid "Download the ``.AppImage``, make it executable (``chmod +x``) and run it."
-msgstr ""
+msgid ""
+"Download the ``.AppImage``, make it executable (``chmod +x``) and run it."
+msgstr "``.AppImage`` 를 받아 실행 권한을 준 뒤(``chmod +x``) 실행하세요."
 
 #: ../../installation.rst:18
 msgid "macOS"
-msgstr ""
+msgstr "macOS"
 
 #: ../../installation.rst:19
 msgid ""
-"Download the ``.dmg`` and drag the app to Applications. The build is "
-"**not notarized**, so on first launch use Right-click → Open to get past "
+"Download the ``.dmg`` and drag the app to Applications. The build is **not "
+"notarized**, so on first launch use Right-click → Open to get past "
 "Gatekeeper."
 msgstr ""
+"``.dmg`` 를 받아 앱을 응용 프로그램 폴더로 끌어다 놓으세요. 이 빌드는 **공증(notarize)되지 않았으므로**, 처음 "
+"실행할 때는 우클릭 → 열기로 Gatekeeper를 통과해야 합니다."
 
 #: ../../installation.rst:22
 msgid ""
-"Windows is the best-tested platform; the Linux and macOS builds are "
-"produced by CI but see less use."
-msgstr ""
+"Windows is the best-tested platform; the Linux and macOS builds are produced"
+" by CI but see less use."
+msgstr "Windows가 가장 많이 검증된 플랫폼입니다. Linux와 macOS 빌드는 CI가 만들어내지만 실사용은 훨씬 적습니다."
 
 #: ../../installation.rst:26
 msgid "Run from source"
-msgstr ""
+msgstr "소스에서 실행"
 
 #: ../../installation.rst:35
 msgid ""
-"Python 3.12 or newer is required. For a reproducible environment matching"
-" CI, install from the hash-pinned lockfile instead:"
-msgstr ""
+"Python 3.12 or newer is required. For a reproducible environment matching "
+"CI, install from the hash-pinned lockfile instead:"
+msgstr "Python 3.12 이상이 필요합니다. CI와 동일한 재현 가능한 환경을 원하면 해시가 고정된 lock 파일로 설치하세요:"
 
 #: ../../installation.rst:42
 msgid "Two other entry points share the same database:"
-msgstr ""
+msgstr "같은 데이터베이스를 공유하는 다른 두 진입점도 있습니다:"
 
 #: ../../installation.rst:50
 msgid "First run"
-msgstr ""
+msgstr "첫 실행"
 
 #: ../../installation.rst:52
 msgid ""
-"Open **Settings** from the left rail and fill in what you need. Nothing "
-"is required to browse, but each feature needs its own credentials."
+"Open **Settings** from the left rail and fill in what you need. Nothing is "
+"required to browse, but each feature needs its own credentials."
 msgstr ""
+"왼쪽 레일에서 **Settings** 를 열어 필요한 항목을 입력하세요. 둘러보기만 한다면 아무것도 필수는 아니지만, 각 기능마다 해당 "
+"자격 증명이 필요합니다."
 
 #: ../../installation.rst:55
 msgid "Zotero"
-msgstr ""
+msgstr "Zotero"
 
 #: ../../installation.rst:56
 msgid ""
@@ -104,30 +113,36 @@ msgid ""
 "read-only key is enough unless you want write-back, which needs write "
 "permission on the library."
 msgstr ""
+"https://www.zotero.org/settings/keys 에서 발급한 ``user_id`` 와 API 키. 반영(write-"
+"back)을 쓰지 않는다면 읽기 전용 키로 충분하며, 반영을 쓰려면 라이브러리 쓰기 권한이 필요합니다."
 
 #: ../../installation.rst:60
 msgid "OCR"
-msgstr ""
+msgstr "OCR"
 
 #: ../../installation.rst:61
 msgid ""
-"The URL (and key, if applicable) of your OCR backend. Three are "
-"supported: RunPod serverless, a direct vLLM pod, and the wrapper API."
+"The URL (and key, if applicable) of your OCR backend. Three are supported: "
+"RunPod serverless, a direct vLLM pod, and the wrapper API."
 msgstr ""
+"OCR 백엔드의 URL(필요하면 키). 세 가지를 지원합니다 — RunPod 서버리스, vLLM 파드 직접 연결, 래퍼 API."
 
 #: ../../installation.rst:64
 msgid "Bibliographic extraction"
-msgstr ""
+msgstr "서지 정보 추출"
 
 #: ../../installation.rst:65
 msgid ""
-"Choose the LLM backend — Claude via the ``claude`` CLI, or Qwen on your "
-"own server. Automatic and manual extraction are separate toggles."
+"Choose the LLM backend — Claude via the ``claude`` CLI, or Qwen on your own "
+"server. Automatic and manual extraction are separate toggles."
 msgstr ""
+"LLM 백엔드를 고릅니다 — ``claude`` CLI를 통한 Claude, 또는 직접 운영하는 서버의 Qwen. 자동 추출과 수동 "
+"추출은 각각 별도 토글입니다."
 
 #: ../../installation.rst:68
 msgid ""
-"Settings are written to ``~/.papermeister/preferences.json``. It holds "
-"API keys in plain text, so treat it like any other credentials file."
+"Settings are written to ``~/.papermeister/preferences.json``. It holds API "
+"keys in plain text, so treat it like any other credentials file."
 msgstr ""
-
+"설정은 ``~/.papermeister/preferences.json`` 에 저장됩니다. API 키가 평문으로 들어 있으므로 다른 자격 "
+"증명 파일과 똑같이 취급하세요."

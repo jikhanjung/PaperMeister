@@ -12,21 +12,21 @@ msgstr ""
 "POT-Creation-Date: 2026-07-27 19:14+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: ko\n"
 "Language-Team: ko <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: ko\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.18.0\n"
 
 #: ../../faq.rst:2
 msgid "Frequently Asked Questions"
-msgstr ""
+msgstr "자주 묻는 질문"
 
 #: ../../faq.rst:5
 msgid "Does PaperMeister change my Zotero library?"
-msgstr ""
+msgstr "PaperMeister가 내 Zotero 라이브러리를 바꾸나요?"
 
 #: ../../faq.rst:7
 msgid ""
@@ -35,69 +35,84 @@ msgid ""
 "changes can be overwritten the next time Zotero is pulled, since Zotero "
 "remains the source of truth for items it owns."
 msgstr ""
+"반영(write-back)을 켰을 때만 바뀝니다. 기본값은 꺼짐이며, 꺼져 있으면 모든 변경이 로컬 데이터베이스에만 남습니다. 다만 "
+"절충점이 있습니다 — Zotero가 소유한 아이템의 원본은 여전히 Zotero이므로, 로컬에만 있는 변경은 다음 Zotero 동기화 때 "
+"덮어쓰일 수 있습니다."
 
 #: ../../faq.rst:13
 msgid "Why OCR a PDF that already has a text layer?"
-msgstr ""
+msgstr "이미 텍스트 레이어가 있는 PDF에도 왜 OCR을 하나요?"
 
 #: ../../faq.rst:15
 msgid ""
 "Consistency. Embedded text layers vary enormously in quality and layout "
-"fidelity, especially for scanned journals and multi-column articles. "
-"Running everything through the same pipeline makes the corpus uniform, "
-"and page-level text comparable across papers. The cost is paid once — "
-"results are cached."
+"fidelity, especially for scanned journals and multi-column articles. Running"
+" everything through the same pipeline makes the corpus uniform, and page-"
+"level text comparable across papers. The cost is paid once — results are "
+"cached."
 msgstr ""
+"일관성 때문입니다. 내장 텍스트 레이어는 품질과 레이아웃 재현도가 천차만별이며, 스캔된 학술지나 다단 조판 논문에서 특히 그렇습니다. "
+"모든 문서를 같은 파이프라인에 통과시키면 말뭉치가 균일해지고 페이지 단위 텍스트를 논문끼리 비교할 수 있습니다. 비용은 한 번만 듭니다 "
+"— 결과가 캐시되기 때문입니다."
 
 #: ../../faq.rst:21
 msgid "Where is my data?"
-msgstr ""
+msgstr "데이터는 어디에 있나요?"
 
 #: ../../faq.rst:23
 msgid ""
 "Everything is under ``~/.papermeister/``: the SQLite database, the OCR "
-"cache, preferences and logs. PDFs are not copied there; they stay in "
-"Zotero or in the folder you imported."
+"cache, preferences and logs. PDFs are not copied there; they stay in Zotero "
+"or in the folder you imported."
 msgstr ""
+"모두 ``~/.papermeister/`` 아래에 있습니다 — SQLite 데이터베이스, OCR 캐시, 설정, 로그. PDF 자체는 "
+"이곳으로 복사되지 않고 Zotero나 가져온 폴더에 그대로 남습니다."
 
 #: ../../faq.rst:28
 msgid "Can I re-run extraction with a different model?"
-msgstr ""
+msgstr "다른 모델로 추출을 다시 돌릴 수 있나요?"
 
 #: ../../faq.rst:30
 msgid ""
 "Yes. Results are stored per model, so a new run is added rather than "
-"replacing the old one. This is deliberate — it lets you compare models on"
-" the same paper without losing the earlier answer."
+"replacing the old one. This is deliberate — it lets you compare models on "
+"the same paper without losing the earlier answer."
 msgstr ""
+"네. 결과는 모델별로 저장되므로 새 실행이 기존 것을 대체하지 않고 추가됩니다. 의도된 설계로, 같은 논문에 대해 이전 답을 잃지 않고 "
+"모델을 비교할 수 있습니다."
 
 #: ../../faq.rst:35
 msgid "What happens if a batch is interrupted?"
-msgstr ""
+msgstr "배치 작업이 중간에 끊기면 어떻게 되나요?"
 
 #: ../../faq.rst:37
 msgid ""
-"Nothing is lost. Every stage records what it completed, and re-running "
-"the same action resumes from there. Closing the window mid-batch is a "
-"safe way to stop."
+"Nothing is lost. Every stage records what it completed, and re-running the "
+"same action resumes from there. Closing the window mid-batch is a safe way "
+"to stop."
 msgstr ""
+"잃는 것은 없습니다. 각 단계가 완료 지점을 기록하므로 같은 작업을 다시 실행하면 그 지점부터 이어집니다. 작업 도중 창을 닫는 것은 "
+"안전한 중단 방법입니다."
 
 #: ../../faq.rst:41
 msgid "A paper shows \"no references section\" — is that wrong?"
-msgstr ""
+msgstr "어떤 논문이 \"no references section\"으로 표시됩니다 — 잘못된 건가요?"
 
 #: ../../faq.rst:43
 msgid ""
 "Not necessarily. Letters, abstracts, plates, obituaries and front matter "
-"genuinely have no bibliography, and that is recorded as a completed check"
-" rather than a failure. A paper that *does* have references but returns "
-"nothing is treated differently: it stays unchecked so a later run retries"
-" it."
+"genuinely have no bibliography, and that is recorded as a completed check "
+"rather than a failure. A paper that *does* have references but returns "
+"nothing is treated differently: it stays unchecked so a later run retries "
+"it."
 msgstr ""
+"꼭 그렇지는 않습니다. 편지, 초록, 도판, 부고, 앞부속 같은 문서는 실제로 참고문헌이 없으며, 이 경우는 실패가 아니라 확인 완료로 "
+"기록됩니다. 반면 참고문헌이 *실제로 있는데* 아무것도 나오지 않은 논문은 다르게 처리됩니다 — 미확인 상태로 남겨 다음 실행에서 "
+"재시도합니다."
 
 #: ../../faq.rst:49
 msgid "Are non-English papers supported?"
-msgstr ""
+msgstr "영어가 아닌 논문도 지원하나요?"
 
 #: ../../faq.rst:51
 msgid ""
@@ -105,15 +120,17 @@ msgid ""
 "European languages. Author-name splitting understands CJK conventions. "
 "Reference-section headings are recognised in many languages and scripts."
 msgstr ""
+"네. OCR과 추출 모두 한국어·일본어·중국어·러시아어와 유럽 언어들을 처리합니다. 저자 이름 분리는 CJK 관례를 이해하며, 참고문헌 "
+"섹션 제목도 여러 언어와 문자 체계에서 인식됩니다."
 
 #: ../../faq.rst:56
 msgid "Which platform should I use?"
-msgstr ""
+msgstr "어떤 플랫폼을 쓰는 게 좋나요?"
 
 #: ../../faq.rst:58
 msgid ""
-"Windows is the best-tested. Linux and macOS builds are produced and "
-"smoke-tested by CI but see far less real use. The macOS build is not "
-"notarized."
+"Windows is the best-tested. Linux and macOS builds are produced and smoke-"
+"tested by CI but see far less real use. The macOS build is not notarized."
 msgstr ""
-
+"Windows가 가장 많이 검증돼 있습니다. Linux와 macOS 빌드도 CI가 만들고 기본 동작을 확인하지만 실사용은 훨씬 적습니다."
+" macOS 빌드는 공증되지 않았습니다."

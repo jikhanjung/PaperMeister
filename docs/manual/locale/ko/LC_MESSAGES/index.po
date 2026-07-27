@@ -12,30 +12,31 @@ msgstr ""
 "POT-Creation-Date: 2026-07-27 19:14+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: ko\n"
 "Language-Team: ko <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: ko\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.18.0\n"
 
 #: ../../index.rst:13
 msgid "Contents:"
-msgstr ""
+msgstr "목차:"
 
 #: ../../index.rst:2
 msgid "PaperMeister Documentation"
-msgstr ""
+msgstr "PaperMeister 문서"
 
 #: ../../index.rst:4
 msgid ""
-"PaperMeister turns a collection of academic PDFs into a searchable, "
-"linked knowledge base. It reads your papers with OCR, extracts their "
-"bibliographic metadata and reference lists, and connects them into a "
-"citation network — while keeping Zotero as the library you already "
-"curate."
+"PaperMeister turns a collection of academic PDFs into a searchable, linked "
+"knowledge base. It reads your papers with OCR, extracts their bibliographic "
+"metadata and reference lists, and connects them into a citation network — "
+"while keeping Zotero as the library you already curate."
 msgstr ""
+"PaperMeister는 학술 PDF 모음을 검색 가능하고 서로 연결된 지식 베이스로 바꿉니다. OCR로 논문을 읽어 서지 정보와 "
+"참고문헌 목록을 추출하고, 이를 인용 네트워크로 연결합니다. 그러면서도 이미 정리해 오신 Zotero를 그대로 라이브러리로 씁니다."
 
 #: ../../index.rst:9
 msgid ""
@@ -43,61 +44,69 @@ msgid ""
 "text is the source of truth, and everything else — metadata, references, "
 "citation links — is a derived layer that can be regenerated at any time."
 msgstr ""
+"기본 원칙은 **먼저 저장하고 나중에 이해한다**\\ 입니다. OCR 전문이 원본이고, 메타데이터·참고문헌·인용 링크 등 나머지는 언제든"
+" 다시 만들어낼 수 있는 파생 레이어입니다."
 
 #: ../../index.rst:26
 msgid "Features"
-msgstr ""
+msgstr "주요 기능"
 
 #: ../../index.rst:28
 msgid ""
 "**Zotero as the library** — collections, items and attachments sync both "
 "ways; extracted metadata can be written back to Zotero, or kept local"
 msgstr ""
+"**Zotero를 라이브러리로 사용** — 컬렉션·아이템·첨부파일이 양방향으로 동기화됩니다. 추출한 메타데이터는 Zotero에 반영하거나"
+" 로컬에만 둘 수 있습니다"
 
 #: ../../index.rst:30
 msgid ""
-"**OCR everything** — every PDF goes through OCR regardless of whether it "
-"has a text layer, so the corpus is uniform. Raw OCR JSON is cached and "
-"reusable"
+"**OCR everything** — every PDF goes through OCR regardless of whether it has"
+" a text layer, so the corpus is uniform. Raw OCR JSON is cached and reusable"
 msgstr ""
+"**모든 PDF에 OCR 적용** — 텍스트 레이어 유무와 관계없이 모든 PDF를 OCR에 통과시켜 말뭉치를 균일하게 유지합니다. 원본 "
+"OCR JSON은 캐시되어 재사용됩니다"
 
 #: ../../index.rst:32
 msgid ""
 "**Bibliographic extraction** — an LLM reads the first pages and proposes "
-"title, authors, year, journal, volume/issue/pages and DOI, stored "
-"separately from your curated data so nothing is overwritten silently"
+"title, authors, year, journal, volume/issue/pages and DOI, stored separately"
+" from your curated data so nothing is overwritten silently"
 msgstr ""
+"**서지 정보 추출** — LLM이 앞쪽 페이지를 읽어 제목·저자·연도·저널·권/호/페이지·DOI를 제안합니다. 직접 정리하신 데이터와 "
+"별도로 저장되므로 조용히 덮어쓰이는 일이 없습니다"
 
 #: ../../index.rst:35
 msgid ""
-"**Reference lists and a citation network** — reference sections are "
-"parsed into structured entries, matched against papers you hold, and de-"
-"duplicated into canonical nodes for the works you don't"
+"**Reference lists and a citation network** — reference sections are parsed "
+"into structured entries, matched against papers you hold, and de-duplicated "
+"into canonical nodes for the works you don't"
 msgstr ""
+"**참고문헌 목록과 인용 네트워크** — 참고문헌 섹션을 구조화된 항목으로 파싱하고, 보유 중인 논문과 매칭합니다. 보유하지 않은 문헌은"
+" 대표 노드로 중복 제거됩니다"
 
 #: ../../index.rst:38
 msgid ""
 "**Full-text search** — SQLite FTS5 over every page, with title/author "
 "boosting and match highlighting"
-msgstr ""
+msgstr "**전문 검색** — 모든 페이지에 대한 SQLite FTS5 검색. 제목·저자 가중치와 일치 부분 강조를 지원합니다"
 
 #: ../../index.rst:40
 msgid ""
-"**Local folders too** — a directory of PDFs can be imported alongside "
-"Zotero"
-msgstr ""
+"**Local folders too** — a directory of PDFs can be imported alongside Zotero"
+msgstr "**로컬 폴더도 지원** — PDF가 담긴 디렉터리를 Zotero와 나란히 가져올 수 있습니다"
 
 #: ../../index.rst:43
 msgid "Where things live"
-msgstr ""
+msgstr "데이터 저장 위치"
 
 #: ../../index.rst:49
 msgid "Path"
-msgstr ""
+msgstr "경로"
 
 #: ../../index.rst:50
 msgid "Contents"
-msgstr ""
+msgstr "내용"
 
 #: ../../index.rst:51
 msgid "``~/.papermeister/papermeister.db``"
@@ -105,7 +114,7 @@ msgstr ""
 
 #: ../../index.rst:52
 msgid "SQLite database (papers, authors, passages, references)"
-msgstr ""
+msgstr "SQLite 데이터베이스 (논문, 저자, 본문, 참고문헌)"
 
 #: ../../index.rst:53
 msgid "``~/.papermeister/ocr_json/``"
@@ -113,7 +122,7 @@ msgstr ""
 
 #: ../../index.rst:54
 msgid "Cached OCR output, one file per PDF"
-msgstr ""
+msgstr "OCR 결과 캐시 (PDF 하나당 파일 하나)"
 
 #: ../../index.rst:55
 msgid "``~/.papermeister/preferences.json``"
@@ -121,7 +130,7 @@ msgstr ""
 
 #: ../../index.rst:56
 msgid "Credentials and settings"
-msgstr ""
+msgstr "자격 증명 및 설정"
 
 #: ../../index.rst:57
 msgid "``~/.papermeister/logs/``"
@@ -129,11 +138,11 @@ msgstr ""
 
 #: ../../index.rst:58
 msgid "OCR, sync and extraction logs"
-msgstr ""
+msgstr "OCR·동기화·추출 로그"
 
 #: ../../index.rst:61
 msgid "Indices and tables"
-msgstr ""
+msgstr "색인 및 표"
 
 #: ../../index.rst:63
 msgid ":ref:`genindex`"
@@ -142,4 +151,3 @@ msgstr ""
 #: ../../index.rst:64
 msgid ":ref:`search`"
 msgstr ""
-

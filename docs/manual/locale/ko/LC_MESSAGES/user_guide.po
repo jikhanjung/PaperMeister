@@ -12,280 +12,314 @@ msgstr ""
 "POT-Creation-Date: 2026-07-27 19:14+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: ko\n"
 "Language-Team: ko <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: ko\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.18.0\n"
 
 #: ../../user_guide.rst:2
 msgid "User Guide"
-msgstr ""
+msgstr "사용자 안내서"
 
 #: ../../user_guide.rst:5
 msgid "The window"
-msgstr ""
+msgstr "화면 구성"
 
 #: ../../user_guide.rst:7
 msgid "Four regions, left to right."
-msgstr ""
+msgstr "왼쪽부터 네 영역으로 나뉩니다."
 
 #: ../../user_guide.rst:9
 msgid "**Rail** (icon bar)"
-msgstr ""
+msgstr "**레일(Rail)** — 아이콘 바"
 
 #: ../../user_guide.rst:10
 msgid ""
 "Mode buttons — *Library* and *Search* — plus one-shot actions: *Sync*, "
 "*Process*, *Import folder*, *Cited Works*, *Settings*."
 msgstr ""
+"모드 버튼(*Library*, *Search*)과 단발 동작(*Sync*, *Process*, *Import folder*, *Cited"
+" Works*, *Settings*)."
 
 #: ../../user_guide.rst:13
 msgid "**Sources**"
-msgstr ""
+msgstr "**소스(Sources)**"
 
 #: ../../user_guide.rst:14
 msgid ""
 "One tab per source. Zotero appears as *My Library*; each imported local "
-"folder gets its own tab. Inside a tab: library-wide filters at the top "
-"(All Papers, Needs Review, Recent, Trash) and the collection tree below."
+"folder gets its own tab. Inside a tab: library-wide filters at the top (All "
+"Papers, Needs Review, Recent, Trash) and the collection tree below."
 msgstr ""
+"소스마다 탭이 하나씩 생깁니다. Zotero는 *My Library* 로 나타나고, 가져온 로컬 폴더는 각각 별도 탭을 갖습니다. 탭 "
+"안에는 위쪽에 라이브러리 전체 필터(All Papers, Needs Review, Recent, Trash), 아래쪽에 컬렉션 트리가 "
+"있습니다."
 
 #: ../../user_guide.rst:18
 msgid "**Paper list**"
-msgstr ""
+msgstr "**논문 목록(Paper list)**"
 
 #: ../../user_guide.rst:19
 msgid ""
-"Status, authors, year and title. Click a column header to sort. "
-"Ctrl+click a row to reveal which collection it lives in. Right-click for "
-"the actions that apply to that paper's current state."
+"Status, authors, year and title. Click a column header to sort. Ctrl+click a"
+" row to reveal which collection it lives in. Right-click for the actions "
+"that apply to that paper's current state."
 msgstr ""
+"상태·저자·연도·제목을 보여줍니다. 열 머리글을 클릭하면 정렬되고, 행을 Ctrl+클릭하면 그 논문이 속한 컬렉션을 찾아 보여줍니다. "
+"우클릭하면 해당 논문의 현재 상태에 맞는 동작들이 나옵니다."
 
 #: ../../user_guide.rst:23
 msgid "**Detail panel**"
-msgstr ""
+msgstr "**상세 패널(Detail panel)**"
 
 #: ../../user_guide.rst:24
 msgid ""
 "Four tabs — *Metadata*, *PDF*, *Text*, *References*. Each keeps its own "
-"scroll position, and the tab you were on is restored when you switch "
-"papers."
+"scroll position, and the tab you were on is restored when you switch papers."
 msgstr ""
+"네 개 탭(*Metadata*, *PDF*, *Text*, *References*). 탭마다 스크롤 위치를 따로 유지하며, 논문을 바꿔도"
+" 보고 있던 탭이 그대로 복원됩니다."
 
 #: ../../user_guide.rst:28
 msgid "Sources"
-msgstr ""
+msgstr "소스"
 
 #: ../../user_guide.rst:31 ../../user_guide.rst:133
 msgid "Zotero"
-msgstr ""
+msgstr "Zotero"
 
 #: ../../user_guide.rst:33
 msgid ""
-"Sync is incremental: only what changed since the last run is fetched. "
-"Right-click the *My Library* tab for a **Full Sync** when you want "
-"everything re-read."
+"Sync is incremental: only what changed since the last run is fetched. Right-"
+"click the *My Library* tab for a **Full Sync** when you want everything re-"
+"read."
 msgstr ""
+"동기화는 증분 방식이라 지난번 이후 바뀐 것만 가져옵니다. 전체를 다시 읽고 싶으면 *My Library* 탭을 우클릭해 **Full "
+"Sync** 를 실행하세요."
 
 #: ../../user_guide.rst:36
 msgid ""
-"Sync mirrors Zotero in both directions of removal — items you move to the"
-" trash are hidden, items you delete permanently are removed locally too. "
+"Sync mirrors Zotero in both directions of removal — items you move to the "
+"trash are hidden, items you delete permanently are removed locally too. "
 "Collection membership is currently additive: a paper removed from a "
 "collection in Zotero keeps its old link here until a full sync."
 msgstr ""
+"삭제는 양방향으로 반영됩니다 — 휴지통으로 옮긴 아이템은 숨겨지고, 영구 삭제한 아이템은 로컬에서도 제거됩니다. 다만 컬렉션 소속은 현재"
+" 추가만 반영되므로, Zotero에서 컬렉션에서 뺀 논문은 전체 동기화 전까지 기존 링크가 남아 있습니다."
 
 #: ../../user_guide.rst:42
 msgid "Local folders"
-msgstr ""
+msgstr "로컬 폴더"
 
 #: ../../user_guide.rst:44
 msgid ""
 "Rail → **Import folder** scans a directory tree for PDFs and creates a "
-"source tab for it. Files are identified by SHA256, so a PDF already in "
-"your Zotero library is linked rather than duplicated — the same paper "
-"simply appears under both tabs."
+"source tab for it. Files are identified by SHA256, so a PDF already in your "
+"Zotero library is linked rather than duplicated — the same paper simply "
+"appears under both tabs."
 msgstr ""
+"레일 → **Import folder** 는 디렉터리 트리에서 PDF를 훑어 새 소스 탭을 만듭니다. 파일은 SHA256으로 식별하므로,"
+" 이미 Zotero 라이브러리에 있는 PDF는 중복 생성되지 않고 링크만 걸립니다 — 같은 논문이 양쪽 탭에 함께 보이게 됩니다."
 
 #: ../../user_guide.rst:49
 msgid ""
-"Right-click a local folder tab → **Remove** to detach it. Papers that "
-"exist only in that folder are deleted from the database; papers shared "
-"with Zotero just lose the folder link. Files on disk and the OCR cache "
-"are never touched."
+"Right-click a local folder tab → **Remove** to detach it. Papers that exist "
+"only in that folder are deleted from the database; papers shared with Zotero"
+" just lose the folder link. Files on disk and the OCR cache are never "
+"touched."
 msgstr ""
+"로컬 폴더 탭을 우클릭 → **Remove** 로 분리할 수 있습니다. 그 폴더에만 있던 논문은 데이터베이스에서 삭제되고, Zotero와"
+" 공유된 논문은 폴더 링크만 해제됩니다. 디스크의 파일과 OCR 캐시는 건드리지 않습니다."
 
 #: ../../user_guide.rst:54
 msgid "Processing"
-msgstr ""
+msgstr "처리"
 
 #: ../../user_guide.rst:56
 msgid ""
 "OCR runs against one of three backends, chosen in Settings: RunPod "
-"serverless, a direct vLLM pod, or the wrapper API. The wrapper mode keeps"
-" the server's queue filled rather than sending one file at a time, and "
+"serverless, a direct vLLM pod, or the wrapper API. The wrapper mode keeps "
+"the server's queue filled rather than sending one file at a time, and "
 "follows the server's own recommendation for how deep to keep that queue."
 msgstr ""
+"OCR은 Settings에서 고른 세 가지 백엔드 중 하나로 실행됩니다 — RunPod 서버리스, vLLM 파드 직접 연결, 래퍼 "
+"API. 래퍼 모드는 파일을 하나씩 보내는 대신 서버 큐를 채워 두며, 큐를 얼마나 깊게 유지할지는 서버가 알려주는 권장값을 따릅니다."
 
 #: ../../user_guide.rst:61
 msgid ""
 "Every PDF is OCR'd, even those with a text layer, so that the corpus is "
 "uniform and the results are directly comparable."
 msgstr ""
+"텍스트 레이어가 있는 PDF도 포함해 모든 PDF에 OCR을 적용합니다. 말뭉치를 균일하게 만들어 결과를 바로 비교할 수 있게 하기 "
+"위함입니다."
 
 #: ../../user_guide.rst:64
 msgid ""
-"Files that are not PDFs — supplementary material, link-only attachments —"
-" are marked ``skip`` rather than failing."
-msgstr ""
+"Files that are not PDFs — supplementary material, link-only attachments — "
+"are marked ``skip`` rather than failing."
+msgstr "PDF가 아닌 파일(보충자료, 링크만 있는 첨부)은 실패 처리 대신 ``skip`` 으로 표시됩니다."
 
 #: ../../user_guide.rst:67
 msgid ""
-"If the OCR server becomes unreachable mid-batch, processing pauses rather"
-" than failing every remaining file, polls until the server returns, and "
+"If the OCR server becomes unreachable mid-batch, processing pauses rather "
+"than failing every remaining file, polls until the server returns, and "
 "resumes. The same applies to the extraction batches."
 msgstr ""
+"작업 도중 OCR 서버에 연결할 수 없게 되면, 남은 파일을 모두 실패 처리하는 대신 **일시정지**\\ 한 뒤 서버가 돌아올 때까지 "
+"확인하다가 자동으로 재개합니다. 추출 작업에도 동일하게 적용됩니다."
 
 #: ../../user_guide.rst:72
 msgid "Bibliographic data"
-msgstr ""
+msgstr "서지 정보"
 
 #: ../../user_guide.rst:74
 msgid ""
-"Extraction never overwrites your curated metadata in place. Results live "
-"in their own table, tagged with the model that produced them, so you can "
-"re-run with a different model and compare."
+"Extraction never overwrites your curated metadata in place. Results live in "
+"their own table, tagged with the model that produced them, so you can re-run"
+" with a different model and compare."
 msgstr ""
+"추출은 직접 정리하신 메타데이터를 제자리에서 덮어쓰지 않습니다. 결과는 별도 테이블에 저장되며 어떤 모델이 만든 것인지 함께 기록되므로,"
+" 다른 모델로 다시 돌려 비교할 수 있습니다."
 
 #: ../../user_guide.rst:78
 msgid ""
 "What happens after extraction depends on how the result compares with "
 "Zotero:"
-msgstr ""
+msgstr "추출 이후 동작은 결과가 Zotero와 어떻게 비교되는지에 따라 달라집니다:"
 
 #: ../../user_guide.rst:80
 msgid "**Fills gaps only** — applied automatically"
-msgstr ""
+msgstr "**빈 항목만 채움** — 자동 반영"
 
 #: ../../user_guide.rst:81
 msgid "**Agrees with what is there** — recorded as confirmed, no change"
-msgstr ""
+msgstr "**기존 값과 일치** — 확인됨으로 기록, 변경 없음"
 
 #: ../../user_guide.rst:82
 msgid "**Disagrees** — the paper is flagged ``rev`` and waits for review"
-msgstr ""
+msgstr "**불일치** — 논문이 ``rev`` 로 표시되고 검토를 기다림"
 
 #: ../../user_guide.rst:84
 msgid ""
-"The review UI is the **Metadata** tab: differing fields get a radio "
-"button per side and an editable box, so you can take Zotero's value, take"
-" the extracted one, or type a third. Authors are one per line, "
-"``Lastname, Firstname``."
+"The review UI is the **Metadata** tab: differing fields get a radio button "
+"per side and an editable box, so you can take Zotero's value, take the "
+"extracted one, or type a third. Authors are one per line, ``Lastname, "
+"Firstname``."
 msgstr ""
+"검토 화면은 **Metadata** 탭입니다. 값이 다른 항목마다 양쪽 라디오 버튼과 편집 가능한 입력란이 붙으므로 Zotero 값을 "
+"쓰거나, 추출 값을 쓰거나, 제3의 값을 직접 입력할 수 있습니다. 저자는 한 줄에 한 명씩 ``성, 이름`` 형식입니다."
 
 #: ../../user_guide.rst:88
 msgid ""
-"If Zotero write-back is enabled, applying pushes the result to Zotero. "
-"With it off, changes stay local — and may be overwritten by a later pull "
-"sync."
+"If Zotero write-back is enabled, applying pushes the result to Zotero. With "
+"it off, changes stay local — and may be overwritten by a later pull sync."
 msgstr ""
+"Zotero 반영이 켜져 있으면 Apply가 결과를 Zotero로 보냅니다. 꺼져 있으면 변경이 로컬에만 남고, 이후 Zotero 동기화"
+" 때 덮어쓰일 수 있습니다."
 
 #: ../../user_guide.rst:92
 msgid "References and the citation network"
-msgstr ""
+msgstr "참고문헌과 인용 네트워크"
 
 #: ../../user_guide.rst:94
 msgid ""
-"Reference extraction locates the bibliography, splits it into entries, "
-"and parses each into fields. Entries are then resolved:"
-msgstr ""
+"Reference extraction locates the bibliography, splits it into entries, and "
+"parses each into fields. Entries are then resolved:"
+msgstr "참고문헌 추출은 서지 목록을 찾아 항목으로 나누고 각각을 필드로 파싱합니다. 그다음 항목을 해소(resolve)합니다:"
 
 #: ../../user_guide.rst:97
 msgid "an entry matching a paper you hold becomes a **held** link"
-msgstr ""
+msgstr "보유 중인 논문과 일치하는 항목은 **보유(held)** 링크가 됩니다"
 
 #: ../../user_guide.rst:98
 msgid ""
 "everything else is canonicalised into a **cited work** node, so the same "
 "external paper cited by ten of your papers is one node, not ten rows"
 msgstr ""
+"나머지는 **인용 문헌(cited work)** 노드로 정규화됩니다. 같은 외부 논문을 열 편이 인용해도 행 열 개가 아니라 노드 하나가"
+" 됩니다"
 
 #: ../../user_guide.rst:101
 msgid ""
 "The **References** tab shows outgoing references and incoming citations "
-"together. Held references are clickable and navigate to the paper. "
-"External ones carry a badge showing how many of your papers cite the same"
-" work."
+"together. Held references are clickable and navigate to the paper. External "
+"ones carry a badge showing how many of your papers cite the same work."
 msgstr ""
+"**References** 탭은 나가는 인용과 들어오는 인용을 함께 보여줍니다. 보유 중인 참고문헌은 클릭하면 해당 논문으로 이동하고, "
+"외부 문헌에는 같은 문헌을 인용한 내 논문이 몇 편인지 배지로 표시됩니다."
 
 #: ../../user_guide.rst:105
 msgid ""
 "Rail → **Cited Works** ranks external works by citation count, with the "
 "citing papers listed for each. Right-click a paper → **Show in citation "
-"network** for the interactive ego graph: node fill shows direction "
-"relative to the focused paper, the border shows whether it is held with a"
-" PDF, held without one, or external."
+"network** for the interactive ego graph: node fill shows direction relative "
+"to the focused paper, the border shows whether it is held with a PDF, held "
+"without one, or external."
 msgstr ""
+"레일 → **Cited Works** 는 외부 문헌을 인용 횟수 순으로 정렬하고 각각을 인용한 논문을 함께 보여줍니다. 논문 우클릭 → "
+"**Show in citation network** 를 고르면 대화형 에고 그래프가 열립니다 — 노드 채움색은 중심 논문 기준 인용 "
+"방향을, 테두리는 PDF까지 보유했는지·PDF 없이 보유했는지·외부 문헌인지를 나타냅니다."
 
 #: ../../user_guide.rst:112
 msgid "Search"
-msgstr ""
+msgstr "검색"
 
 #: ../../user_guide.rst:114
 msgid ""
-"Search runs over the OCR text of every page, and separately over titles "
-"and author names, then merges the two. Papers whose *title* matches all "
-"your terms rank above papers that merely mention them often — a search "
-"for a taxon name finds the monograph about it, not the hundred papers "
-"that cite it in passing."
+"Search runs over the OCR text of every page, and separately over titles and "
+"author names, then merges the two. Papers whose *title* matches all your "
+"terms rank above papers that merely mention them often — a search for a "
+"taxon name finds the monograph about it, not the hundred papers that cite it"
+" in passing."
 msgstr ""
+"검색은 모든 페이지의 OCR 텍스트와, 그와 별도로 제목·저자명을 훑은 뒤 두 결과를 병합합니다. 검색어가 *제목* 에 모두 들어간 "
+"논문이, 본문에서 자주 언급하기만 한 논문보다 위에 옵니다 — 분류군 이름으로 검색하면 지나가듯 인용한 수백 편이 아니라 그 분류군을 "
+"다룬 논저가 잡힙니다."
 
 #: ../../user_guide.rst:119
 msgid "Both plain terms and phrases in quotes work."
-msgstr ""
+msgstr "일반 단어와 따옴표로 묶은 구절 모두 사용할 수 있습니다."
 
 #: ../../user_guide.rst:122
 msgid "Settings"
-msgstr ""
+msgstr "설정"
 
 #: ../../user_guide.rst:124
 msgid "Four tabs."
-msgstr ""
+msgstr "네 개 탭으로 구성됩니다."
 
 #: ../../user_guide.rst:126
 msgid "OCR"
-msgstr ""
+msgstr "OCR"
 
 #: ../../user_guide.rst:127
 msgid ""
-"Backend selection and credentials; queue depth; whether to wait when "
-"another machine is already using the server."
-msgstr ""
+"Backend selection and credentials; queue depth; whether to wait when another"
+" machine is already using the server."
+msgstr "백엔드 선택과 자격 증명, 큐 깊이, 다른 기기가 이미 서버를 쓰고 있을 때 기다릴지 여부."
 
 #: ../../user_guide.rst:130
 msgid "Biblio"
-msgstr ""
+msgstr "Biblio"
 
 #: ../../user_guide.rst:131
 msgid ""
-"Automatic and manual extraction toggles (independent), and the LLM "
-"backend."
-msgstr ""
+"Automatic and manual extraction toggles (independent), and the LLM backend."
+msgstr "자동 추출과 수동 추출 토글(서로 독립), 그리고 LLM 백엔드."
 
 #: ../../user_guide.rst:134
 msgid ""
 "Credentials; write-back on/off; OCR JSON upload on/off; automatic parent-"
 "item creation for standalone PDFs."
-msgstr ""
+msgstr "자격 증명, 반영(write-back) 켬/끔, OCR JSON 업로드 켬/끔, 단독 PDF에 대한 상위 아이템 자동 생성."
 
 #: ../../user_guide.rst:137
 msgid "About"
-msgstr ""
+msgstr "정보"
 
 #: ../../user_guide.rst:138
 msgid "Version and the per-install client ID used to identify your OCR jobs."
-msgstr ""
-
+msgstr "버전과, OCR 작업을 식별하는 데 쓰이는 설치별 클라이언트 ID."

@@ -12,72 +12,82 @@ msgstr ""
 "POT-Creation-Date: 2026-07-27 19:14+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: ko\n"
 "Language-Team: ko <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: ko\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.18.0\n"
 
 #: ../../troubleshooting.rst:2
 msgid "Troubleshooting"
-msgstr ""
+msgstr "문제 해결"
 
 #: ../../troubleshooting.rst:4
 msgid ""
-"Each entry below describes something that has actually happened, and how "
-"it presents."
-msgstr ""
+"Each entry below describes something that has actually happened, and how it "
+"presents."
+msgstr "아래 항목은 모두 이 프로젝트에서 실제로 겪은 문제와 그 증상입니다."
 
 #: ../../troubleshooting.rst:8
 msgid "OCR or extraction stops making progress"
-msgstr ""
+msgstr "OCR이나 추출이 더 이상 진행되지 않음"
 
 #: ../../troubleshooting.rst:10
 msgid ""
-"**Symptom** — the progress window sits still, or the log fills with ``502"
-" upstream: All connection attempts failed`` and ``500 EngineCore "
-"encountered an issue``."
+"**Symptom** — the progress window sits still, or the log fills with ``502 "
+"upstream: All connection attempts failed`` and ``500 EngineCore encountered "
+"an issue``."
 msgstr ""
+"**증상** — 진행 창이 멈춰 있거나, 로그가 ``502 upstream: All connection attempts failed`` "
+"과 ``500 EngineCore encountered an issue`` 로 채워집니다."
 
 #: ../../troubleshooting.rst:14
 msgid ""
 "**Cause** — the 502 is a symptom, not the fault: the front proxy is "
-"answering, but the model worker behind it died and is restarting. The 500"
-" is that worker on its way out. Repeating in a cycle means it is crash-"
-"looping, usually out of GPU memory."
+"answering, but the model worker behind it died and is restarting. The 500 is"
+" that worker on its way out. Repeating in a cycle means it is crash-looping,"
+" usually out of GPU memory."
 msgstr ""
+"**원인** — 502는 원인이 아니라 증상입니다. 앞단 프록시는 응답하고 있지만 그 뒤의 모델 워커가 죽어 재시작 중이라는 뜻입니다. "
+"500은 그 워커가 죽어가며 내는 메시지입니다. 이 조합이 주기적으로 반복되면 크래시 루프이며, 대개 GPU 메모리 부족이 원인입니다."
 
 #: ../../troubleshooting.rst:19
 msgid ""
 "**What the app does** — brief outages are absorbed by a short retry. A "
-"sustained one pauses the batch, polls the server, and resumes "
-"automatically when it comes back, keeping the queue intact."
+"sustained one pauses the batch, polls the server, and resumes automatically "
+"when it comes back, keeping the queue intact."
 msgstr ""
+"**앱의 대응** — 짧은 장애는 재시도로 흡수합니다. 장애가 지속되면 작업을 일시정지하고 큐를 유지한 채 서버를 확인하다가, 서버가 "
+"돌아오면 자동으로 재개합니다."
 
 #: ../../troubleshooting.rst:23
 msgid ""
 "**What to check** — the server's own log for the actual crash (out of "
-"memory, a CUDA fault). Running OCR and the language model on the same GPU"
-" makes this more likely."
+"memory, a CUDA fault). Running OCR and the language model on the same GPU "
+"makes this more likely."
 msgstr ""
+"**확인할 것** — 실제 크래시 원인은 서버 자체 로그에 있습니다(메모리 부족, CUDA 오류 등). OCR과 언어 모델을 같은 "
+"GPU에서 돌리면 이 문제가 더 잘 생깁니다."
 
 #: ../../troubleshooting.rst:28
 msgid "A paper comes back \"PARTIAL\""
-msgstr ""
+msgstr "논문이 \"PARTIAL\"로 표시됨"
 
 #: ../../troubleshooting.rst:30
 msgid ""
-"Part of the bibliography was parsed and the rest was not. The parsed "
-"entries are saved; the paper stays unchecked so a later run replaces "
-"them. Nothing is lost, and re-running is safe — references are written "
-"per source, replacing the previous set rather than accumulating."
+"Part of the bibliography was parsed and the rest was not. The parsed entries"
+" are saved; the paper stays unchecked so a later run replaces them. Nothing "
+"is lost, and re-running is safe — references are written per source, "
+"replacing the previous set rather than accumulating."
 msgstr ""
+"참고문헌 일부만 파싱되고 나머지는 실패했다는 뜻입니다. 파싱된 항목은 저장되고, 논문은 미확인 상태로 남아 다음 실행에서 교체됩니다. "
+"잃는 것은 없으며 재실행도 안전합니다 — 참고문헌은 출처 단위로 기록되어 누적되지 않고 이전 집합을 대체합니다."
 
 #: ../../troubleshooting.rst:35
 msgid "The progress line names the reason:"
-msgstr ""
+msgstr "진행 표시줄에 사유가 함께 나옵니다:"
 
 #: ../../troubleshooting.rst:37
 msgid "``bad JSON``"
@@ -85,9 +95,10 @@ msgstr ""
 
 #: ../../troubleshooting.rst:38
 msgid ""
-"The model's answer was cut off. The batch is retried with a larger "
-"budget, then split, before being given up on."
+"The model's answer was cut off. The batch is retried with a larger budget, "
+"then split, before being given up on."
 msgstr ""
+"모델의 응답이 중간에 잘렸습니다. 해당 배치는 더 큰 토큰 예산으로 재시도하고, 그래도 안 되면 배치를 쪼갠 뒤에야 포기합니다."
 
 #: ../../troubleshooting.rst:41
 msgid "``no array``"
@@ -95,9 +106,9 @@ msgstr ""
 
 #: ../../troubleshooting.rst:42
 msgid ""
-"The model answered in prose rather than data — usually because the text "
-"it was handed is not a bibliography."
-msgstr ""
+"The model answered in prose rather than data — usually because the text it "
+"was handed is not a bibliography."
+msgstr "모델이 데이터가 아니라 산문으로 답했습니다. 대개 넘겨준 텍스트가 서지 목록이 아니기 때문입니다."
 
 #: ../../troubleshooting.rst:45
 msgid "``timeout``"
@@ -105,88 +116,104 @@ msgstr ""
 
 #: ../../troubleshooting.rst:46
 msgid "No answer within the time limit. The batch is split and retried."
-msgstr ""
+msgstr "제한 시간 안에 응답이 없었습니다. 배치를 쪼개어 재시도합니다."
 
 #: ../../troubleshooting.rst:48
 msgid ""
 "Details, including the offending response, go to "
 "``~/.papermeister/logs/biblio_YYYYMMDD.log``."
 msgstr ""
+"문제가 된 응답 본문을 포함한 상세 내용은 ``~/.papermeister/logs/biblio_YYYYMMDD.log`` 에 "
+"기록됩니다."
 
 #: ../../troubleshooting.rst:52
 msgid "Zotero write-back fails with 403"
-msgstr ""
+msgstr "Zotero 반영이 403으로 실패함"
 
 #: ../../troubleshooting.rst:54
 msgid ""
-"The API key is read-only. Either issue a key with write permission on the"
-" library, or turn write-back off in Settings → Zotero and keep changes "
-"local."
+"The API key is read-only. Either issue a key with write permission on the "
+"library, or turn write-back off in Settings → Zotero and keep changes local."
 msgstr ""
+"API 키가 읽기 전용입니다. 라이브러리 쓰기 권한이 있는 키를 새로 발급하거나, Settings → Zotero에서 반영을 끄고 변경을"
+" 로컬에만 두세요."
 
 #: ../../troubleshooting.rst:58
 msgid "Zotero rejects an update with 400"
-msgstr ""
+msgstr "Zotero가 400으로 업데이트를 거부함"
 
 #: ../../troubleshooting.rst:60
 msgid ""
 "Usually a field that does not exist on that item type — for example a "
-"journal name on a ``bookSection``. The app maps journal-like fields per "
-"item type and will say which field was refused. For a standalone PDF with"
-" no parent item, promote it to a real item first."
+"journal name on a ``bookSection``. The app maps journal-like fields per item"
+" type and will say which field was refused. For a standalone PDF with no "
+"parent item, promote it to a real item first."
 msgstr ""
+"대개 해당 아이템 타입에 존재하지 않는 필드 때문입니다 — 예를 들어 ``bookSection`` 에 저널명을 넣는 경우. 앱은 아이템 "
+"타입별로 저널 계열 필드를 매핑하며, 어떤 필드가 거부됐는지 알려줍니다. 상위 아이템이 없는 단독 PDF라면 먼저 정식 아이템으로 "
+"승격해야 합니다."
 
 #: ../../troubleshooting.rst:66
 msgid "A PDF will not download"
-msgstr ""
+msgstr "PDF가 내려받아지지 않음"
 
 #: ../../troubleshooting.rst:68
 msgid ""
-"If the attachment record exists but the file is not in Zotero's storage, "
-"the download returns 404 and the paper is marked failed. Check whether "
-"the file opens in Zotero itself; if it only exists on your local disk, it"
-" needs to be uploaded to Zotero first."
+"If the attachment record exists but the file is not in Zotero's storage, the"
+" download returns 404 and the paper is marked failed. Check whether the file"
+" opens in Zotero itself; if it only exists on your local disk, it needs to "
+"be uploaded to Zotero first."
 msgstr ""
+"첨부 레코드는 있는데 실제 파일이 Zotero 저장소에 없으면 다운로드가 404를 반환하고 논문은 실패로 표시됩니다. Zotero에서 "
+"직접 파일이 열리는지 확인하세요. 로컬 디스크에만 있다면 먼저 Zotero에 업로드해야 합니다."
 
 #: ../../troubleshooting.rst:74
 msgid "The frozen app fails to start on Windows"
-msgstr ""
+msgstr "패키징한 앱이 Windows에서 실행되지 않음"
 
 #: ../../troubleshooting.rst:76
 msgid ""
-"If you built it yourself: build in a clean virtual environment with conda"
-" **off** the PATH. Building inside a conda shell mixes conda's Qt "
-"libraries into the bundle, and the frozen app then dies with a missing-"
-"procedure error. ``build_desktop_clean.bat`` does this correctly."
+"If you built it yourself: build in a clean virtual environment with conda "
+"**off** the PATH. Building inside a conda shell mixes conda's Qt libraries "
+"into the bundle, and the frozen app then dies with a missing-procedure "
+"error. ``build_desktop_clean.bat`` does this correctly."
 msgstr ""
+"직접 빌드하신 경우 — conda가 PATH에서 **빠진** 깨끗한 가상환경에서 빌드하세요. conda 셸 안에서 빌드하면 conda의 "
+"Qt 라이브러리가 번들에 섞여 들어가고, 패키징된 앱이 프로시저를 찾지 못한다는 오류로 죽습니다. "
+"``build_desktop_clean.bat`` 이 이 방식대로 빌드합니다."
 
 #: ../../troubleshooting.rst:82
 msgid "The database is damaged"
-msgstr ""
+msgstr "데이터베이스가 손상됨"
 
 #: ../../troubleshooting.rst:84
 msgid ""
-"Do not run scripts against the live database from WSL while the Windows "
-"app is writing to it — the two disagree about file locking and can "
-"desynchronise an index."
+"Do not run scripts against the live database from WSL while the Windows app "
+"is writing to it — the two disagree about file locking and can desynchronise"
+" an index."
 msgstr ""
+"Windows 앱이 쓰고 있는 라이브 데이터베이스를 WSL에서 동시에 건드리지 마세요 — 파일 잠금 처리가 서로 달라 인덱스가 어긋날 수"
+" 있습니다."
 
 #: ../../troubleshooting.rst:88
 msgid ""
-"Recovery is usually cheap, because index damage does not lose rows: copy "
-"the database somewhere local, ``REINDEX`` the affected index, and confirm"
-" with ``PRAGMA integrity_check``. Take a backup with ``VACUUM INTO`` "
-"before any bulk operation."
+"Recovery is usually cheap, because index damage does not lose rows: copy the"
+" database somewhere local, ``REINDEX`` the affected index, and confirm with "
+"``PRAGMA integrity_check``. Take a backup with ``VACUUM INTO`` before any "
+"bulk operation."
 msgstr ""
+"복구는 대체로 간단합니다. 인덱스 손상은 행을 잃지 않기 때문입니다 — 데이터베이스를 로컬로 복사한 뒤 해당 인덱스에 "
+"``REINDEX`` 를 실행하고 ``PRAGMA integrity_check`` 로 확인하세요. 대량 작업 전에는 ``VACUUM "
+"INTO`` 로 백업을 떠두는 것이 좋습니다."
 
 #: ../../troubleshooting.rst:94
 msgid "Search finds nothing for a word I can see"
-msgstr ""
+msgstr "눈에 보이는 단어인데 검색되지 않음"
 
 #: ../../troubleshooting.rst:96
 msgid ""
-"Check the **Text** tab: if the page is blank there, OCR did not capture "
-"it and the paper needs reprocessing. Search reads the stored text, not "
-"the PDF."
+"Check the **Text** tab: if the page is blank there, OCR did not capture it "
+"and the paper needs reprocessing. Search reads the stored text, not the PDF."
 msgstr ""
-
+"**Text** 탭을 확인하세요. 거기서 페이지가 비어 있다면 OCR이 그 내용을 잡지 못한 것이므로 다시 처리해야 합니다. 검색은 "
+"PDF가 아니라 저장된 텍스트를 읽습니다."

@@ -12,29 +12,29 @@ msgstr ""
 "POT-Creation-Date: 2026-07-27 19:14+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: ko\n"
 "Language-Team: ko <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: ko\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.18.0\n"
 
 #: ../../developer_guide.rst:2
 msgid "Developer Guide"
-msgstr ""
+msgstr "개발자 안내서"
 
 #: ../../developer_guide.rst:5
 msgid "Layout"
-msgstr ""
+msgstr "구조"
 
 #: ../../developer_guide.rst:11
 msgid "Path"
-msgstr ""
+msgstr "경로"
 
 #: ../../developer_guide.rst:12
 msgid "Contents"
-msgstr ""
+msgstr "내용"
 
 #: ../../developer_guide.rst:13
 msgid "``papermeister/``"
@@ -42,7 +42,7 @@ msgstr ""
 
 #: ../../developer_guide.rst:14
 msgid "Core: models, database, ingestion, OCR, extraction, search, Zotero"
-msgstr ""
+msgstr "코어 — 모델, 데이터베이스, 수집, OCR, 추출, 검색, Zotero"
 
 #: ../../developer_guide.rst:15
 msgid "``desktop/``"
@@ -50,9 +50,11 @@ msgstr ""
 
 #: ../../developer_guide.rst:16
 msgid ""
-"The current app — ``views/``, ``services/``, ``components/``, "
-"``workers/``, ``windows/``, ``theme/``"
+"The current app — ``views/``, ``services/``, ``components/``, ``workers/``, "
+"``windows/``, ``theme/``"
 msgstr ""
+"현재 앱 — ``views/``, ``services/``, ``components/``, ``workers/``, "
+"``windows/``, ``theme/``"
 
 #: ../../developer_guide.rst:18
 msgid "``papermeister/ui/``"
@@ -60,7 +62,7 @@ msgstr ""
 
 #: ../../developer_guide.rst:19
 msgid "The older GUI. Frozen; two dialogs are still reused by the new app"
-msgstr ""
+msgstr "이전 GUI. 동결 상태이며, 다이얼로그 두 개는 새 앱에서 계속 재사용 중"
 
 #: ../../developer_guide.rst:20
 msgid "``scripts/``"
@@ -68,7 +70,7 @@ msgstr ""
 
 #: ../../developer_guide.rst:21
 msgid "Operational one-offs (migrations, bulk re-processing, audits)"
-msgstr ""
+msgstr "운영용 일회성 스크립트 (마이그레이션, 대량 재처리, 감사)"
 
 #: ../../developer_guide.rst:22
 msgid "``tests/``"
@@ -76,7 +78,7 @@ msgstr ""
 
 #: ../../developer_guide.rst:23
 msgid "pytest suite"
-msgstr ""
+msgstr "pytest 테스트 모음"
 
 #: ../../developer_guide.rst:24
 msgid "``devlog/``"
@@ -84,92 +86,110 @@ msgstr ""
 
 #: ../../developer_guide.rst:25
 msgid "Design notes, plans and implementation records"
-msgstr ""
+msgstr "설계 노트, 계획, 구현 기록"
 
 #: ../../developer_guide.rst:28
 msgid "Data model"
-msgstr ""
+msgstr "데이터 모델"
 
 #: ../../developer_guide.rst:38
 msgid ""
-"``Paper`` is one document. ``PaperFile`` is an attachment of it. "
-"``Passage`` is one page of OCR text. ``PaperBiblio`` holds extracted "
-"metadata separately from the curated fields, tagged by source model. A "
-"``Reference`` resolves to either a held ``Paper`` or an external "
-"``CitedWork`` — never both, and neither means it could not be identified."
+"``Paper`` is one document. ``PaperFile`` is an attachment of it. ``Passage``"
+" is one page of OCR text. ``PaperBiblio`` holds extracted metadata "
+"separately from the curated fields, tagged by source model. A ``Reference`` "
+"resolves to either a held ``Paper`` or an external ``CitedWork`` — never "
+"both, and neither means it could not be identified."
 msgstr ""
+"``Paper`` 는 문서 하나입니다. ``PaperFile`` 은 그 문서의 첨부파일, ``Passage`` 는 OCR 텍스트 한 "
+"페이지입니다. ``PaperBiblio`` 는 추출된 메타데이터를 직접 정리한 필드와 분리해 보관하며 어떤 모델이 만들었는지 함께 "
+"기록합니다. ``Reference`` 는 보유 중인 ``Paper`` 또는 외부 ``CitedWork`` 중 하나로 해소됩니다 — 둘 "
+"다인 경우는 없고, 둘 다 아니면 식별하지 못했다는 뜻입니다."
 
 #: ../../developer_guide.rst:44
 msgid ""
 "Full-text search uses two FTS5 indexes: ``passage_fts`` over page text "
 "(external-content, so the text is not duplicated) and ``paper_fts`` over "
-"titles and authors. Both are maintained by triggers — never write to them"
-" directly."
+"titles and authors. Both are maintained by triggers — never write to them "
+"directly."
 msgstr ""
+"전문 검색은 FTS5 인덱스 두 개를 씁니다 — 페이지 텍스트에 대한 ``passage_fts``(external-content 방식이라"
+" 본문이 중복 저장되지 않음)와 제목·저자에 대한 ``paper_fts``. 둘 다 트리거로 유지되므로 **직접 쓰지 마세요**."
 
 #: ../../developer_guide.rst:49
 msgid "Running things"
-msgstr ""
+msgstr "실행 방법"
 
 #: ../../developer_guide.rst:60
 msgid "Conventions"
-msgstr ""
+msgstr "관례"
 
 #: ../../developer_guide.rst:62
 msgid ""
 "**Scripts that change data take** ``--execute``. Without it they print a "
 "dry-run preview. There is no ``--dry-run`` flag; dry run is the default."
 msgstr ""
+"**데이터를 변경하는 스크립트는** ``--execute`` **를 받습니다.** 플래그가 없으면 미리보기(dry-run)만 출력합니다."
+" ``--dry-run`` 플래그는 없으며, dry-run이 기본값입니다."
 
 #: ../../developer_guide.rst:65
 msgid ""
-"**Every fix gets a regression test.** The test should fail against the "
-"old behaviour — verify that, rather than assuming it."
+"**Every fix gets a regression test.** The test should fail against the old "
+"behaviour — verify that, rather than assuming it."
 msgstr ""
+"**모든 수정에는 회귀 테스트를 붙입니다.** 그 테스트는 옛 동작에서 반드시 실패해야 하며, 가정하지 말고 실제로 확인하세요."
 
 #: ../../developer_guide.rst:68
 msgid ""
-"**devlog files** record the reasoning, not the diff — git already has the"
-" diff. Naming: ``YYYYMMDD_P##_title.md`` for plans, "
-"``YYYYMMDD_R##_title.md`` for reviews and audits, "
-"``YYYYMMDD_###_title.md`` for implementation records."
+"**devlog files** record the reasoning, not the diff — git already has the "
+"diff. Naming: ``YYYYMMDD_P##_title.md`` for plans, ``YYYYMMDD_R##_title.md``"
+" for reviews and audits, ``YYYYMMDD_###_title.md`` for implementation "
+"records."
 msgstr ""
+"**devlog 파일** 은 diff가 아니라 판단 근거를 기록합니다 — diff는 git이 이미 갖고 있습니다. 이름 규칙: 계획은 "
+"``YYYYMMDD_P##_제목.md``, 리뷰·감사는 ``YYYYMMDD_R##_제목.md``, 구현 기록은 "
+"``YYYYMMDD_###_제목.md``."
 
 #: ../../developer_guide.rst:72
 msgid ""
-"**HANDOFF.md** is the state of play between sessions. Read it first; "
-"update it last."
+"**HANDOFF.md** is the state of play between sessions. Read it first; update "
+"it last."
 msgstr ""
+"**HANDOFF.md** 는 세션 간 진행 상황입니다. 작업을 시작할 때 가장 먼저 읽고, 끝낼 때 가장 마지막에 갱신하세요."
 
 #: ../../developer_guide.rst:76
 msgid "Dependencies"
-msgstr ""
+msgstr "의존성"
 
 #: ../../developer_guide.rst:78
 msgid ""
 "``requirements.txt`` and ``requirements-dev.txt`` declare ranges; "
-"``requirements.lock`` and ``requirements-dev.lock`` pin exact versions "
-"with hashes. CI and release builds install from the locks, so a shipped "
-"build contains exactly what CI tested."
+"``requirements.lock`` and ``requirements-dev.lock`` pin exact versions with "
+"hashes. CI and release builds install from the locks, so a shipped build "
+"contains exactly what CI tested."
 msgstr ""
+"``requirements.txt`` 와 ``requirements-dev.txt`` 는 버전 범위를 선언하고, "
+"``requirements.lock`` 과 ``requirements-dev.lock`` 은 해시와 함께 정확한 버전을 고정합니다. "
+"CI와 릴리스 빌드는 lock에서 설치하므로, 배포되는 빌드에는 CI가 테스트한 것과 정확히 같은 패키지가 들어갑니다."
 
 #: ../../developer_guide.rst:89
 msgid ""
-"``make lock`` keeps existing pins as preferences and moves only what must"
-" move, so an unrelated upstream release does not churn the lock."
+"``make lock`` keeps existing pins as preferences and moves only what must "
+"move, so an unrelated upstream release does not churn the lock."
 msgstr ""
+"``make lock`` 은 기존 핀을 선호값으로 유지하고 꼭 움직여야 하는 것만 옮기므로, 무관한 상위 패키지 릴리스 때문에 lock이"
+" 흔들리지 않습니다."
 
 #: ../../developer_guide.rst:93
 msgid "Continuous integration"
-msgstr ""
+msgstr "지속적 통합(CI)"
 
 #: ../../developer_guide.rst:99
 msgid "Workflow"
-msgstr ""
+msgstr "워크플로"
 
 #: ../../developer_guide.rst:100
 msgid "Purpose"
-msgstr ""
+msgstr "용도"
 
 #: ../../developer_guide.rst:101
 msgid "``test.yml``"
@@ -177,9 +197,9 @@ msgstr ""
 
 #: ../../developer_guide.rst:102
 msgid ""
-"ruff and mypy, then the suite on Linux and Windows. Coverage is measured "
-"on Linux with a ratchet floor"
-msgstr ""
+"ruff and mypy, then the suite on Linux and Windows. Coverage is measured on "
+"Linux with a ratchet floor"
+msgstr "ruff와 mypy를 돌린 뒤 Linux·Windows에서 테스트 실행. 커버리지는 Linux에서 측정하며 하한선을 둠"
 
 #: ../../developer_guide.rst:104
 msgid "``security.yml``"
@@ -187,7 +207,7 @@ msgstr ""
 
 #: ../../developer_guide.rst:105
 msgid "pip-audit against the lockfile, plus the lock-check gate. Also weekly"
-msgstr ""
+msgstr "lock 파일에 대한 pip-audit과 lock-check 게이트. 주간 스케줄로도 실행"
 
 #: ../../developer_guide.rst:106
 msgid "``codeql.yml``"
@@ -195,7 +215,7 @@ msgstr ""
 
 #: ../../developer_guide.rst:107
 msgid "Static analysis of our own code, on push and weekly"
-msgstr ""
+msgstr "자체 코드에 대한 정적 분석. push 시점과 주간 스케줄"
 
 #: ../../developer_guide.rst:108
 msgid "``build.yml``"
@@ -203,7 +223,7 @@ msgstr ""
 
 #: ../../developer_guide.rst:109
 msgid "Manual packaging run for all three platforms"
-msgstr ""
+msgstr "세 플랫폼 패키징 수동 실행"
 
 #: ../../developer_guide.rst:110
 msgid "``release.yml``"
@@ -211,7 +231,7 @@ msgstr ""
 
 #: ../../developer_guide.rst:111
 msgid "Tag ``v*.*.*`` → test, build, publish with checksums"
-msgstr ""
+msgstr "``v*.*.*`` 태그 → 테스트·빌드 후 체크섬과 함께 릴리스 발행"
 
 #: ../../developer_guide.rst:112
 msgid "``manual-release.yml``"
@@ -219,7 +239,7 @@ msgstr ""
 
 #: ../../developer_guide.rst:113
 msgid "Same, triggered by hand, for pre-releases and re-cuts"
-msgstr ""
+msgstr "동일하되 수동 실행. 프리릴리스와 재발행용"
 
 #: ../../developer_guide.rst:114
 msgid "``dependabot-lock-refresh.yml``"
@@ -227,7 +247,7 @@ msgstr ""
 
 #: ../../developer_guide.rst:115
 msgid "Regenerates the locks on a Dependabot PR so its checks can pass"
-msgstr ""
+msgstr "Dependabot PR에서 lock을 다시 생성해 검사를 통과시킴"
 
 #: ../../developer_guide.rst:116
 msgid "``docs.yml``"
@@ -235,45 +255,50 @@ msgstr ""
 
 #: ../../developer_guide.rst:117
 msgid "Builds this manual and deploys it to GitHub Pages"
-msgstr ""
+msgstr "이 매뉴얼을 빌드해 GitHub Pages에 배포"
 
 #: ../../developer_guide.rst:119
 msgid ""
 "mypy runs against a list of modules that are already clean, and the list "
 "grows as more are cleaned — it is a ratchet, not a blanket check."
 msgstr ""
+"mypy는 이미 오류가 없는 모듈 목록만 검사하며, 정리되는 모듈이 늘어날 때마다 목록도 늘어납니다 — 전면 검사가 아니라 점진적 확대 "
+"방식입니다."
 
 #: ../../developer_guide.rst:123
 msgid "Releasing"
-msgstr ""
+msgstr "릴리스"
 
 #: ../../developer_guide.rst:125
 msgid "Add a section to ``CHANGELOG.md`` for the version"
-msgstr ""
+msgstr "``CHANGELOG.md`` 에 해당 버전 섹션 추가"
 
 #: ../../developer_guide.rst:126
 msgid "Bump ``version.py``"
-msgstr ""
+msgstr "``version.py`` 버전 올리기"
 
 #: ../../developer_guide.rst:127
 msgid "Tag ``vX.Y.Z`` and push"
-msgstr ""
+msgstr "``vX.Y.Z`` 태그를 붙여 push"
 
 #: ../../developer_guide.rst:129
 msgid ""
-"``release.yml`` runs the tests, builds all three platforms, and publishes"
-" a release whose notes are the CHANGELOG section for that version — so "
-"the changelog stays the single source of truth. Build numbers come from "
-"the commit count, which keeps tagged and manual builds consistent."
+"``release.yml`` runs the tests, builds all three platforms, and publishes a "
+"release whose notes are the CHANGELOG section for that version — so the "
+"changelog stays the single source of truth. Build numbers come from the "
+"commit count, which keeps tagged and manual builds consistent."
 msgstr ""
+"``release.yml`` 이 테스트를 돌리고 세 플랫폼을 빌드한 뒤, 해당 버전의 CHANGELOG 섹션을 릴리스 노트로 삼아 "
+"발행합니다 — 그래서 CHANGELOG가 유일한 원본으로 유지됩니다. 빌드 번호는 커밋 수에서 나오므로 태그 빌드와 수동 빌드가 "
+"일관됩니다."
 
 #: ../../developer_guide.rst:135
 msgid "Building the manual"
-msgstr ""
+msgstr "매뉴얼 빌드"
 
 #: ../../developer_guide.rst:142
 msgid ""
-"Korean translations live in ``locale/ko/LC_MESSAGES/``. Refresh the "
-"catalogs after changing English text:"
+"Korean translations live in ``locale/ko/LC_MESSAGES/``. Refresh the catalogs"
+" after changing English text:"
 msgstr ""
-
+"한국어 번역은 ``locale/ko/LC_MESSAGES/`` 에 있습니다. 영어 원문을 수정한 뒤에는 카탈로그를 갱신하세요:"

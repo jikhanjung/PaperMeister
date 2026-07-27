@@ -12,17 +12,17 @@ msgstr ""
 "POT-Creation-Date: 2026-07-27 19:14+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: ko\n"
 "Language-Team: ko <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: ko\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.18.0\n"
 
 #: ../../quick_start.rst:2
 msgid "Quick Start"
-msgstr ""
+msgstr "빠른 시작"
 
 #: ../../quick_start.rst:4
 msgid ""
@@ -30,56 +30,65 @@ msgid ""
 "citation network. Each step is resumable — interrupting a batch and re-"
 "running it picks up where it stopped."
 msgstr ""
+"Zotero 라이브러리를 아무것도 없는 상태에서 검색 가능한 전문과 인용 네트워크까지 끌고 가는 과정입니다. 각 단계는 재개 가능하므로,"
+" 작업을 중단했다가 다시 실행하면 멈춘 지점부터 이어집니다."
 
 #: ../../quick_start.rst:9
 msgid "1. Connect Zotero"
-msgstr ""
+msgstr "1. Zotero 연결"
 
 #: ../../quick_start.rst:11
 msgid "Settings → **Zotero** tab → enter ``user_id`` and API key → OK."
-msgstr ""
+msgstr "Settings → **Zotero** 탭 → ``user_id`` 와 API 키 입력 → OK."
 
 #: ../../quick_start.rst:13
 msgid ""
-"The app syncs on startup and whenever you press **Sync** in the left "
-"rail. Collections appear as a tree under the *My Library* tab; papers "
-"show in the middle list."
+"The app syncs on startup and whenever you press **Sync** in the left rail. "
+"Collections appear as a tree under the *My Library* tab; papers show in the "
+"middle list."
 msgstr ""
+"앱은 시작할 때, 그리고 왼쪽 레일의 **Sync** 를 누를 때마다 동기화합니다. 컬렉션은 *My Library* 탭 아래 트리로, "
+"논문은 가운데 목록에 표시됩니다."
 
 #: ../../quick_start.rst:17
 msgid ""
 "The first sync only fetches metadata. PDFs stay in Zotero until they are "
 "needed."
-msgstr ""
+msgstr "첫 동기화는 메타데이터만 가져옵니다. PDF는 필요해질 때까지 Zotero에 그대로 있습니다."
 
 #: ../../quick_start.rst:20
 msgid "2. Run OCR"
-msgstr ""
+msgstr "2. OCR 실행"
 
 #: ../../quick_start.rst:22
 msgid ""
-"Right-click a collection → **Process Folder (OCR → Biblio)**, or right-"
-"click *My Library* → **Process All** for the whole library."
+"Right-click a collection → **Process Folder (OCR → Biblio)**, or right-click"
+" *My Library* → **Process All** for the whole library."
 msgstr ""
+"컬렉션 우클릭 → **Process Folder (OCR → Biblio)**, 라이브러리 전체는 *My Library* 우클릭 → "
+"**Process All**."
 
 #: ../../quick_start.rst:25
 msgid ""
-"The Process window shows progress per file. Each PDF is downloaded, sent "
-"to the OCR backend, and its text stored page by page. Results are cached "
-"in ``~/.papermeister/ocr_json/``, so re-processing a paper is free."
+"The Process window shows progress per file. Each PDF is downloaded, sent to "
+"the OCR backend, and its text stored page by page. Results are cached in "
+"``~/.papermeister/ocr_json/``, so re-processing a paper is free."
 msgstr ""
+"Process 창이 파일별 진행 상황을 보여줍니다. 각 PDF는 내려받아 OCR 백엔드로 보내지고, 그 텍스트가 페이지 단위로 "
+"저장됩니다. 결과는 ``~/.papermeister/ocr_json/`` 에 캐시되므로 같은 논문을 다시 처리하는 데는 비용이 들지 "
+"않습니다."
 
 #: ../../quick_start.rst:29
 msgid "Watch the status pill in the paper list:"
-msgstr ""
+msgstr "논문 목록의 상태 배지를 확인하세요:"
 
 #: ../../quick_start.rst:35
 msgid "Pill"
-msgstr ""
+msgstr "배지"
 
 #: ../../quick_start.rst:36
 msgid "Meaning"
-msgstr ""
+msgstr "의미"
 
 #: ../../quick_start.rst:37
 msgid "``wait``"
@@ -87,7 +96,7 @@ msgstr ""
 
 #: ../../quick_start.rst:38
 msgid "PDF present, not processed yet"
-msgstr ""
+msgstr "PDF는 있으나 아직 처리 전"
 
 #: ../../quick_start.rst:39
 msgid "``OCR``"
@@ -95,7 +104,7 @@ msgstr ""
 
 #: ../../quick_start.rst:40
 msgid "text extracted, no bibliographic data yet"
-msgstr ""
+msgstr "텍스트는 추출됐으나 서지 정보는 아직 없음"
 
 #: ../../quick_start.rst:41
 msgid "``done``"
@@ -103,7 +112,7 @@ msgstr ""
 
 #: ../../quick_start.rst:42
 msgid "metadata extracted and applied"
-msgstr ""
+msgstr "메타데이터 추출 후 반영 완료"
 
 #: ../../quick_start.rst:43
 msgid "``rev``"
@@ -111,7 +120,7 @@ msgstr ""
 
 #: ../../quick_start.rst:44
 msgid "extracted metadata disagrees with Zotero — needs your review"
-msgstr ""
+msgstr "추출된 메타데이터가 Zotero와 불일치 — 검토 필요"
 
 #: ../../quick_start.rst:45
 msgid "``err``"
@@ -119,7 +128,7 @@ msgstr ""
 
 #: ../../quick_start.rst:46
 msgid "processing failed"
-msgstr ""
+msgstr "처리 실패"
 
 #: ../../quick_start.rst:47
 msgid "``skip``"
@@ -127,7 +136,7 @@ msgstr ""
 
 #: ../../quick_start.rst:48
 msgid "not a PDF (supplementary file, link attachment)"
-msgstr ""
+msgstr "PDF가 아님 (보충자료, 링크 첨부)"
 
 #: ../../quick_start.rst:49
 msgid "``—``"
@@ -135,84 +144,95 @@ msgstr ""
 
 #: ../../quick_start.rst:50
 msgid "no PDF attached"
-msgstr ""
+msgstr "첨부된 PDF 없음"
 
 #: ../../quick_start.rst:53
 msgid "3. Extract bibliographic data"
-msgstr ""
+msgstr "3. 서지 정보 추출"
 
 #: ../../quick_start.rst:55
 msgid ""
 "If automatic extraction is on, this follows OCR without any action. "
 "Otherwise right-click a paper → **Extract Biblio**."
 msgstr ""
+"자동 추출이 켜져 있으면 OCR에 이어 자동으로 진행됩니다. 그렇지 않으면 논문 우클릭 → **Extract Biblio**."
 
 #: ../../quick_start.rst:58
 msgid ""
 "The result is stored in a separate table, never written over your Zotero "
-"data directly. When the extraction agrees with what Zotero already has, "
-"or fills empty fields only, it is applied automatically. When it "
-"conflicts, the paper is marked ``rev`` and waits for you."
+"data directly. When the extraction agrees with what Zotero already has, or "
+"fills empty fields only, it is applied automatically. When it conflicts, the"
+" paper is marked ``rev`` and waits for you."
 msgstr ""
+"결과는 별도 테이블에 저장되며 Zotero 데이터를 직접 덮어쓰지 않습니다. 추출 결과가 Zotero의 기존 값과 일치하거나 비어 있던 "
+"항목만 채우는 경우에는 자동으로 반영됩니다. 충돌하는 경우에는 논문이 ``rev`` 로 표시되고 검토를 기다립니다."
 
 #: ../../quick_start.rst:63
 msgid ""
-"To review: select the paper, open the **Metadata** tab, and compare the "
-"two columns field by field. Pick a side per row, edit the value if "
-"neither is right, then **Apply**."
+"To review: select the paper, open the **Metadata** tab, and compare the two "
+"columns field by field. Pick a side per row, edit the value if neither is "
+"right, then **Apply**."
 msgstr ""
+"검토 방법 — 논문을 선택하고 **Metadata** 탭을 열어 두 열을 항목별로 비교합니다. 행마다 어느 쪽을 쓸지 고르고, 둘 다 "
+"맞지 않으면 직접 수정한 뒤 **Apply** 를 누릅니다."
 
 #: ../../quick_start.rst:68
 msgid "4. Parse reference lists"
-msgstr ""
+msgstr "4. 참고문헌 목록 파싱"
 
 #: ../../quick_start.rst:70
 msgid ""
-"Right-click a paper, a collection, or *My Library* → **Extract "
-"References**."
-msgstr ""
+"Right-click a paper, a collection, or *My Library* → **Extract References**."
+msgstr "논문·컬렉션·*My Library* 중 하나를 우클릭 → **Extract References**."
 
 #: ../../quick_start.rst:72
 msgid ""
-"Each paper's bibliography is located, split into entries, and parsed into"
-" structured fields. Entries are then matched against papers you already "
-"hold — by DOI first, then by title with author and year as corroboration."
-" Everything else becomes an external *cited work*."
+"Each paper's bibliography is located, split into entries, and parsed into "
+"structured fields. Entries are then matched against papers you already hold "
+"— by DOI first, then by title with author and year as corroboration. "
+"Everything else becomes an external *cited work*."
 msgstr ""
+"각 논문의 참고문헌을 찾아 항목으로 나누고 구조화된 필드로 파싱합니다. 그다음 이미 보유한 논문과 매칭합니다 — DOI를 먼저 보고, "
+"그다음 제목에 저자와 연도를 방증으로 함께 사용합니다. 나머지는 외부 *인용 문헌(cited work)* 이 됩니다."
 
 #: ../../quick_start.rst:77
 msgid ""
-"The **References** tab of a paper shows both directions: works it cites, "
-"and papers in your library that cite it."
+"The **References** tab of a paper shows both directions: works it cites, and"
+" papers in your library that cite it."
 msgstr ""
+"논문의 **References** 탭은 양방향을 모두 보여줍니다 — 이 논문이 인용한 문헌과, 라이브러리에서 이 논문을 인용한 논문들."
 
 #: ../../quick_start.rst:81
 msgid "5. Search"
-msgstr ""
+msgstr "5. 검색"
 
 #: ../../quick_start.rst:83
 msgid ""
-"Type in the search box and press Enter. Search covers the full OCR text "
-"of every page, plus titles and author names, so a paper is findable by a "
-"term that never appears in its body."
+"Type in the search box and press Enter. Search covers the full OCR text of "
+"every page, plus titles and author names, so a paper is findable by a term "
+"that never appears in its body."
 msgstr ""
+"검색창에 입력하고 Enter를 누르세요. 검색은 모든 페이지의 OCR 전문과 제목·저자명을 함께 다루므로, 본문에 한 번도 나오지 않는 "
+"단어로도 논문을 찾을 수 있습니다."
 
 #: ../../quick_start.rst:87
 msgid ""
 "Results show a snippet with the matched words in bold; opening a result "
 "highlights the matches inside the **Text** tab."
-msgstr ""
+msgstr "결과에는 일치 단어가 굵게 표시된 발췌가 함께 나오고, 결과를 열면 **Text** 탭 안에서 일치 부분이 강조됩니다."
 
 #: ../../quick_start.rst:91
 msgid "6. See the citation network"
-msgstr ""
+msgstr "6. 인용 네트워크 보기"
 
 #: ../../quick_start.rst:93
 msgid ""
-"Right-click a paper → **Show in citation network** for an interactive "
-"graph centred on it: what it cites, what cites it, and the external works"
-" it cites. Click any node to re-centre."
+"Right-click a paper → **Show in citation network** for an interactive graph "
+"centred on it: what it cites, what cites it, and the external works it "
+"cites. Click any node to re-centre."
 msgstr ""
+"논문 우클릭 → **Show in citation network** 를 선택하면 해당 논문을 중심으로 한 대화형 그래프가 열립니다 — 이"
+" 논문이 인용한 것, 이 논문을 인용한 것, 그리고 인용한 외부 문헌. 아무 노드나 클릭하면 그 노드를 중심으로 다시 그립니다."
 
 #: ../../quick_start.rst:97
 msgid ""
@@ -220,4 +240,5 @@ msgid ""
 "library cites them — a direct answer to \"what do I keep citing but not "
 "own?\""
 msgstr ""
-
+"레일의 **Cited Works** 뷰는 외부 문헌을 라이브러리에서 인용한 횟수 순으로 나열합니다 — \"자주 인용하는데 정작 보유하지 "
+"않은 문헌은 무엇인가?\"에 대한 직접적인 답입니다."
