@@ -1,0 +1,26 @@
+version: 2
+updates:
+  # Python dependencies. Bumps land in requirements.txt / requirements-dev.txt;
+  # dependabot-lock-refresh.yml then regenerates the lockfiles on the PR branch,
+  # because a bump without a re-lock fails the lock-check gate in security.yml.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "@jikhanjung"
+    assignees:
+      - "@jikhanjung"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # Actions get security fixes and pinned majors go stale otherwise.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"

@@ -32,6 +32,11 @@ jobs:
       - name: mypy (typed core modules)
         run: mypy papermeister/references.py papermeister/search.py papermeister/biblio.py
 
+      # Non-gating: surfaces the most tangled functions so they can be picked off
+      # deliberately, without blocking work on code that is already this shape.
+      - name: Complexity report (C901, non-gating)
+        run: ruff check --select C901 --statistics . || true
+
   # --------------------------------------------------------------------------
   # Tests — Linux + Windows (the platforms that matter here: WSL-dev, Windows-run).
   # All legs gating. Same commands on both via bash (Git Bash on Windows).
@@ -88,7 +93,27 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: pytest tests/test_smoke.py -v
 
+      # Coverage is measured on Linux only (one number, no per-OS merging).
+      # --cov-fail-under is a ratchet floor, currently just under the measured
+      # 20%: it exists to stop regressions, not to claim the suite is thorough.
+      # Raise it as tests are added. Scoped to the two shipped packages —
+      # scripts/ are one-off operational tools, not part of the app.
       - name: Run test suite
         env:
           QT_QPA_PLATFORM: offscreen
-        run: pytest tests/ --tb=short
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            pytest tests/ --cov=papermeister --cov=desktop \
+              --cov-report=term --cov-report=xml \
+              --cov-fail-under=18 --tb=short
+          else
+            pytest tests/ --tb=short
+          fi
+
+      - name: Upload coverage (Linux)
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-py${{ matrix.python-version }}
+          path: coverage.xml
+          if-no-files-found: ignore

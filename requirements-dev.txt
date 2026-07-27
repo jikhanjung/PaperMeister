@@ -4,5 +4,6 @@
 
 ruff
 pytest
+pytest-cov
 mypy
 pip-audit

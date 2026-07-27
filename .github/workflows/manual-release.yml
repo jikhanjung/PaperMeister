@@ -1,0 +1,131 @@
+name: Manual Release
+
+# Publish a release without pushing a tag first — for pre-releases and for
+# re-cutting a build when a tag already exists. The tagged path (release.yml)
+# stays the normal route; this is the escape hatch, mirroring Modan2.
+#
+# Release notes come from the input if given, else from the matching CHANGELOG.md
+# section, so the changelog stays the single source of truth either way.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Version tag (e.g. v0.1.2-beta.1)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Is this a pre-release?'
+        required: true
+        type: boolean
+        default: true
+      release_notes:
+        description: 'Release notes (optional — defaults to the CHANGELOG section)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  # Same commit-count build number as release.yml, so a manually-released build
+  # carries a number consistent with the tagged ones (github.run_number is
+  # per-workflow and would diverge). Needs full history.
+  compute-build-number:
+    runs-on: ubuntu-latest
+    outputs:
+      build_number: ${{ steps.bn.outputs.build_number }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: bn
+        run: echo "build_number=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+
+  call-build-workflow:
+    needs: [test, compute-build-number]
+    uses: ./.github/workflows/reusable_build.yml
+    with:
+      build_number: ${{ needs.compute-build-number.outputs.build_number }}
+
+  create-release:
+    needs: call-build-workflow
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: release-files/
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd release-files
+          find . -type f \( -name "*.zip" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.dmg" \) -exec sha256sum {} \; > ../SHA256SUMS.txt
+          cd ..
+          cat SHA256SUMS.txt
+
+      - name: Prepare release body
+        id: release_body
+        env:
+          INPUT_NOTES: ${{ inputs.release_notes }}
+          VERSION_TAG: ${{ inputs.version_tag }}
+        run: |
+          VERSION="${VERSION_TAG#v}"
+          if [ -n "$INPUT_NOTES" ]; then
+            NOTES="$INPUT_NOTES"
+            echo "Using release notes from the workflow input"
+          else
+            NOTES=$(awk -v hdr="## [$VERSION]" '
+              index($0, hdr) == 1 { found=1; next }
+              found && /^## \[/   { exit }
+              found               { print }
+            ' CHANGELOG.md | sed -e '/./,$!d' | tac | sed -e '/./,$!d' | tac)
+            if [ -n "$NOTES" ]; then
+              echo "Using CHANGELOG.md section for $VERSION"
+            else
+              echo "::warning::No release notes given and no CHANGELOG.md section for $VERSION; publishing checksums only"
+            fi
+          fi
+
+          {
+            echo 'RELEASE_BODY<<GH_EOF'
+            echo "🚀 PaperMeister ${VERSION_TAG}"
+            echo ""
+            echo "Windows (portable zip + installer), Linux (AppImage), macOS (DMG)."
+            echo ""
+            if [ -n "$NOTES" ]; then
+              echo "## What's changed"
+              echo ""
+              echo "$NOTES"
+              echo ""
+              echo "---"
+              echo ""
+            fi
+            echo "## SHA256 Checksums"
+            echo ""
+            echo '```'
+            cat SHA256SUMS.txt
+            echo '```'
+            echo ""
+            echo "Built from commit: ${{ github.sha }}"
+            echo 'GH_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ inputs.version_tag }}
+          name: PaperMeister ${{ inputs.version_tag }}
+          body: ${{ steps.release_body.outputs.RELEASE_BODY }}
+          prerelease: ${{ inputs.prerelease }}
+          files: |
+            release-files/**/*.zip
+            release-files/**/*.exe
+            release-files/**/*.AppImage
+            release-files/**/*.dmg
+            SHA256SUMS.txt
