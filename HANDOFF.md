@@ -207,6 +207,17 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 
 ## 최근 세션 요약
 
+**2026-07-27 (세션 52)** — 상태 점검 + CI 그린 복구 — [devlog 074](./devlog/20260727_074_Lock_Check_Pin_Preference_Fix.md)
+- 상태 점검: main clean, `pytest` 81 passed, v0.1.1 릴리스 완료. **본체로 남은 건 references 추출 완주** (마지막 실측 1,733/9,889편, 17.5%). 라이브 DB는 오늘도 쓰이는 중 — WSL에서 read-only 조회는 WAL/NTFS로 `disk I/O error`라 현재 수치 미확인, Windows에서 `scripts/refs_progress.py`로 볼 것
+- **`make lock-check`가 upstream 릴리스마다 red 되던 문제 수정**: `lock`은 기존 lock 파일을 핀 선호로 읽는데 `lock-check`는 빈 temp에 컴파일해 전부 fresh 해석 → pytz가 7/25에 2026.3.post1을 내자 소스 변경 0인데 실패. temp를 커밋된 lock으로 seed해 양쪽 해석 조건을 일치시킴 + 의도적 업그레이드용 `make lock-upgrade` 분리. **lock 파일 자체는 stale하지 않아 손대지 않음**. 검증: lock-check 통과 + `tabulate` 임시 추가 시 정상 실패(게이트 살아있음)
+- 라이브러리 정리: `papermeister.db.corrupt-20260625` / `.pre-p13-backup` 삭제(사용자, ~9GB 회수)
+- 미반영이던 **devlog 073**(lockfile + CodeQL + 버전 일치 테스트, Modan2 CI 패리티)을 HANDOFF에 편입
+
+**2026-07-24 (세션 51)** — CI 패리티 — [devlog 073](./devlog/20260724_073_CI_Parity_Lockfiles_CodeQL_Version_Test.md)
+- `requirements.lock` / `requirements-dev.lock`(uv `--universal --generate-hashes`) 도입, CI·release는 `pip install --require-hashes`로 설치 → 배포본이 CI가 테스트한 그 wheel임이 증명됨. `Makefile`의 `lock`/`lock-check` + `security.yml`의 lock-check job
+- `codeql.yml`(자체 코드 data-flow SAST, push+주간+PR) 추가. ruff `S`(bandit)는 P15부터 이미 보유
+- `tests/test_version_consistency.py` — `version.py` 단일 소스 일치 검증
+
 **2026-07-23 (세션 50)** — 상태 점검 + **P14 계획/착수** (references 진행 모니터 + 인용 네트워크) — [devlog P14](./devlog/20260723_P14_Citation_Matching_And_Network.md)
 - HANDOFF 상단이 세션 49(P11 "라이브 대기")에 멈춰 있어 git log(P12/P13/065~068)와 어긋남을 발견 → **Windows 라이브 DB(2.3GB)를 WSL 로컬로 복사 후 스키마·카운트 실측**으로 실제 진행 확정
 - **P13 FTS 마이그레이션 적용 완료 확인**: `passage_fts` external-content + standalone `paper_fts` + 트리거 9종, `passage_fts_content` 부재, `pre-p13-backup`(4.3GB) 존재, `quick_check=ok`. DB 4.3→2.3GB
@@ -248,7 +259,7 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 - **A1 재-resolve + 정규화 라이브 실행 완료** (Windows, 앱 닫은 상태): `resolve_references.py --reresolve --execute` → `normalize_works.py --pass 1 --execute` → `--pass 2 --execute`(~61분, LLM 병합). **효과(라이브 DB 실측)**: unresolved **31.7%→4.3%** 급감, held 13,123→**17,671**, external 58,473→**83,388**, held→held 엣지 12,038→**17,089**, active CitedWork 49,728→**59,963**(pass1이 미분류 인용을 canonicalize → 순증, pass2가 near-dup 5,989 제거). `quick_check=ok`
   - **병합 품질 spot-check 통과**: `match_method='work-llm'` 7,955 refs 샘플 검사 — 전부 같은 문헌의 OCR/철자/음차 변형(키릴 혼입까지 정상 병합), Hupé 1953/1955 Part1/2를 연도로 구분 유지(과대병합 없음). borderline 1건(work#20427 Whittington), out-degree 이상치 1건(Education 2005, 367)만 관찰 대상
   - **다음**: PaperMeister 재시작(새 스코어러 + Cancel 버튼 반영) → 추출 재개. 추출이 더 진행되면 재-resolve 한 번 더(멱등). 증분 재-resolve 훅(sync 콜백)·L2/L3(인앱 ego-view / 공동인용)은 이후
-- 참고: `.papermeister/papermeister.db.pre-p13-backup`(4.3GB, 6/26)는 검증 종료 후 삭제 가능
+- 참고: `.papermeister/papermeister.db.pre-p13-backup`(4.3GB, 6/26)는 검증 종료 후 삭제 가능 → **세션 52에서 `corrupt-20260625`와 함께 삭제됨**
 
 **2026-06-25 (세션 49)** — [devlog P11](./devlog/20260625_P11_References_Extraction_Citation_Network.md)
 - **P11 References 추출 + 인용 네트워크 (Phase 1) 설계 + 코드 작성** — 논문 본문 references 섹션을 파싱해 인용 네트워크의 토대 구축. held(PDF 보유) vs cited-only(외부) 구분이 핵심 요구
