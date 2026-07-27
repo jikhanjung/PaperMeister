@@ -181,3 +181,38 @@ def test_missing_references_section_returns_the_same_tuple_shape(monkeypatch):
 
     assert entries == [] and complete is True
     assert skipped == biblio._no_skips()
+
+
+@pytest.mark.unit
+def test_empty_array_for_a_located_section_is_not_accepted(one_batch_at_a_time,
+                                                           monkeypatch):
+    """A found references section that yields nothing is a contradiction.
+
+    Live regression: prompting the model to emit [] for non-bibliographic text
+    gave it an escape hatch it used on a Korean reference list — 47 entries, []
+    back for every batch in under a second each — and the paper was stamped
+    "no references section", excluding it from every future batch with zero
+    references stored. Silent permanent loss; a retry costs almost nothing.
+    """
+    monkeypatch.setattr(biblio, '_call_qwen', lambda *a, **k: '[]')
+
+    entries, _, _, complete, skipped = biblio.extract_references_llm('h')
+
+    assert entries == []
+    assert complete is False              # NOT stamped checked
+    assert skipped['empty_result'] == 1
+    assert 'model returned nothing' in biblio.describe_skips(skipped)
+
+
+@pytest.mark.unit
+def test_empty_array_on_a_fallback_block_still_means_none(one_batch_at_a_time,
+                                                          monkeypatch):
+    """The letter case must keep working: no heading was found, so [] really is
+    the document saying it has no bibliography."""
+    one_batch_at_a_time('low')
+    monkeypatch.setattr(biblio, '_call_qwen', lambda *a, **k: '[]')
+
+    entries, _, _, complete, skipped = biblio.extract_references_llm('h')
+
+    assert entries == [] and complete is True
+    assert skipped == biblio._no_skips()

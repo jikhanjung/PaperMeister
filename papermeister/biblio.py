@@ -820,9 +820,13 @@ _REFS_PROMPT = (
     "- `year`: the publication year only.\n"
     "- Return one object per input entry; if an entry is not a real reference, "
     "use type \"unknown\" with empty fields (do not drop it).\n"
-    "- If the text contains NO bibliographic references at all — it is body "
-    "prose, a letter, an abstract, acknowledgements, or similar — output an "
-    "empty array [] and nothing else. Never answer in prose.\n"
+    "- Output [] ONLY if the text is clearly not a bibliography at all — body "
+    "prose, a letter, an abstract, acknowledgements, an index. Never answer in "
+    "prose; use [] instead.\n"
+    "- Do NOT return [] because the entries are hard to read. OCR noise, an "
+    "unfamiliar language or script (Korean, Japanese, Chinese, Russian…), "
+    "abbreviated journal names, or unusual formatting are NOT reasons to give "
+    "up: extract whatever fields you can and leave the rest empty.\n"
     "- Output ONLY the JSON array.\n\n"
 )
 
@@ -956,7 +960,8 @@ def _no_skips() -> dict:
     all usually means the model was handed text that isn't a bibliography and
     answered in prose. Only the second one can mean "this paper has none".
     """
-    return {'timeout': 0, 'bad_json': 0, 'no_array': 0, 'entries_lost': 0}
+    return {'timeout': 0, 'bad_json': 0, 'no_array': 0, 'empty_result': 0,
+            'entries_lost': 0}
 
 
 def describe_skips(skipped: dict) -> str:
@@ -971,6 +976,8 @@ def describe_skips(skipped: dict) -> str:
         parts.append(f"no array x{skipped['no_array']}")
     if skipped.get('timeout'):
         parts.append(f"timeout x{skipped['timeout']}")
+    if skipped.get('empty_result'):
+        parts.append('model returned nothing for a located section')
     if not parts:
         return ''
     if skipped.get('entries_lost'):
@@ -1041,6 +1048,7 @@ def extract_references_llm(
     # Position whose batch has already been retried at the token ceiling, so a
     # second truncation there escalates to splitting instead of looping.
     boost_at = -1
+    logger.info('%srefs: block confidence=%s, %d entries', tag, confidence, total)
     i = 0
     while i < total:
         # Take up to the current adaptive batch size, also bounded by chars.
@@ -1171,6 +1179,23 @@ def extract_references_llm(
     # Conservative on purpose — a high-confidence block (we DID find a
     # references section) that won't parse is a real failure, and so is a
     # partially-parsed fallback block. Both stay PARTIAL.
+    # We located an actual references section (a heading or a Bibliography
+    # label) and the model handed back nothing at all for it. That is a
+    # contradiction, not a finding — believe the block, not the model.
+    #
+    # Getting this wrong is expensive in one direction only. Marking it checked
+    # excludes the paper from every future batch with zero references stored,
+    # and nothing ever revisits it: silent, permanent loss. Leaving it unchecked
+    # only costs a retry. Observed live: a Korean paper whose block split into
+    # 47 entries came back [] for every batch in under a second each — far too
+    # fast to have parsed anything — and was stamped "no references section".
+    if complete and not parsed and confidence != 'low':
+        logger.warning('%srefs: located a %s-confidence section with %d entries but '
+                       'the model returned nothing → leaving UNCHECKED for retry',
+                       tag, confidence, total)
+        complete = False
+        skipped['empty_result'] += 1
+
     if (not complete and confidence == 'low' and not parsed
             and skipped['no_array'] and not skipped['timeout']
             and not skipped['bad_json']):

@@ -224,6 +224,8 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
   - ✅ **라이브 검증**: 재기동 후 같은 DETR 논문이 `34 refs PARTIAL (3 refs lost)` → **`53 references, 6 in library`** 로 통과. **+19개** — "3 refs lost"가 실제로는 레퍼런스 19개였음(엔트리 3개 × blob당 6~7개, 절단 응답 6,544자 ≈ 22개 분량과 일치). **blob 가설 실측 확정**
   - 따라서 지표명 `refs_lost` → **`entries_lost`** 로 정정(표시도 `3 entries lost`). 엔트리 수를 세면서 "refs"라 부르면 **심각도를 6배 축소 보고**하게 됨. 실제 손실 레퍼런스 수는 파싱을 못 했으니 알 수 없으므로 아는 척하지 않는 쪽이 정직
   - 배처 거동은 건강함 확인(`1건 42.7s → 8건 62.4s` 정상 워밍업) — 이 논문의 PARTIAL은 서버 문제가 아니었음
+  - 🔴 **`[]` 탈출구 회귀 발견 + 수정** — [devlog 079](./devlog/20260727_079_Empty_Array_Escape_Hatch_Regression.md). 077 §4에서 넣은 프롬프트 줄("참고문헌 없으면 `[]`")을 모델이 **CJK 서지에서 남용** → `complete=True` → `references_checked=True` → **레퍼런스 0건으로 영구 확정**(PARTIAL 무한재시도라는 *복구 가능한* 상태를 **조용한 영구 유실**로 바꿔버린 최악의 교환). 라이브 증거: 한국어 논문(엔트리 **47개**, 실제 서지 목록)이 배치당 **0.05초/엔트리**로 응답 — 같은 런 정상 속도 4.4초/엔트리 대비 물리적으로 불가능 → `[]` 확정. 영향 논문 2편(로그상 9/115 배치)
+    - 수정: (1) 프롬프트에서 `[]` 조건 축소 + **OCR 잡음·낯선 언어·축약 저널명은 포기 사유 아님** 명시 (2) **코드 가드**: `high` confidence 블록(진짜 섹션을 찾음)인데 파싱 결과 0건 = 모순 → `complete=False`로 UNCHECKED 유지(`empty_result` 집계). 비대칭 근거 — 잘못 checked는 영구 유실, 잘못 unchecked는 재시도 1회. **fallback(`low`)의 `[]`는 checked-empty 유지**(편지 케이스 보존) (3) `refs: block confidence=…, N entries` 로깅 추가 (4) **복구**: `scripts/reset_references.py --scope empty-checked` — `references_checked=1`인데 Reference 0건인 논문의 플래그 해제(지울 데이터 0이라 안전, 진짜 무참고문헌은 같은 판정 재확인). 테스트 12케이스, **105 passed**
   - **미해결**: 일반적 재시도 give-up 카운터는 여전히 없음. 위 수정들이 확인된 두 원인(레퍼런스 없는 문서 / 절단)을 제거하므로 새 로그로 잔류분 규모를 본 뒤 필요성 판단
 - 라이브러리 정리: `papermeister.db.corrupt-20260625` / `.pre-p13-backup` 삭제(사용자, ~9GB 회수)
 - 미반영이던 **devlog 073**(lockfile + CodeQL + 버전 일치 테스트, Modan2 CI 패리티)을 HANDOFF에 편입
