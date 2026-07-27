@@ -214,20 +214,38 @@ def _call_claude(prompt: str) -> str:
     return envelope.get('result', '').strip()
 
 
+# Backoff between retries of a 5xx. The vLLM engine worker can die (OOM, CUDA
+# fault) and take a moment to come back; while it is down the front proxy answers
+# 502 `upstream: All connection attempts failed`, and the engine itself reports
+# 500 `EngineCore encountered an issue` on the way out. Both are transient and
+# the request is idempotent, so a short wait rides through a restart. Kept short
+# on purpose: a server that is genuinely down should fall through to the caller
+# so ServerGuard can pause the batch and poll, rather than being absorbed here.
+_QWEN_5XX_BACKOFF = (5.0, 15.0)
+
+
 def _call_qwen(prompt: str, base_url: str, max_tokens: int = 2048,
-               read_timeout: int = 180, retries: int = 0, label: str = '') -> str:
+               read_timeout: int = 180, retries: int = 0, label: str = '',
+               server_retries: int = 2) -> str:
     """Call Qwen3 via OpenAI-compatible API. Returns raw text output.
 
     `read_timeout` is the per-attempt read timeout (connect is fixed at 10s).
     `retries` extra attempts on a timeout / connection drop (the server may be
     momentarily busy with OCR) — the request itself is idempotent.
+    `server_retries` extra attempts on a 5xx, with `_QWEN_5XX_BACKOFF` between
+    them. Separate from `retries` because the two failures want opposite
+    responses: a timeout means the batch is too big (callers shrink and retry),
+    while a 5xx means the engine restarted and the same batch will succeed if we
+    just wait. 4xx is never retried — that is our own malformed request.
     `label` is an optional caller tag (e.g. the paper) for log attribution.
     """
     import requests as req
     url = f'{base_url.rstrip("/")}/llm/v1/chat/completions'
     logger.debug('Qwen request: POST %s', url)
+    tag = f'{label} ' if label else ''
     last_exc: Exception | None = None
-    for attempt in range(retries + 1):
+    transport_left, server_left = retries, server_retries
+    while True:
         try:
             resp = req.post(url, json={
                 'model': 'qwen',
@@ -238,16 +256,26 @@ def _call_qwen(prompt: str, base_url: str, max_tokens: int = 2048,
             }, timeout=(10, read_timeout))
         except (req.exceptions.Timeout, req.exceptions.ConnectionError) as exc:
             last_exc = exc
-            tag = f'{label} ' if label else ''
             logger.warning('%sQwen attempt %d/%d failed: %s',
-                           tag, attempt + 1, retries + 1, exc)
+                           tag, retries - transport_left + 1, retries + 1, exc)
+            if transport_left <= 0:
+                break
+            transport_left -= 1
+            continue
+        if resp.status_code >= 500 and server_left > 0:
+            wait = _QWEN_5XX_BACKOFF[min(server_retries - server_left,
+                                         len(_QWEN_5XX_BACKOFF) - 1)]
+            logger.warning('%sQwen %d (%s) — engine restarting? retrying in %.0fs',
+                           tag, resp.status_code, resp.text[:200].strip(), wait)
+            server_left -= 1
+            time.sleep(wait)
             continue
         if resp.status_code != 200:
             logger.error('Qwen %d: %s', resp.status_code, resp.text[:500])
         resp.raise_for_status()
         data = resp.json()
         return data['choices'][0]['message']['content'].strip()
-    # The loop only falls through here after an attempt set last_exc; the `or`
+    # The loop only breaks out here after an attempt set last_exc; the `or`
     # is a provably-non-None fallback that also satisfies the type checker.
     raise last_exc or RuntimeError('Qwen request failed')
 
