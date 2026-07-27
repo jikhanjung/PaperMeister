@@ -107,7 +107,10 @@ def test_truncation_at_the_ceiling_splits_the_batch(monkeypatch):
 
     assert complete is False                 # genuinely unrecoverable → PARTIAL
     assert skipped['bad_json'] > 0
-    assert biblio._refs_batcher.size == biblio._AdaptiveBatcher.MIN  # shrank to the floor
+    # Terminates (reaching this line proves it) having consumed every entry,
+    # and backed the controller off rather than re-sending the same batch.
+    assert skipped['entries_lost'] == 4
+    assert biblio._refs_batcher.size < 4
 
 
 @pytest.mark.unit
@@ -216,3 +219,44 @@ def test_empty_array_on_a_fallback_block_still_means_none(one_batch_at_a_time,
 
     assert entries == [] and complete is True
     assert skipped == biblio._no_skips()
+
+
+@pytest.mark.unit
+def test_a_lone_oversized_entry_is_not_retried(monkeypatch):
+    """Retrying only pays when the request actually gets smaller.
+
+    Live waste: one blob entry (capped by MAX_CHARS, so the batch is length 1)
+    was re-sent byte-for-byte three times because the guard asked the controller
+    about its own size rather than the batch. Each attempt burned the full read
+    timeout — 9,517 tokens and ~369s, three times, six minutes apart.
+    """
+    monkeypatch.setattr(biblio, 'load_ocr_pages', lambda h: [{'markdown': 'x'}])
+    monkeypatch.setattr(biblio, 'extract_references_block', lambda p: ('block', 'high'))
+    monkeypatch.setattr(biblio, 'split_reference_entries', lambda b: ['one huge blob'])
+    # Controller well above the floor — the old guard would have kept retrying.
+    monkeypatch.setattr(biblio, '_refs_batcher', biblio._AdaptiveBatcher(size=8))
+    monkeypatch.setattr('papermeister.preferences.get_pref',
+                        lambda k, d=None: 'http://server' if k == 'ocr_pod_url' else d)
+    calls = []
+
+    def fake(*a, **k):
+        import requests
+        calls.append(1)
+        raise requests.exceptions.Timeout()
+
+    monkeypatch.setattr(biblio, '_call_qwen', fake)
+
+    _, _, _, complete, skipped = biblio.extract_references_llm('h')
+
+    assert len(calls) == 1            # tried once, then gave up on it
+    assert complete is False
+    assert skipped['timeout'] == 1
+
+
+@pytest.mark.unit
+def test_shrink_below_forces_a_strictly_smaller_batch():
+    """A batch capped by MAX_CHARS can be shorter than the controller's size, so
+    backing off from the controller's own number can fail to shrink anything."""
+    b = biblio._AdaptiveBatcher(size=8)
+    b.shrink_below(2)                 # the batch that failed held 2 entries
+    assert b.size < 2

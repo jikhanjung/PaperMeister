@@ -106,3 +106,72 @@ fallback(`low`) 블록의 `[]`는 **그대로 checked-empty 유지** — 편지�
 LLM에게 "모르겠으면 빈 값을 내라"는 탈출구를 줄 때는, **그 빈 값이 최종 상태로 굳는
 경로가 있는지** 먼저 봐야 한다. 여기서는 `[]` → `checked` → 재조회 불가였다. 탈출구는
 되돌릴 수 있는 상태로만 이어져야 한다.
+
+---
+
+# 후속 — 같은 세션에서 이어진 두 건
+
+## (a) 가드가 실제로 작동함 + 회복 확인 (라이브)
+
+리셋 후 새 런의 진행창:
+
+```
+[7/6090] Major Transitions in Evolution - Course Guidebook
+         — 0 refs PARTIAL (model returned nothing for a located section), left to retry
+[8/6090] STRATIFICATION OF COMMUNITY BY MEANS OF "COMMUNITY COEF — 38 references, 0 in library
+```
+
+- **[7]**: 새 가드가 정확히 의도대로 발동 — 섹션을 찾았는데 모델이 빈손 → checked 안 하고 재시도로 남김
+- **[8]**: 이전 런에서 **`0 refs PARTIAL`** 이던 논문이 **38 references**로 회복
+
+## (b) 축소 재시도가 진전을 못 내는 경우 (낭비 버그)
+
+사용자가 서버 통계에서 발견:
+```
+17:38:29  9517 tok  369.4s  ok
+17:32:29  9517 tok  369.3s  ok
+17:26:29  9517 tok  368.4s  ok
+```
+**6분 간격 = 360초 = 우리 read timeout.** 클라이언트가 360초에 포기하고, 서버는 369초에
+완성해서 버리고, 다시 같은 요청. **토큰 수가 동일**하다는 게 핵심 — 요청이 전혀 안 줄었다.
+
+원인: 타임아웃 재시도 조건이 `_refs_batcher.size > MIN` 이었다. 문제의 배치는 **엔트리
+1개짜리 blob**(`MAX_CHARS`로 잘린 것)이라, 컨트롤러 size를 5→2→1로 줄여도 **배치 길이는
+1 그대로** — 요청 바이트가 동일하다. 3회 × 369초 = **18분을 태우고 결국 skip**.
+
+### 수정
+
+조건을 `len(batch) > 1`로 바꾸고, 축소가 **반드시 더 짧은 배치**를 만들도록
+`shrink_below(n)`을 추가했다 — `MAX_CHARS`로 잘린 배치는 컨트롤러 size보다 짧을 수 있어서,
+컨트롤러 자기 숫자 기준으로 물러나면 아무것도 안 줄어들 수 있다.
+
+```python
+def shrink_below(self, n):
+    self.ceiling = max(self.MIN, min(self.size - self.BACKOFF_STEP, n - 1))
+```
+
+엔트리 1개가 시간 안에 안 끝나면 **즉시 skip**한다. 재시도해봐야 같은 것을 보내고 같은
+타임아웃을 기다릴 뿐이다. 타임아웃/절단 두 경로 모두 동일하게 적용.
+
+**효과**: 이런 논문 하나당 ~12분 절약(3회 → 1회). 손실되는 레퍼런스 수는 동일하다 —
+어차피 skip될 배치였고, 다만 **느리게 실패하던 것을 빠르게 실패**하게 만든 것.
+
+**남는 한계**: 혼자서도 타임아웃을 내는 거대 blob은 여전히 skip → PARTIAL → 재시도 →
+같은 실패. blob 텍스트 자체를 쪼개는 방법이 있지만 이음매에서 서지 항목이 깨질 위험이
+있어 이번 범위에서 제외했다. 빈도를 로그로 보고 판단할 것.
+
+## (c) 아직 남은 구멍 — `low` confidence 오판
+
+같은 런에서 이런 것들이 여전히 `no references section`으로 확정된다:
+```
+[2/6090] 88서울올림픽을 위한 도시 경관 조작과 도시 이미지 구축 전략 — no references section
+[3/6090] Anatomy of the Mollusca: Sepia esculenta — no references section
+[5/6090] canadiannaturali07natu.pdf — no references section
+```
+리셋 대상이었는데 재시도 후 **같은 판정을 다시 받았다**. 새 가드는 `high` confidence에만
+걸리므로, **헤딩 탐지가 실패해 `low`로 떨어진 논문**은 여전히 모델의 "없다"를 그대로
+받아들인다. 즉 이제 문제는 `[]` 탈출구가 아니라 **참고문헌 헤딩 탐지 실패**다
+(한국어·일본어 학술지, 스캔된 합본 저널).
+
+다음 작업 후보: `low` 블록에서 `split_reference_entries`가 많은 엔트리를 만들어냈다면
+(= 블록이 목록처럼 생겼다면) `[]`를 믿지 않는 추가 가드, 또는 헤딩 사전 확장.

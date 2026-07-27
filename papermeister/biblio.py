@@ -907,6 +907,19 @@ class _AdaptiveBatcher:
         """Ease down after a timeout, so we retry the same refs a bit smaller."""
         self._backoff()
 
+    def shrink_below(self, n: int):
+        """Back off to strictly fewer than `n` entries per call.
+
+        `shrink()` lowers the ceiling relative to the controller's own size,
+        which can land above the batch that actually failed — a batch capped by
+        MAX_CHARS rather than by size. Retrying then rebuilds the identical
+        request and waits out the identical timeout, which is exactly what was
+        seen live: the same 9,517-token call three times, six minutes apart.
+        """
+        self.ceiling = max(self.MIN, min(self.size - self.BACKOFF_STEP, n - 1))
+        self.size = self.ceiling
+        self._good = 0
+
     def _backoff(self):
         # Lower the ceiling a little (not a halving) and sit just under it; cap
         # regrowth here so we don't slam back into the same wall.
@@ -1083,21 +1096,24 @@ def extract_references_llm(
                 raw = _call_qwen(prompt, url, max_tokens=mt, read_timeout=read_timeout,
                                  retries=0, label=label)
             except (_req.exceptions.Timeout, _req.exceptions.ConnectionError):
-                # Too slow at this size — shrink and retry the SAME refs, unless
-                # already at the floor (then it's a real failure).
-                if _refs_batcher.size > _AdaptiveBatcher.MIN:
-                    _refs_batcher.shrink()
+                # Too slow at this size — shrink and retry the SAME refs, but
+                # only when that can actually make the request smaller. Gating on
+                # the controller's size instead of the batch length meant a lone
+                # oversized entry (one blob, capped by MAX_CHARS) was re-sent
+                # byte-for-byte and burned another full timeout each time.
+                if len(batch) > 1:
+                    _refs_batcher.shrink_below(len(batch))
                     logger.info('%srefs %d/%d: timeout at batch %d → shrink to %d, '
                                 'retrying', tag, i + len(batch), total, len(batch),
                                 _refs_batcher.size)
                     continue
-                # At the floor and still timing out — skip THIS batch (lose its
-                # refs) but keep what we've parsed so far and carry on, rather
-                # than discarding the whole paper. Mark the result incomplete so
-                # the caller can re-run it later.
-                logger.warning('%srefs %d/%d: timeout at batch %d (already at floor) '
-                               '→ skipping %d refs', tag, i + len(batch), total,
-                               len(batch), len(batch))
+                # A single entry that won't finish in time. Nothing left to
+                # shrink, so skip THIS batch (lose its refs) and carry on with
+                # what the other batches parsed, rather than discarding the whole
+                # paper. Marked incomplete so the caller can re-run it later.
+                logger.warning('%srefs %d/%d: timeout on a single entry '
+                               '(%d chars, nothing left to shrink) → skipping it',
+                               tag, i + len(batch), total, len(batch[0]))
                 complete = False
                 skipped['timeout'] += 1
                 skipped['entries_lost'] += len(batch)
@@ -1135,8 +1151,8 @@ def extract_references_llm(
                                'same batch at ceiling %d', tag, i + len(batch), total,
                                mt, _MT_CEILING)
                 continue
-            if kind == 'bad_json' and _refs_batcher.size > _AdaptiveBatcher.MIN:
-                _refs_batcher.shrink()
+            if kind == 'bad_json' and len(batch) > 1:
+                _refs_batcher.shrink_below(len(batch))
                 logger.warning('%srefs %d/%d: still truncated at the ceiling → '
                                'shrink to %d, retrying', tag, i + len(batch), total,
                                _refs_batcher.size)
