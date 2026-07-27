@@ -9,6 +9,26 @@ from dataclasses import asdict, dataclass, field
 
 logger = logging.getLogger('biblio')
 
+# Log to a file, same as the `ocr` logger. Without this the desktop app never
+# configures this logger at all (basicConfig only runs in the CLI scripts), so
+# everything below WARNING was dropped and the per-batch reason a references
+# parse came back PARTIAL — the one line that says whether the server timed out
+# or returned unparseable JSON — was never recorded anywhere. DEBUG level so the
+# offending response body is captured too; this is a diagnostic log, not a hot path.
+_LOG_DIR = os.path.join(os.path.expanduser('~'), '.papermeister', 'logs')
+os.makedirs(_LOG_DIR, exist_ok=True)
+logger.setLevel(logging.DEBUG)
+if not logger.handlers:
+    class _FlushHandler(logging.FileHandler):
+        def emit(self, record):
+            super().emit(record)
+            self.stream.flush()
+    _fh = _FlushHandler(os.path.join(_LOG_DIR, 'biblio.log'), encoding='utf-8')
+    _fh.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
+    ))
+    logger.addHandler(_fh)
+
 OCR_JSON_DIR = os.path.join(os.path.expanduser('~'), '.papermeister', 'ocr_json')
 
 
@@ -886,9 +906,31 @@ def _chunk_entries(entries: list, max_chars: int = 4500,
     return chunks
 
 
+def _no_skips() -> dict:
+    """Zeroed skip tally — the shape `extract_references_llm` always returns."""
+    return {'timeout': 0, 'bad_json': 0, 'refs_lost': 0}
+
+
+def describe_skips(skipped: dict) -> str:
+    """Render a skip tally for a progress line, e.g. `bad JSON x2, 17 refs lost`.
+
+    Empty string when nothing was skipped, so callers can append it unconditionally.
+    """
+    parts = []
+    if skipped.get('bad_json'):
+        parts.append(f"bad JSON x{skipped['bad_json']}")
+    if skipped.get('timeout'):
+        parts.append(f"timeout x{skipped['timeout']}")
+    if not parts:
+        return ''
+    if skipped.get('refs_lost'):
+        parts.append(f"{skipped['refs_lost']} refs lost")
+    return ', '.join(parts)
+
+
 def extract_references_llm(
     file_hash: str, backend: str = 'qwen', base_url: str = '', label: str = '',
-) -> tuple[list, str, str, bool]:
+) -> tuple[list, str, str, bool, dict]:
     """Parse a paper's references section into structured entries via LLM.
 
     Args:
@@ -897,15 +939,20 @@ def extract_references_llm(
         base_url: ocrserver URL (qwen). If empty, read from preferences.
 
     Returns:
-        (entries, source_label, model_version, complete). `entries` is a list of
-        dicts each carrying the parsed fields plus 'raw' and 'parse_confidence';
-        it is EMPTY when no references section was found (a valid "checked,
-        none" outcome — the caller should mark the paper checked, not retry).
+        (entries, source_label, model_version, complete, skipped). `entries` is a
+        list of dicts each carrying the parsed fields plus 'raw' and
+        'parse_confidence'; it is EMPTY when no references section was found (a
+        valid "checked, none" outcome — the caller should mark the paper checked,
+        not retry).
         `complete` is False when one or more batches were skipped (timeout at the
         floor, or malformed JSON): the returned entries are PARTIAL and worth
         saving, but the caller should leave the paper unchecked so a later run
-        can re-parse it. Raises ValueError only when the OCR text itself is
-        missing (genuine error — retry after OCR), or RuntimeError on misconfig.
+        can re-parse it. `skipped` breaks that down —
+        `{'timeout': n, 'bad_json': n, 'refs_lost': n}` — so the caller can say
+        WHY a paper came back partial instead of just that it did; it is all
+        zeros when `complete` is True. Raises ValueError only when the OCR text
+        itself is missing (genuine error — retry after OCR), or RuntimeError on
+        misconfig.
     """
     source = 'llm-qwen' if backend == 'qwen' else 'llm-sonnet'
     model_version = QWEN_REFS_MODEL_VERSION if backend == 'qwen' else 'claude-sonnet-4-6'
@@ -917,7 +964,7 @@ def extract_references_llm(
     if not block:
         # No references section in this document — a valid empty result, not
         # a failure. No LLM call needed.
-        return [], source, model_version, True
+        return [], source, model_version, True, _no_skips()
 
     entries = split_reference_entries(block)
 
@@ -939,6 +986,7 @@ def extract_references_llm(
     total = len(entries)
     parsed = []
     complete = True   # flips False if any batch is skipped (timeout / bad JSON)
+    skipped = _no_skips()
     i = 0
     while i < total:
         # Take up to the current adaptive batch size, also bounded by chars.
@@ -953,6 +1001,7 @@ def extract_references_llm(
 
         prompt = _REFS_PROMPT + '--- REFERENCES TEXT ---\n' + '\n\n'.join(batch)
         tag = f'{label} ' if label else ''
+        mt = 0   # qwen-only token cap; 0 on the claude path (logged on bad JSON)
         if backend == 'qwen':
             # Scale by INPUT size, not just entry count: a single un-split blob
             # is one "entry" but yields many reference objects — sizing by count
@@ -976,10 +1025,12 @@ def extract_references_llm(
                 # refs) but keep what we've parsed so far and carry on, rather
                 # than discarding the whole paper. Mark the result incomplete so
                 # the caller can re-run it later.
-                logger.info('%srefs %d/%d: timeout at batch %d (already at floor) '
-                            '→ skipping %d refs', tag, i + len(batch), total,
-                            len(batch), len(batch))
+                logger.warning('%srefs %d/%d: timeout at batch %d (already at floor) '
+                               '→ skipping %d refs', tag, i + len(batch), total,
+                               len(batch), len(batch))
                 complete = False
+                skipped['timeout'] += 1
+                skipped['refs_lost'] += len(batch)
                 i += len(batch)
                 continue
             dt = time.monotonic() - t0
@@ -995,10 +1046,19 @@ def extract_references_llm(
             # The model returned malformed / truncated JSON for this batch. Skip
             # just this batch — keep the references parsed from the other batches
             # — instead of losing the whole paper. Flag the result incomplete.
-            logger.info('%srefs %d/%d: bad JSON for batch %d (%s) → skipping %d refs',
-                        tag, i + len(batch), total, len(batch),
-                        str(ex)[:60], len(batch))
+            logger.warning('%srefs %d/%d: bad JSON for batch %d (%s) → skipping %d refs',
+                           tag, i + len(batch), total, len(batch),
+                           str(ex)[:60], len(batch))
+            # The exception message alone can't distinguish "the model wandered
+            # off" from "the response was cut mid-array" (truncation is the
+            # working hypothesis). Head+tail of the actual body settles it: a cut
+            # response ends mid-token with no closing bracket.
+            logger.debug('%sbad JSON body (%d chars, max_tokens=%d)\n'
+                         '  head: %r\n  tail: %r',
+                         tag, len(raw), mt, raw[:400], raw[-400:])
             complete = False
+            skipped['bad_json'] += 1
+            skipped['refs_lost'] += len(batch)
             i += len(batch)
             continue
         # We split the entries ourselves, so attach the original text as `raw`
@@ -1012,7 +1072,9 @@ def extract_references_llm(
             parsed.append(item)
         i += len(batch)
 
-    return parsed, source, model_version, complete
+    if not complete:
+        logger.warning('%srefs done: PARTIAL — %s', tag, describe_skips(skipped))
+    return parsed, source, model_version, complete, skipped
 
 
 # ===========================================================================

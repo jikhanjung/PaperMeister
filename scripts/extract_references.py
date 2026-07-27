@@ -19,7 +19,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from papermeister.biblio import extract_references_llm
+from papermeister.biblio import describe_skips, extract_references_llm
 from papermeister.database import init_db
 from papermeister.models import Folder, Paper, PaperFile, Source
 from papermeister.references import save_references
@@ -119,17 +119,17 @@ def main():
         # batches concurrent requests. DB writes happen in the main loop below.
         label = f'[{pid} {_short(title)}]'
         try:
-            entries, source, mv, complete = extract_references_llm(
+            entries, source, mv, complete, skipped = extract_references_llm(
                 h, backend=args.backend, label=label)
-            return pid, title, entries, source, mv, complete, None
+            return pid, title, entries, source, mv, complete, skipped, None
         except Exception as e:
-            return pid, title, None, None, None, False, str(e)
+            return pid, title, None, None, None, False, {}, str(e)
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
     with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
         futures = [pool.submit(_extract, pid, h, title) for pid, h, title in targets]
         for i, fut in enumerate(as_completed(futures), 1):
-            pid, title, entries, source, mv, complete, e = fut.result()
+            pid, title, entries, source, mv, complete, skipped, e = fut.result()
             short = _short(title)
             if e:
                 err += 1
@@ -147,7 +147,9 @@ def main():
             if complete:
                 tag = f'{n} refs' if n else 'no references section'
             else:
-                tag = f'{n} refs PARTIAL — some batches skipped, will retry'
+                why = describe_skips(skipped)
+                tag = (f'{n} refs PARTIAL ({why}), will retry' if why
+                       else f'{n} refs PARTIAL — some batches skipped, will retry')
             print(f'[{i}/{len(targets)}] {pid} {short} ok | {tag}', flush=True)
 
     # Auto-resolve the just-extracted references against held papers (one shared

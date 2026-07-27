@@ -1273,7 +1273,7 @@ class MainWindow(QMainWindow):
         def _do_extract():
             from papermeister import references as refs_mod
             from papermeister.biblio import extract_references_llm
-            entries, source, model_version, complete = extract_references_llm(
+            entries, source, model_version, complete, skipped = extract_references_llm(
                 file_hash, backend=backend)
             n = refs_mod.save_references(paper_id, entries, source, model_version)
             # Auto-resolve the freshly-saved references against held papers so
@@ -1292,7 +1292,7 @@ class MainWindow(QMainWindow):
                     paper_id, index=self._refs_index,
                     work_index=self._refs_work_index)
                 resolved = counts.get('doi', 0) + counts.get('title', 0)
-            return n, resolved, complete
+            return n, resolved, complete, skipped
 
         task = BackgroundTask(_do_extract)
         task.done.connect(lambda result: self._on_refs_extracted(paper_id, result))
@@ -1303,7 +1303,7 @@ class MainWindow(QMainWindow):
     def _on_refs_extracted(self, paper_id: int, result):
         win = self._refs_window if (self._refs_window and self._refs_window.isVisible()) else None
         try:
-            n, resolved, complete = result
+            n, resolved, complete, skipped = result
             # Only stamp checked when parsing completed. A partial result
             # (complete=False: the LLM server timed out / died and batches were
             # skipped) is saved but left UNCHECKED so a later run re-parses and
@@ -1320,8 +1320,10 @@ class MainWindow(QMainWindow):
                     f'References incomplete for paper {paper_id} '
                     f'(server?) — will retry')
                 if win:
+                    from papermeister.biblio import describe_skips
+                    why = describe_skips(skipped) or 'server?'
                     win.record(
-                        f'{title} — {n} refs PARTIAL (server?), left to retry',
+                        f'{title} — {n} refs PARTIAL ({why}), left to retry',
                         'error', refs=n)
             elif n > 0:
                 self.status_bar.set_task(
