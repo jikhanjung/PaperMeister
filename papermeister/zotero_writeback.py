@@ -126,11 +126,49 @@ def _build_type_upgrade_payload(
 _RETRY_HTTP_CODES = ('500', '502', '503', '504')
 
 
+def _zotero_error(*names):
+    """Resolve a pyzotero error class across versions, by any of `names`.
+
+    pyzotero 1.13 renamed every error with an `Error` suffix
+    (``UserNotAuthorised`` → ``UserNotAuthorisedError``). Naming the missing one
+    in an ``except`` clause raises AttributeError *while the real exception is in
+    flight*, so the actual Zotero failure is replaced by a confusing one.
+
+    Returns an empty tuple when no name matches, which is a valid `except`
+    target that never fires — so a future rename degrades to "not specially
+    handled" rather than breaking the call.
+    """
+    from pyzotero import zotero_errors
+    for name in names:
+        cls = getattr(zotero_errors, name, None)
+        if cls is not None:
+            return cls
+    return ()
+
+
+def _transient_network_errors() -> tuple:
+    """Connection/timeout exception types to retry, across HTTP backends.
+
+    pyzotero moved from requests to httpx in 1.13, so the same network blip
+    arrives as a different exception class depending on the installed version.
+    `download_file_content` still calls requests directly, so both matter.
+    HTTP *status* errors are excluded on purpose — those are handled by code.
+    """
+    import requests
+    types: list = [requests.exceptions.ConnectionError, requests.exceptions.Timeout]
+    try:
+        import httpx
+    except ImportError:
+        pass
+    else:
+        types.append(httpx.TransportError)   # connect/read/timeout, not status
+    return tuple(types)
+
+
 def _is_retryable_zotero_error(exc: Exception) -> bool:
     """True for transient server-side failures (5xx / connection / timeout), but
     NOT for 429 rate limits or 4xx client errors."""
-    import requests
-    if isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)):
+    if isinstance(exc, _transient_network_errors()):
         return True
     msg = str(exc)
     return any(
@@ -166,17 +204,18 @@ def _update_item(client: ZoteroClient, payload: dict) -> None:
     wall-of-text tracebacks that hit the UI as generic background failures.
     Transient 5xx/connection errors are retried first.
     """
-    from pyzotero import zotero_errors
+    not_authorised = _zotero_error('UserNotAuthorisedError', 'UserNotAuthorised')
+    unsupported = _zotero_error('UnsupportedParamsError', 'UnsupportedParams')
 
     try:
         _zotero_retry(lambda: client._zot.update_item(payload))
-    except zotero_errors.UserNotAuthorised as e:
+    except not_authorised as e:
         raise ZoteroWriteAccessDenied(
             'Zotero API key lacks write access. Create a new key with '
             '"Allow write access" at zotero.org/settings/keys, or turn '
             'off "Enable Zotero write-back" in Preferences.'
         ) from e
-    except zotero_errors.UnsupportedParams as e:
+    except unsupported as e:
         # Most common cause: a field name that's not valid for this itemType
         # (e.g. publicationTitle on bookSection). Surface the original message
         # but wrapped in a tidy exception.
