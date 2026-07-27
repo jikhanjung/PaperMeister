@@ -112,7 +112,7 @@ jobs:
 
       - name: Upload coverage (Linux)
         if: always() && runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-py${{ matrix.python-version }}
           path: coverage.xml
