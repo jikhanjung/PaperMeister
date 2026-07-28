@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **The Windows installer now installs to `%LOCALAPPDATA%\PaleoBytes\PaperMeister`**
+  and appears under a PaleoBytes group in the Start menu, alongside the other
+  tools. It also carries a publisher name and a stable application id, so future
+  versions upgrade in place instead of installing beside each other. Your library
+  is untouched by install or uninstall — it lives in
+  `%USERPROFILE%\PaleoBytes\PaperMeister`.
 - **User data now lives in `~/PaleoBytes/PaperMeister/`**, the layout shared with
   Modan2 and CTHarvester, instead of `~/.papermeister/`. **Existing installations
   are untouched and keep working** — the old location is still used when it is

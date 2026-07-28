@@ -1,13 +1,28 @@
 ; Inno Setup script template for PaperMeister (Windows installer).
 ; CI (reusable_build.yml) fills {{VERSION}} / {{DIST_PATH}} / {{OUTPUT_DIR}} and
-; runs ISCC. Per-user install (no admin) into LocalAppData\Programs.
+; runs ISCC. Per-user install (no admin).
+;
+; Runtime data is NOT installed or removed by this script — it lives in
+; %USERPROFILE%\PaleoBytes\PaperMeister and must survive an uninstall, since
+; that directory holds the user's library (gigabytes of OCR text and the
+; database). The app creates it on first run.
 #define AppVersion "{{VERSION}}"
 #define BuildNumber GetEnv('BUILD_NUMBER')
 
 [Setup]
+; Stable identity for upgrades and uninstall. Without it Inno derives the ID
+; from AppName, so renaming the app later would install a second copy beside the
+; first and orphan its entry in Add/Remove Programs. Generated once — never
+; change it. The doubled brace below is Inno's escape for a literal `{`; it is
+; not one of the placeholders CI substitutes, and must be left alone.
+AppId={{AFA39013-CEDA-4056-9C78-9C66226B8B1F}
 AppName=PaperMeister
 AppVersion={#AppVersion}
-DefaultDirName={localappdata}\Programs\PaperMeister
+AppPublisher=PaleoBytes
+; Local, not Roaming: the onedir payload is ~180 MB and would otherwise sync
+; with the user profile on domain-joined machines. Grouped under PaleoBytes to
+; match Modan2 and CTHarvester.
+DefaultDirName={localappdata}\PaleoBytes\PaperMeister
 PrivilegesRequired=lowest
 DisableProgramGroupPage=yes
 OutputDir={{OUTPUT_DIR}}
@@ -19,7 +34,7 @@ OutputBaseFilename=PaperMeister_v{#AppVersion}_build{#BuildNumber}_Installer
 Source: "{{DIST_PATH}}\PaperMeister\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{userprograms}\PaperMeister"; Filename: "{app}\PaperMeister.exe"
+Name: "{userprograms}\PaleoBytes\PaperMeister"; Filename: "{app}\PaperMeister.exe"
 Name: "{userdesktop}\PaperMeister"; Filename: "{app}\PaperMeister.exe"; Tasks: desktopicon
 
 [Tasks]
