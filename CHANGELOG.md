@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **References extraction no longer loses work silently.** A batch that hit a
+  truncated model response, a crash-looping OCR/LLM server, or a document with
+  no bibliography used to drop the affected references and, in some cases, mark
+  the paper permanently done with nothing stored. Each of those now either
+  recovers or leaves the paper to be retried:
+  - a response cut off at the token limit is retried with more room, then split,
+    before anything is given up on
+  - a server that restarts mid-request is ridden through with a short retry
+  - a paper that genuinely has no bibliography (a letter, plates, front matter)
+    is recorded as checked rather than retried forever
+  - a paper that *does* have one but returns nothing stays unchecked, so a later
+    run tries again
+- **Batches no longer stall on an unsplittable request.** A request too large to
+  finish was re-sent unchanged until the batch controller bottomed out — roughly
+  25 minutes per paper. It is now shortened on the first retry, and the read
+  timeout was raised to 480 s so work the server actually completed is not
+  discarded nine seconds short.
+- **The source tab stays put.** Switching to another source and then having the
+  Zotero sync finish (or applying biblio) no longer snaps the tab bar back to
+  the first tab, which left the selected tab and the listed papers disagreeing.
+
+### Added
+- **Documentation site.** A full manual in English and Korean at
+  https://jikhanjung.github.io/PaperMeister/ — installation, a quick start
+  through the whole pipeline, a user guide, an FAQ, troubleshooting drawn from
+  real failures, and a developer guide.
+- **Diagnosable extraction.** A partial result now says why it was partial
+  (truncated response, no JSON array, timeout) instead of just "server?", and
+  `~/.papermeister/logs/biblio_YYYYMMDD.log` records the per-batch detail
+  including the offending response. Progress windows timestamp with the date, so
+  a log excerpt from a multi-day run is unambiguous.
+
+### Changed
+- Dependencies updated to current versions (peewee 4, pyzotero 1.13,
+  PyMuPDF 1.28); Zotero write-back handles both the old and new pyzotero error
+  classes and HTTP backends.
+
+---
+
 
 ## [0.1.1] - 2026-07-24
 

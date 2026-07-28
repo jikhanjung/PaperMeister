@@ -31,12 +31,29 @@ PaperMeister transforms a user's academic paper (PDF) collection into a searchab
 ## Commands
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt                  # Python 3.12+
+pip install --require-hashes -r requirements.lock  # CI와 동일한 재현 환경
 
 python -m desktop   # 신규 desktop 앱 (P07~P09, 현재 개발 중)
 python main.py      # 기존 PyQt6 GUI (동결, 안정)
 python cli.py       # CLI — GUI 없이 import/process/search/list/show/config/zotero
 ```
+
+### 개발 (P15 이후 상시)
+
+```bash
+pip install -r requirements-dev.txt
+pytest                  # markers: unit / ui / integration. Qt는 conftest가 offscreen 처리
+ruff check .            # 린트 (게이팅)
+mypy papermeister/references.py papermeister/search.py papermeister/biblio.py
+make lock / make lock-check / make lock-upgrade   # 의존성 lock
+cd docs/manual && make html                       # Sphinx 매뉴얼 로컬 빌드
+```
+
+**mypy는 의존성이 설치돼 있어야 의미가 있다** — 없으면 `ignore_missing_imports`로 peewee가
+`Any`가 되어 ORM 코드가 사실상 미검사된다(CI의 lint 잡이 `requirements.lock`을 설치하는 이유).
+peewee가 생성하는 `id`/`<fk>_id`는 `models.py`에 `TYPE_CHECKING`으로 선언돼 있다.
+**mypy가 `x_id` 대신 `x`를 제안해도 따르지 말 것** — 통과는 하지만 행마다 관계 fetch가 붙는다.
 
 ## Tech Stack
 
@@ -98,7 +115,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
   - `desktop/theme/` — design tokens (`tokens.py`), QSS generator (`qss.py`), SVG icons + runtime tinting loader (`icons.py`)
 - **Rail** (좌측 아이콘 바): Library/Search는 **checkable 모드** → `section_changed` 시그널, Process/Settings는 **one-shot 액션** → `action_triggered` 시그널. Process/Settings는 **동결된 `papermeister/ui/process_window.ProcessWindow` / `preferences_dialog.PreferencesDialog`를 재사용**
 - **SourceNav**: `QTabWidget` — 각 Source마다 탭 하나 (현재 Zotero 하나). 각 탭 내부는 단일 트리에 상단=Library 필터, 하단=hierarchical 컬렉션
-- **DetailPanel**: `QWidget` (not QScrollArea) + 내부 `QTabWidget#DetailTabs`. 탭 3개 — **Metadata / Biblio / OCR**. 각 탭 독립 스크롤, 논문 전환 시 직전 탭 복원. Stub 배너는 탭바 위에 고정
+- **DetailPanel**: `QWidget` (not QScrollArea) + 내부 `QTabWidget#DetailTabs`. 탭 4개 — **Metadata / PDF / Text / References** (Biblio 대조는 Metadata 탭에 통합, PDF·Text·References는 첫 활성화 때 lazy 빌드). 각 탭 독립 스크롤, 논문 전환 시 직전 탭 복원. Stub 배너는 탭바 위에 고정
 - **Biblio 탭 대조 비교 UI**: Paper(Zotero) vs PaperBiblio(추출) 필드별 비교 테이블. diff가 있는 행에 라디오 버튼(Paper/Biblio 선택) + 편집 가능한 입력 필드(QPlainTextEdit: Title/Authors/Journal, QLineEdit: Year/DOI) + × 클리어 버튼. Apply 시 `apply_merged()`로 선택/편집된 값 반영. 저자는 한 줄 한 명, "Lastname, Firstname" 형식
 - **OCR 탭**: `papermeister.biblio.load_ocr_pages()`로 `~/.papermeister/ocr_json/{hash}.json` 페치 → `_sanitize_ocr_markdown()` 적용 → `QTextBrowser.setMarkdown()` 렌더
   - **Sanitizer 필수**: Chandra2 원본을 그대로 `setMarkdown()`에 넘기면 `-qt-list-indent` 누적으로 "텍스트가 계속 오른쪽으로 밀리는" 버그. 원인은 (a) 4+ leading space → indented code block, (b) 줄 시작 `숫자.` → ordered list, (c) 레퍼런스의 바 볼륨 번호(`88.`, `158.`) → 빈 OL이 인접하면 Qt가 nested로 해석해서 indent가 누적. Sanitizer가 모든 줄 `lstrip()` + `^(\d+)\.` regex를 backslash escape로 차단
@@ -123,13 +140,30 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 | `update_promoted_items.py` | 기존 Zotero parent item in-place 수정 |
 | `preview_standalone_biblio.py` | Standalone PDF 추출 결과 미리보기 (read-only) |
 | `extract_references.py` | (P11) references 섹션 파싱 → `Reference` 테이블 (Qwen3, `--execute`) |
-| `reset_references.py` | (P11) 지정 paper의 `Reference` 행 삭제 + `references_checked` 해제 → 재추출 대상으로 되돌림 (`--paper-ids`, `--execute`) |
+| `reset_references.py` | (P11) `Reference` 행 삭제 + `references_checked` 해제 → 재추출 대상으로 되돌림. `--paper-ids` 또는 `--scope empty-checked`(checked인데 Reference 0건인 논문 전체 — "no references section" 판정을 재검증할 때), `--execute` |
 | `reprocess_references.bat` | (P11, Windows) reset(化石 합본) → extract_references `--scope all` → normalize_works `--pass 1` 일괄 실행 래퍼 |
 | `migrate_fts_external_content.py` | (P13) `passage_fts` → external-content + `paper_fts` 추가 1회 변환 (자동 백업 VACUUM INTO + rebuild + VACUUM, `--execute`) |
 | `backup-papermeister.ps1` + `_db_snapshot.py` | (운영) 라이브 DB 일관성 스냅샷(online backup) → gzip → 서버 scp + 보존정리. Task Scheduler 3시간 간격 백업용 |
 | `resolve_references.py` | (P11) `Reference` → 보유 Paper 매칭 (DOI + 제목 스코어, `--execute`) |
 | `normalize_works.py` | (P11 Phase 2) 외부 문헌 → `CitedWork` 노드 정규화. 패스1 exact dedup + 패스2 LLM 병합 + cite_count/reconcile (`--execute`, `--pass`, `--workers`) |
 | `probe_qwen.py` | (P11) ocrserver LLM 응답시간 진단 (trivial/1ref/5ref 계측) |
+| `refs_progress.py` | (P14) references 추출 진행률·처리율·ETA 모니터 (`--watch`) |
+| `citation_stats.py` | (P14 L0) held→held 인용 그래프 통계 |
+| `export_citation_graph.py` | (P14 L1) nodes/edges CSV + GEXF(Gephi), `--with-external` |
+| `audit_matches.py` | (P14 A2) 참조 매칭 감사 (의심 FP / 미연결 FN 탐지) |
+| `verify_image.py` | OCR 이미지 경로(Pillow) 1-커맨드 검증 |
+
+## 문서 / 릴리스
+
+- **사용자 매뉴얼**: `docs/manual/` (Sphinx, en + ko) → push 시 `docs.yml`이 GitHub Pages 배포.
+  버전은 `version.py`에서, 릴리스 노트는 루트 `CHANGELOG.md`에서 **single-source**로 가져온다
+  (복사 금지). 한국어 번역은 `locale/ko/LC_MESSAGES/*.po`
+  - ⚠️ 닫는 강조 표시 뒤에 조사가 바로 붙으면 RST가 마크업을 통째로 삼킨다.
+    `**일시정지**한 뒤` → `**일시정지**\ 한 뒤` 처럼 이스케이프 공백(`\ `)을 넣을 것
+- **릴리스**: `CHANGELOG.md`에 섹션 추가 → `version.py` 범프 → `vX.Y.Z` 태그 push.
+  `release.yml`이 테스트→3플랫폼 빌드→CHANGELOG 섹션을 노트로 발행. 수동 발행은 `manual-release.yml`
+- **CI**: `test.yml`(ruff+mypy, Linux·Windows 테스트, 커버리지 ratchet) / `security.yml`(pip-audit + lock-check)
+  / `codeql.yml` / `docs.yml` / `dependabot-lock-refresh.yml`(Dependabot PR의 lock 자동 재생성)
 
 ## Future Phases
 
