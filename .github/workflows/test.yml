@@ -23,13 +23,16 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      # NOTE: project dependencies are deliberately NOT installed here, so mypy
-      # sees peewee/pyzotero/PyMuPDF as untyped and skips them. peewee 4 ships
-      # annotations that model neither the implicit `id` primary key nor the
-      # `<fk>_id` attribute, which would flag ~28 false positives in code that
-      # runs correctly. Installing the deps here is the honest next step, but it
-      # needs those to be silenced first — see HANDOFF.
-      - run: pip install ruff mypy
+      # Pinned: a new ruff/mypy release adding checks should be an intentional
+      # upgrade, not a surprise red build (Modan2 does the same).
+      - run: pip install ruff mypy==2.3.0
+
+      # mypy needs the project's dependencies to see real types. Without them
+      # `import peewee` resolves to Any under ignore_missing_imports, every
+      # model subclasses Any, and the gate silently passes anything that touches
+      # the ORM — which is most of what it claims to check.
+      - name: Install project dependencies (so mypy sees real types)
+        run: pip install --require-hashes -r requirements.lock
       - name: ruff check
         run: ruff check . --output-format=github
       # Type checking is incremental: gate only the modules already at zero mypy

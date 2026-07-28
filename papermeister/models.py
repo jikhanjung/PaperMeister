@@ -1,4 +1,5 @@
 import datetime
+from typing import TYPE_CHECKING
 
 import peewee
 
@@ -6,6 +7,15 @@ db = peewee.DatabaseProxy()
 
 
 class BaseModel(peewee.Model):
+    # peewee creates an implicit `id` primary key and, for every ForeignKeyField
+    # `x`, an `x_id` attribute holding the raw key without triggering a fetch.
+    # Neither is in peewee 4's type annotations, so mypy rejects code that works
+    # — and reaching for `x` instead of `x_id` to satisfy it would silently add
+    # a query per row. Declaring them under TYPE_CHECKING documents what peewee
+    # generates, with no runtime effect.
+    if TYPE_CHECKING:
+        id: peewee.AutoField
+
     class Meta:
         database = db
 
@@ -19,14 +29,22 @@ class Source(BaseModel):
 
 class Folder(BaseModel):
     """A folder within a source — maps to filesystem dir or Zotero collection."""
+    if TYPE_CHECKING:
+        source_id: int
+
     source = peewee.ForeignKeyField(Source, backref='folders', on_delete='CASCADE')
     name = peewee.TextField()
-    parent = peewee.ForeignKeyField('self', null=True, backref='children', on_delete='CASCADE')
+    # peewee's overloads don't cover the string form of a self-referential FK.
+    parent = peewee.ForeignKeyField(  # type: ignore[call-overload]
+        'self', null=True, backref='children', on_delete='CASCADE')
     path = peewee.TextField(default='')  # full path for directory folders
     zotero_key = peewee.TextField(default='')  # Zotero collection key
 
 
 class Paper(BaseModel):
+    if TYPE_CHECKING:
+        folder_id: int
+
     title = peewee.TextField(default='')
     # date is the raw Zotero `data.date` string (e.g. '08/2017', '2022-12-16',
     # '1865'). Round-trip source of truth for writeback to Zotero.
@@ -50,12 +68,18 @@ class Paper(BaseModel):
 
 
 class Author(BaseModel):
+    if TYPE_CHECKING:
+        paper_id: int
+
     paper = peewee.ForeignKeyField(Paper, backref='authors_list', on_delete='CASCADE')
     name = peewee.TextField()
     order = peewee.IntegerField(default=0)
 
 
 class PaperFile(BaseModel):
+    if TYPE_CHECKING:
+        paper_id: int
+
     paper = peewee.ForeignKeyField(Paper, backref='files', on_delete='CASCADE')
     path = peewee.TextField()
     hash = peewee.TextField(default='')
@@ -70,6 +94,9 @@ class PaperFile(BaseModel):
 
 class PaperBiblio(BaseModel):
     """LLM-extracted bibliographic info. Non-destructive: separate from Paper."""
+    if TYPE_CHECKING:
+        paper_id: int
+
     paper = peewee.ForeignKeyField(Paper, backref='biblio_extractions', on_delete='CASCADE')
     file_hash = peewee.TextField(default='')   # PDF hash this extraction came from
     title = peewee.TextField(default='')
@@ -96,6 +123,10 @@ class PaperBiblio(BaseModel):
 
 class PaperFolder(BaseModel):
     """Many-to-many: a Paper can belong to multiple Folders (Zotero collections)."""
+    if TYPE_CHECKING:
+        paper_id: int
+        folder_id: int
+
     paper = peewee.ForeignKeyField(Paper, backref='paper_folders', on_delete='CASCADE')
     folder = peewee.ForeignKeyField(Folder, backref='paper_folders', on_delete='CASCADE')
 
@@ -106,6 +137,9 @@ class PaperFolder(BaseModel):
 
 
 class Passage(BaseModel):
+    if TYPE_CHECKING:
+        paper_id: int
+
     paper = peewee.ForeignKeyField(Paper, backref='passages', on_delete='CASCADE')
     page = peewee.IntegerField()
     text = peewee.TextField()
@@ -156,6 +190,11 @@ class Reference(BaseModel):
     to a canonical `resolved_work` (CitedWork) instead. The two are mutually
     exclusive; both null means junk/unparseable.
     """
+    if TYPE_CHECKING:
+        citing_paper_id: int
+        resolved_paper_id: int
+        resolved_work_id: int
+
     citing_paper = peewee.ForeignKeyField(
         Paper, backref='references', on_delete='CASCADE')
     order_index = peewee.IntegerField(default=0)   # position / [n] in the bibliography

@@ -37,7 +37,10 @@ ignore = [
 
 [tool.mypy]
 python_version = "3.12"
-ignore_missing_imports = true   # peewee / PyMuPDF / pyzotero / PyQt6 ship no stubs
+# PyMuPDF / pyzotero / PyQt6 still ship no stubs. peewee 4 does — and CI now
+# installs the dependencies so mypy actually sees them, which is what makes the
+# gated modules meaningfully checked rather than dissolved into Any.
+ignore_missing_imports = true
 warn_unused_ignores = true
 # Incremental: CI type-checks only the modules already at zero errors (see the
 # `mypy` step in test.yml). Expand that list as more modules are cleaned.

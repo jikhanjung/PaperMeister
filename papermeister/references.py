@@ -7,6 +7,7 @@ to a held Paper) so the CLI scripts and the desktop app share one implementation
 import json
 import re
 from collections import defaultdict
+from typing import TypedDict
 
 from .models import Author, CitedWork, Paper, PaperBiblio, Reference, db
 
@@ -94,6 +95,19 @@ def ref_surname(authors_json: str) -> str:
     return surname(str(a))
 
 
+class PaperIndexEntry(TypedDict):
+    """One held paper as the resolver sees it.
+
+    Declared rather than left as a plain dict so `entry['tokens']` is known to
+    be a set: in a heterogeneous dict every value collapses to the union of all
+    value types, and iterating it then looks like iterating an int.
+    """
+    tokens: set[str]
+    year: int | None
+    surname: str
+    title: str
+
+
 def build_resolution_index() -> dict:
     """Index of held papers for resolution. Plain data — safe to reuse across
     threads/papers within a batch (rebuild when the paper set may have changed).
@@ -101,7 +115,7 @@ def build_resolution_index() -> dict:
     Returns {'doi_map': {doi: pid}, 'papers': {pid: {tokens,year,surname,title}},
              'inverted': {token: set(pid)}}.
     """
-    papers = {}
+    papers: dict[int, PaperIndexEntry] = {}
     for p in Paper.select(Paper.id, Paper.title, Paper.year).where(
             Paper.trashed_at.is_null(True)):
         papers[p.id] = {
