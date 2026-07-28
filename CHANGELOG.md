@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.1.2] - 2026-07-28
+
+References extraction that reports what went wrong and recovers from most of it,
+plus a documentation site.
 
 ### Fixed
 - **References extraction no longer loses work silently.** A batch that hit a
