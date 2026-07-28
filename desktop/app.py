@@ -23,6 +23,7 @@ from desktop.theme.qss import build_stylesheet
 from desktop.theme.tokens import COLORS_DARK, FONT
 from desktop.windows.main_window import MainWindow
 from papermeister.database import init_db
+from papermeister.paths import ensure_directories
 
 
 def _install_excepthook():
@@ -86,6 +87,11 @@ def _arm_self_test(app) -> None:
 
 def main() -> int:
     _install_excepthook()
+    # Create the whole data layout up front. Each writer also creates what it
+    # needs, so this is not load-bearing — but without it a fresh install shows
+    # a half-populated folder until the user happens to trigger an OCR download
+    # or a Zotero fetch, which reads as something having gone wrong.
+    ensure_directories()
     init_db()
     app = QApplication(sys.argv)
     app.setApplicationName('PaperMeister')

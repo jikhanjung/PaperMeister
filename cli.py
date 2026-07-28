@@ -16,10 +16,12 @@ from papermeister.models import (
     Passage,
     Source,
 )
+from papermeister.paths import ensure_directories
 
 
 def _init():
-    """Initialize DB (call before any command)."""
+    """Create the data directories and initialize the DB (call before any command)."""
+    ensure_directories()
     init_db()
 
 
