@@ -52,8 +52,8 @@ Where things live
      - SQLite database (papers, authors, passages, references)
    * - ``~/PaleoBytes/PaperMeister/ocr_json/``
      - Cached OCR output, one file per PDF
-   * - ``~/PaleoBytes/PaperMeister/preferences.json``
-     - Credentials and settings
+   * - OS config dir, ``PaleoBytes/PaperMeister/``
+     - Credentials and settings (kept out of the library — see below)
    * - ``~/PaleoBytes/PaperMeister/logs/``
      - OCR, sync and extraction logs
 

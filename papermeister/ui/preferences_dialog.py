@@ -202,7 +202,7 @@ class PreferencesDialog(QDialog):
 
         hint = QLabel(
             'Client ID is generated lazily on first OCR submission and '
-            'persisted to ~/PaleoBytes/PaperMeister/preferences.json.'
+            'persisted to preferences.json in your OS configuration directory.'
         )
         hint.setWordWrap(True)
         hint.setStyleSheet('color: #888;')

@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Settings moved out of the library folder** into the OS location for them —
+  `%LOCALAPPDATA%\PaleoBytes\PaperMeister` on Windows, `~/.config/…` on Linux,
+  `~/Library/Application Support/…` on macOS. Your existing settings are copied
+  there on first run; the old file is left alone. Settings are machine-local and
+  hold your API keys, so they should not travel with a library you may move or
+  copy between machines.
 - **The Windows installer now targets `%LOCALAPPDATA%\Programs\PaleoBytes\PaperMeister`**
   — under Programs, where a per-user install belongs, still grouped with the
   other PaleoBytes tools. An existing install is upgraded where it already sits;

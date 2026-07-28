@@ -81,14 +81,19 @@ def test_env_override_beats_both(monkeypatch, tmp_path):
 
 
 @pytest.mark.unit
-def test_everything_sits_under_the_data_dir(monkeypatch, tmp_path):
-    """No path may escape DATA_DIR — that is what makes moving it one operation."""
+def test_the_library_sits_under_the_data_dir(monkeypatch, tmp_path):
+    """Everything belonging to the library stays under DATA_DIR — that is what
+    makes moving it one operation. Settings are deliberately not in this list:
+    they are machine-local and live in the OS config location instead (see
+    test_config_location)."""
     paths = _resolve(monkeypatch, tmp_path)
 
-    for value in (paths.DB_PATH, paths.PREFS_PATH, paths.ZOTERO_COLLECTIONS_PATH,
+    for value in (paths.DB_PATH, paths.ZOTERO_COLLECTIONS_PATH,
                   paths.OCR_JSON_DIR, paths.PDF_CACHE_DIR, paths.LOG_DIR,
                   paths.TMP_DIR):
         assert value.startswith(paths.DATA_DIR), value
+
+    assert not paths.PREFS_PATH.startswith(paths.DATA_DIR)
 
 
 @pytest.mark.unit

@@ -65,7 +65,7 @@ peewee가 생성하는 `id`/`<fk>_id`는 `models.py`에 `TYPE_CHECKING`으로 �
 - **PDF:** PyMuPDF (fitz) — 메타데이터 추출 + 페이지 렌더링
 - **OCR:** RunPod serverless (Chandra2-vllm) — Preferences에서 API 키 설정
 - **Zotero:** pyzotero — Preferences에서 user_id + api_key 설정
-- **Settings:** `~/PaleoBytes/PaperMeister/preferences.json` (RunPod, Zotero 자격증명)
+- **Settings:** OS 설정 위치의 `PaleoBytes/PaperMeister/preferences.json` (RunPod, Zotero 자격증명) — Windows `%LOCALAPPDATA%`, macOS `~/Library/Application Support`, Linux `~/.config`. **데이터 디렉터리와 분리**(머신 로컬 상태 + 평문 키, 그리고 데이터 위치를 설정 가능하게 만들 때의 부트스트랩 순환 방지). 규약·근거는 [R02](./devlog/20260728_R02_Config_File_Location_Convention.md)
 - **데이터 경로:** `papermeister/paths.py`가 **단일 소스**. PaleoBytes 규약(`~/PaleoBytes/<AppName>/`)을 Modan2·CTHarvester와 공유. **폴백 없음** — 경로는 조건 없는 상수이고 `PAPERMEISTER_DATA_DIR`로만 override. 옛 `~/.papermeister`는 읽지 않으며, 남아 있으면 시작 시 경고만 하고 `scripts/migrate_data_dir.py`를 안내
 - **LLM 서지 추출:** `claude -p` (Haiku 텍스트, Sonnet vision) — Max 플랜 사용량 차감
 - **Dependencies:** Pillow, requests, pyzotero
@@ -92,7 +92,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 - OCR 병렬 처리: `get_worker_status()`로 idle worker 수 확인 → `ThreadPoolExecutor`로 병렬 제출
 - `database.py`의 `_migrate()`가 기존 DB에 새 컬럼/인덱스 변경 자동 적용
 - Zotero: 시작 시 컬렉션 자동 동기화, 컬렉션 클릭 시 아이템 fetch, PDF는 OCR 시점에만 임시 다운로드
-- 설정: `~/PaleoBytes/PaperMeister/preferences.json` (RunPod, Zotero). `.env` 사용하지 않음.
+- 설정: OS 설정 위치의 `PaleoBytes/PaperMeister/preferences.json` (RunPod, Zotero). `.env` 사용하지 않음.
 - OCR JSON → Zotero 자동 업로드: `zotero_upload_ocr_json` pref로 opt-in (기본 OFF)
 - Zotero attachment sync: 모든 타입(PDF+JSON) 수집, JSON은 status='processed'로 자동 설정
 - LLM 서지 추출: `PaperBiblio` 테이블에 비파괴 보관 (source 필드로 모델/버전 구분)

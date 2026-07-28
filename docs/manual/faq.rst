@@ -20,9 +20,14 @@ text comparable across papers. The cost is paid once — results are cached.
 Where is my data?
 -----------------
 
-Everything is under ``~/PaleoBytes/PaperMeister/``: the SQLite database, the OCR cache,
-preferences and logs. PDFs are not copied there; they stay in Zotero or in the
-folder you imported.
+The library — the SQLite database, the OCR cache and the logs — is under
+``~/PaleoBytes/PaperMeister/``. PDFs are not copied there; they stay in Zotero or
+in the folder you imported.
+
+Settings are the exception, and live wherever your OS keeps configuration:
+``%LOCALAPPDATA%\PaleoBytes\PaperMeister`` on Windows, ``~/.config/…`` on Linux,
+``~/Library/Application Support/…`` on macOS. They are specific to the machine
+and hold your API keys, so they stay put if you ever move or copy the library.
 
 Can I re-run extraction with a different model?
 -----------------------------------------------

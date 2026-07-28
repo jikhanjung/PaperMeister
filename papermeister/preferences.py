@@ -1,7 +1,7 @@
 import json
 import os
 
-from .paths import PREFS_PATH  # noqa: F401  (re-exported)
+from .paths import PREFS_PATH, migrate_legacy_config  # noqa: F401  (re-exported)
 
 _cache = None
 
@@ -10,6 +10,10 @@ def _load():
     global _cache
     if _cache is not None:
         return _cache
+    # On first read, not at startup: scripts and the CLI reach settings without
+    # going through the app's init, and a missed entry point would silently mean
+    # an unconfigured run (no Zotero key, no OCR endpoint).
+    migrate_legacy_config()
     if os.path.exists(PREFS_PATH):
         with open(PREFS_PATH, encoding='utf-8') as f:
             _cache = json.load(f)

@@ -4,12 +4,17 @@ Layout follows the PaleoBytes convention shared with Modan2 and CTHarvester::
 
     ~/PaleoBytes/PaperMeister/
     ├── papermeister.db
-    ├── preferences.json
     ├── zotero_collections.json
     ├── ocr_json/          cached OCR output, one file per PDF
     ├── pdf_cache/         PDFs fetched from Zotero
     ├── logs/
     └── tmp/
+
+Settings are the exception: ``preferences.json`` lives in the OS config location
+instead, because it is machine-local state (and holds API keys in plain text)
+rather than part of the library. Keeping it out also means the data directory can
+later be moved or pointed elsewhere without the setting that records where it is
+having to travel with it.
 
 Until this module existed the same ``os.path.join(expanduser('~'),
 '.papermeister', ...)`` was spelled out in 23 files, which is why moving it was a
@@ -23,6 +28,9 @@ building a fresh library beside real data is the one outcome worth ruling out.
 """
 import logging
 import os
+import shutil
+
+import platformdirs
 
 COMPANY_NAME = 'PaleoBytes'
 PROGRAM_NAME = 'PaperMeister'
@@ -38,8 +46,25 @@ DATA_DIR = os.path.expanduser(
     os.environ.get('PAPERMEISTER_DATA_DIR') or DEFAULT_DATA_DIR)
 
 DB_PATH = os.path.join(DATA_DIR, 'papermeister.db')
-PREFS_PATH = os.path.join(DATA_DIR, 'preferences.json')
 ZOTERO_COLLECTIONS_PATH = os.path.join(DATA_DIR, 'zotero_collections.json')
+
+#: OS config location, with the PaleoBytes grouping appended on every platform:
+#:   Windows  %LOCALAPPDATA%\PaleoBytes\PaperMeister
+#:   macOS    ~/Library/Application Support/PaleoBytes/PaperMeister
+#:   Linux    ~/.config/PaleoBytes/PaperMeister
+#:
+#: platformdirs resolves the root — hand-rolling it breaks on XDG_CONFIG_HOME and
+#: on localized Windows. Qt's QStandardPaths would do the same job, but paths.py
+#: is imported by cli.py and every script, and pulling PyQt6 into those would end
+#: the CLI's freedom from Qt. The vendor segment is appended by hand because
+#: platformdirs drops `appauthor` on macOS and Linux, where it is not the
+#: convention — the PaleoBytes grouping is shared with the rest of the suite, and
+#: each of the three paths is a legitimate location for its platform.
+CONFIG_DIR = os.path.join(
+    platformdirs.user_config_dir(), COMPANY_NAME, PROGRAM_NAME)
+PREFS_PATH = os.path.join(CONFIG_DIR, 'preferences.json')
+#: Where settings lived before 0.1.5. Copied forward by `migrate_legacy_config`.
+LEGACY_PREFS_PATH = os.path.join(DATA_DIR, 'preferences.json')
 
 OCR_JSON_DIR = os.path.join(DATA_DIR, 'ocr_json')
 PDF_CACHE_DIR = os.path.join(DATA_DIR, 'pdf_cache')
@@ -64,7 +89,29 @@ def warn_if_legacy_dir() -> bool:
     return True
 
 
+def migrate_legacy_config() -> bool:
+    """Copy settings forward from the data directory. True if copied.
+
+    Unlike the library, this is under a kilobyte, so moving it automatically is
+    reasonable — the same line devlog 084 drew for the data directory, on the
+    other side of it.
+
+    The original is left in place rather than deleted: it costs nothing, and an
+    older build started against the same machine still finds its settings
+    instead of coming up unconfigured.
+    """
+    if os.path.exists(PREFS_PATH) or not os.path.exists(LEGACY_PREFS_PATH):
+        return False
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    shutil.copy2(LEGACY_PREFS_PATH, PREFS_PATH)
+    logging.getLogger('papermeister').info(
+        'Copied settings from %s to %s; the original is left in place and can '
+        'be deleted once this build is known good.',
+        LEGACY_PREFS_PATH, PREFS_PATH)
+    return True
+
+
 def ensure_directories() -> None:
     """Create the data directories. Safe to call repeatedly."""
-    for d in (DATA_DIR, OCR_JSON_DIR, PDF_CACHE_DIR, LOG_DIR, TMP_DIR):
+    for d in (DATA_DIR, OCR_JSON_DIR, PDF_CACHE_DIR, LOG_DIR, TMP_DIR, CONFIG_DIR):
         os.makedirs(d, exist_ok=True)

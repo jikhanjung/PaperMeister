@@ -4,3 +4,4 @@ PyMuPDF~=1.28.0
 Pillow>=12.3.0
 requests>=2.34.2
 pyzotero~=1.13.2
+platformdirs>=4.0.0

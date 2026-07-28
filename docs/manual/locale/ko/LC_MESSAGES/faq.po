@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PaperMeister 0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-28 13:28+0900\n"
+"POT-Creation-Date: 2026-07-28 19:16+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: ko <LL@li.org>\n"
@@ -61,18 +61,31 @@ msgstr "데이터는 어디에 있나요?"
 
 #: ../../faq.rst:23
 msgid ""
-"Everything is under ``~/PaleoBytes/PaperMeister/``: the SQLite database, the"
-" OCR cache, preferences and logs. PDFs are not copied there; they stay in "
+"The library — the SQLite database, the OCR cache and the logs — is under "
+"``~/PaleoBytes/PaperMeister/``. PDFs are not copied there; they stay in "
 "Zotero or in the folder you imported."
 msgstr ""
-"모두 ``~/PaleoBytes/PaperMeister/`` 아래에 있습니다 — SQLite 데이터베이스, OCR 캐시, 설정, 로그. "
-"PDF 자체는 이곳으로 복사되지 않고 Zotero나 가져온 폴더에 그대로 남습니다."
+"라이브러리 — SQLite 데이터베이스, OCR 캐시, 로그 — 는 ``~/PaleoBytes/PaperMeister/`` 아래에 "
+"있습니다. PDF 자체는 이곳으로 복사되지 않고 Zotero나 가져온 폴더에 그대로 남습니다."
 
-#: ../../faq.rst:28
+#: ../../faq.rst:27
+msgid ""
+"Settings are the exception, and live wherever your OS keeps configuration: "
+"``%LOCALAPPDATA%\\PaleoBytes\\PaperMeister`` on Windows, ``~/.config/…`` on "
+"Linux, ``~/Library/Application Support/…`` on macOS. They are specific to "
+"the machine and hold your API keys, so they stay put if you ever move or "
+"copy the library."
+msgstr ""
+"설정만 예외로, OS가 설정을 보관하는 위치에 있습니다 — Windows는 "
+"``%LOCALAPPDATA%\\PaleoBytes\\PaperMeister``, Linux는 ``~/.config/…``, macOS는"
+" ``~/Library/Application Support/…``. 머신마다 다른 값이고 API 키가 들어 있으므로, 라이브러리를 "
+"옮기거나 복사해도 따라가지 않습니다."
+
+#: ../../faq.rst:33
 msgid "Can I re-run extraction with a different model?"
 msgstr "다른 모델로 추출을 다시 돌릴 수 있나요?"
 
-#: ../../faq.rst:30
+#: ../../faq.rst:35
 msgid ""
 "Yes. Results are stored per model, so a new run is added rather than "
 "replacing the old one. This is deliberate — it lets you compare models on "
@@ -81,11 +94,11 @@ msgstr ""
 "네. 결과는 모델별로 저장되므로 새 실행이 기존 것을 대체하지 않고 추가됩니다. 의도된 설계로, 같은 논문에 대해 이전 답을 잃지 않고 "
 "모델을 비교할 수 있습니다."
 
-#: ../../faq.rst:35
+#: ../../faq.rst:40
 msgid "What happens if a batch is interrupted?"
 msgstr "배치 작업이 중간에 끊기면 어떻게 되나요?"
 
-#: ../../faq.rst:37
+#: ../../faq.rst:42
 msgid ""
 "Nothing is lost. Every stage records what it completed, and re-running the "
 "same action resumes from there. Closing the window mid-batch is a safe way "
@@ -94,11 +107,11 @@ msgstr ""
 "잃는 것은 없습니다. 각 단계가 완료 지점을 기록하므로 같은 작업을 다시 실행하면 그 지점부터 이어집니다. 작업 도중 창을 닫는 것은 "
 "안전한 중단 방법입니다."
 
-#: ../../faq.rst:41
+#: ../../faq.rst:46
 msgid "A paper shows \"no references section\" — is that wrong?"
 msgstr "어떤 논문이 \"no references section\"으로 표시됩니다 — 잘못된 건가요?"
 
-#: ../../faq.rst:43
+#: ../../faq.rst:48
 msgid ""
 "Not necessarily. Letters, abstracts, plates, obituaries and front matter "
 "genuinely have no bibliography, and that is recorded as a completed check "
@@ -110,11 +123,11 @@ msgstr ""
 "기록됩니다. 반면 참고문헌이 *실제로 있는데* 아무것도 나오지 않은 논문은 다르게 처리됩니다 — 미확인 상태로 남겨 다음 실행에서 "
 "재시도합니다."
 
-#: ../../faq.rst:49
+#: ../../faq.rst:54
 msgid "Are non-English papers supported?"
 msgstr "영어가 아닌 논문도 지원하나요?"
 
-#: ../../faq.rst:51
+#: ../../faq.rst:56
 msgid ""
 "Yes. OCR and extraction handle Korean, Japanese, Chinese, Russian and "
 "European languages. Author-name splitting understands CJK conventions. "
@@ -123,11 +136,11 @@ msgstr ""
 "네. OCR과 추출 모두 한국어·일본어·중국어·러시아어와 유럽 언어들을 처리합니다. 저자 이름 분리는 CJK 관례를 이해하며, 참고문헌 "
 "섹션 제목도 여러 언어와 문자 체계에서 인식됩니다."
 
-#: ../../faq.rst:56
+#: ../../faq.rst:61
 msgid "Which platform should I use?"
 msgstr "어떤 플랫폼을 쓰는 게 좋나요?"
 
-#: ../../faq.rst:58
+#: ../../faq.rst:63
 msgid ""
 "Windows is the best-tested. Linux and macOS builds are produced and smoke-"
 "tested by CI but see far less real use. The macOS build is not notarized."

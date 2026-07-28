@@ -124,6 +124,22 @@
 ⚠️ **WSL에서 라이브 DB를 볼 때 경로가 바뀌었다**:
 `/mnt/c/Users/Jikhan Jung/PaleoBytes/PaperMeister/papermeister.db`
 
+### ✅ 설정 파일 위치 분리 (2026-07-28) — [R02](./devlog/20260728_R02_Config_File_Location_Convention.md)
+
+`preferences.json`이 데이터 디렉터리를 떠나 **OS 설정 위치**로 갔다:
+Windows `%LOCALAPPDATA%\PaleoBytes\PaperMeister` / macOS `~/Library/Application Support/…`
+/ Linux `~/.config/…`. 해석은 **`platformdirs`**(Qt 아님 — `paths.py`를 CLI·스크립트가
+import하므로 PyQt6를 끌어오면 안 됨). **벤더 세그먼트는 직접 붙인다** — platformdirs는
+`appauthor`를 mac/Linux에서 무시한다.
+
+**왜**: (1) 설정은 머신 로컬 상태 + 평문 API 키라 라이브러리와 함께 이동하면 안 됨
+(2) 나중에 **데이터 경로를 설정 가능하게** 만들 때의 부트스트랩 순환을 미리 끊음
+(설정이 데이터 디렉터리 안에 있으면 서로를 알아야 함). 로그는 그대로 둠(부트스트랩 + 조사 편의).
+
+이전은 **설정 첫 읽기**에 걸어 스크립트·CLI 경로에서도 동작한다(진입점에 걸면 하나만 놓쳐도
+설정 없이 조용히 도는 실행이 생김). 새 위치에 있으면 덮지 않고, 원본은 남긴다.
+**R02는 다른 프로젝트에 그대로 적용하라고 쓴 문서**다.
+
 ### 🔴 사용자 액션 대기 (다음 세션에서 먼저 확인할 것)
 
 - [x] ~~**앱 재기동**~~ (2026-07-28 완료, 정상 가동 중) — 07-27~28 수정분 반영. 마지막 확인 시점의 실행 빌드는 `a6609e1` 근처였고, 이후 **재시도 낭비 제거(`acee8ab`)·타임아웃 480초(`410425d`)·목차 오탐 루프 차단(`1749b4a`)·탭 유지·로그 날짜/롤오버**가 미반영. 특히 앞의 둘은 **논문당 25분→8분**을 좌우
