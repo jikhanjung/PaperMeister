@@ -110,7 +110,7 @@
 - [ ] **v0.1.2 Windows 설치본 수동 확인** — 스모크 테스트는 "기동한다"까지만 보증. 설치 자체와 실기능은 미검증
 - [ ] **peewee 4 / pyzotero 1.13 라이브 확인** — 테스트가 닿지 않는 두 경로: 라이브 DB `_migrate()`, 실제 Zotero API 왕복(`logs/zotero_sync.log`)
 
-### 관찰 중 — 서버 간헐적 사망
+### 관찰 중 — 서버 간헐적 사망 → [devlog 083](./devlog/20260728_083_Container_Restart_Recovery_Wait.md)
 
 **07-28 실적 (로그 실측)**: 179편 시도, **PARTIAL 4편(2.2%)**만 발생(timeout 3 / bad JSON 1).
 `no_array`·`empty_result`는 **0건** — 079의 가드들이 오탐 없이 조용하다.

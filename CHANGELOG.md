@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.1.3] - 2026-07-28
+
+Keeps a paper's work when the model server restarts under it.
 
 ### Fixed
 - **A restarting model server no longer costs a paper's work.** When the
