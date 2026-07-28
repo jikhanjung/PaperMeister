@@ -16,11 +16,12 @@ from papermeister.models import (
     Passage,
     Source,
 )
-from papermeister.paths import ensure_directories
+from papermeister.paths import ensure_directories, warn_if_legacy_dir
 
 
 def _init():
     """Create the data directories and initialize the DB (call before any command)."""
+    warn_if_legacy_dir()
     ensure_directories()
     init_db()
 

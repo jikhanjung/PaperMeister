@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PaperMeister 0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-28 15:22+0900\n"
+"POT-Creation-Date: 2026-07-28 15:44+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: ko <LL@li.org>\n"
@@ -144,23 +144,20 @@ msgstr ""
 
 #: ../../developer_guide.rst:69
 msgid ""
-"An installation predating this still has ``~/.papermeister``. That directory"
-" keeps being used as long as the new one does not exist; nothing is moved "
-"automatically, because a library here is gigabytes and may have a batch "
-"running against it. ``scripts/migrate_data_dir.py`` does the move when "
-"asked. Once the new directory exists it wins — after a migration both can be"
-" present, and the leftover must not pull the app back to the stale copy."
+"Data used to live in ``~/.papermeister``. Nothing reads that location any "
+"more. If one is still lying around, the app says so at startup and points at"
+" ``scripts/migrate_data_dir.py`` rather than quietly starting an empty "
+"library beside it."
 msgstr ""
-"이전 버전에서 설치한 경우 ``~/.papermeister`` 가 남아 있습니다. 새 디렉터리가 없는 한 그 디렉터리를 계속 사용하며, "
-"자동으로 옮기지 않습니다 — 라이브러리는 기가바이트 단위이고 배치가 돌고 있을 수 있기 때문입니다. 이동은 "
-"``scripts/migrate_data_dir.py`` 로 합니다. 새 디렉터리가 생기면 그쪽이 우선입니다 — 이동 후에는 둘 다 "
-"존재할 수 있는데, 남은 쪽이 앱을 낡은 사본으로 되돌려서는 안 되기 때문입니다."
+"데이터는 예전에 ``~/.papermeister`` 에 있었습니다. 이제 그 위치는 읽지 않습니다. 옛 디렉터리가 남아 있으면 앱이 "
+"시작할 때 알려주고 ``scripts/migrate_data_dir.py`` 를 안내합니다 — 그 옆에 빈 라이브러리를 조용히 새로 "
+"만들지 않기 위해서입니다."
 
-#: ../../developer_guide.rst:77
+#: ../../developer_guide.rst:75
 msgid "Conventions"
 msgstr "관례"
 
-#: ../../developer_guide.rst:79
+#: ../../developer_guide.rst:77
 msgid ""
 "**Scripts that change data take** ``--execute``. Without it they print a "
 "dry-run preview. There is no ``--dry-run`` flag; dry run is the default."
@@ -168,14 +165,14 @@ msgstr ""
 "**데이터를 변경하는 스크립트는** ``--execute`` **를 받습니다.** 플래그가 없으면 미리보기(dry-run)만 출력합니다."
 " ``--dry-run`` 플래그는 없으며, dry-run이 기본값입니다."
 
-#: ../../developer_guide.rst:82
+#: ../../developer_guide.rst:80
 msgid ""
 "**Every fix gets a regression test.** The test should fail against the old "
 "behaviour — verify that, rather than assuming it."
 msgstr ""
 "**모든 수정에는 회귀 테스트를 붙입니다.** 그 테스트는 옛 동작에서 반드시 실패해야 하며, 가정하지 말고 실제로 확인하세요."
 
-#: ../../developer_guide.rst:85
+#: ../../developer_guide.rst:83
 msgid ""
 "**devlog files** record the reasoning, not the diff — git already has the "
 "diff. Naming: ``YYYYMMDD_P##_title.md`` for plans, ``YYYYMMDD_R##_title.md``"
@@ -186,18 +183,18 @@ msgstr ""
 "``YYYYMMDD_P##_제목.md``, 리뷰·감사는 ``YYYYMMDD_R##_제목.md``, 구현 기록은 "
 "``YYYYMMDD_###_제목.md``."
 
-#: ../../developer_guide.rst:89
+#: ../../developer_guide.rst:87
 msgid ""
 "**HANDOFF.md** is the state of play between sessions. Read it first; update "
 "it last."
 msgstr ""
 "**HANDOFF.md** 는 세션 간 진행 상황입니다. 작업을 시작할 때 가장 먼저 읽고, 끝낼 때 가장 마지막에 갱신하세요."
 
-#: ../../developer_guide.rst:93
+#: ../../developer_guide.rst:91
 msgid "Dependencies"
 msgstr "의존성"
 
-#: ../../developer_guide.rst:95
+#: ../../developer_guide.rst:93
 msgid ""
 "``requirements.txt`` and ``requirements-dev.txt`` declare ranges; "
 "``requirements.lock`` and ``requirements-dev.lock`` pin exact versions with "
@@ -208,7 +205,7 @@ msgstr ""
 "``requirements.lock`` 과 ``requirements-dev.lock`` 은 해시와 함께 정확한 버전을 고정합니다. "
 "CI와 릴리스 빌드는 lock에서 설치하므로, 배포되는 빌드에는 CI가 테스트한 것과 정확히 같은 패키지가 들어갑니다."
 
-#: ../../developer_guide.rst:106
+#: ../../developer_guide.rst:104
 msgid ""
 "``make lock`` keeps existing pins as preferences and moves only what must "
 "move, so an unrelated upstream release does not churn the lock."
@@ -216,85 +213,85 @@ msgstr ""
 "``make lock`` 은 기존 핀을 선호값으로 유지하고 꼭 움직여야 하는 것만 옮기므로, 무관한 상위 패키지 릴리스 때문에 lock이"
 " 흔들리지 않습니다."
 
-#: ../../developer_guide.rst:110
+#: ../../developer_guide.rst:108
 msgid "Continuous integration"
 msgstr "지속적 통합(CI)"
 
-#: ../../developer_guide.rst:116
+#: ../../developer_guide.rst:114
 msgid "Workflow"
 msgstr "워크플로"
 
-#: ../../developer_guide.rst:117
+#: ../../developer_guide.rst:115
 msgid "Purpose"
 msgstr "용도"
 
-#: ../../developer_guide.rst:118
+#: ../../developer_guide.rst:116
 msgid "``test.yml``"
 msgstr ""
 
-#: ../../developer_guide.rst:119
+#: ../../developer_guide.rst:117
 msgid ""
 "ruff and mypy, then the suite on Linux and Windows. Coverage is measured on "
 "Linux with a ratchet floor"
 msgstr "ruff와 mypy를 돌린 뒤 Linux·Windows에서 테스트 실행. 커버리지는 Linux에서 측정하며 하한선을 둠"
 
-#: ../../developer_guide.rst:121
+#: ../../developer_guide.rst:119
 msgid "``security.yml``"
 msgstr ""
 
-#: ../../developer_guide.rst:122
+#: ../../developer_guide.rst:120
 msgid "pip-audit against the lockfile, plus the lock-check gate. Also weekly"
 msgstr "lock 파일에 대한 pip-audit과 lock-check 게이트. 주간 스케줄로도 실행"
 
-#: ../../developer_guide.rst:123
+#: ../../developer_guide.rst:121
 msgid "``codeql.yml``"
 msgstr ""
 
-#: ../../developer_guide.rst:124
+#: ../../developer_guide.rst:122
 msgid "Static analysis of our own code, on push and weekly"
 msgstr "자체 코드에 대한 정적 분석. push 시점과 주간 스케줄"
 
-#: ../../developer_guide.rst:125
+#: ../../developer_guide.rst:123
 msgid "``build.yml``"
 msgstr ""
 
-#: ../../developer_guide.rst:126
+#: ../../developer_guide.rst:124
 msgid "Manual packaging run for all three platforms"
 msgstr "세 플랫폼 패키징 수동 실행"
 
-#: ../../developer_guide.rst:127
+#: ../../developer_guide.rst:125
 msgid "``release.yml``"
 msgstr ""
 
-#: ../../developer_guide.rst:128
+#: ../../developer_guide.rst:126
 msgid "Tag ``v*.*.*`` → test, build, publish with checksums"
 msgstr "``v*.*.*`` 태그 → 테스트·빌드 후 체크섬과 함께 릴리스 발행"
 
-#: ../../developer_guide.rst:129
+#: ../../developer_guide.rst:127
 msgid "``manual-release.yml``"
 msgstr ""
 
-#: ../../developer_guide.rst:130
+#: ../../developer_guide.rst:128
 msgid "Same, triggered by hand, for pre-releases and re-cuts"
 msgstr "동일하되 수동 실행. 프리릴리스와 재발행용"
 
-#: ../../developer_guide.rst:131
+#: ../../developer_guide.rst:129
 msgid "``dependabot-lock-refresh.yml``"
 msgstr ""
 
-#: ../../developer_guide.rst:132
+#: ../../developer_guide.rst:130
 msgid "Regenerates the locks on a Dependabot PR so its checks can pass"
 msgstr "Dependabot PR에서 lock을 다시 생성해 검사를 통과시킴"
 
-#: ../../developer_guide.rst:133
+#: ../../developer_guide.rst:131
 msgid "``docs.yml``"
 msgstr ""
 
-#: ../../developer_guide.rst:134
+#: ../../developer_guide.rst:132
 msgid "Builds this manual and deploys it to GitHub Pages"
 msgstr "이 매뉴얼을 빌드해 GitHub Pages에 배포"
 
-#: ../../developer_guide.rst:136
+#: ../../developer_guide.rst:134
 msgid ""
 "mypy runs against a list of modules that are already clean, and the list "
 "grows as more are cleaned — it is a ratchet, not a blanket check."
@@ -302,23 +299,23 @@ msgstr ""
 "mypy는 이미 오류가 없는 모듈 목록만 검사하며, 정리되는 모듈이 늘어날 때마다 목록도 늘어납니다 — 전면 검사가 아니라 점진적 확대 "
 "방식입니다."
 
-#: ../../developer_guide.rst:140
+#: ../../developer_guide.rst:138
 msgid "Releasing"
 msgstr "릴리스"
 
-#: ../../developer_guide.rst:142
+#: ../../developer_guide.rst:140
 msgid "Add a section to ``CHANGELOG.md`` for the version"
 msgstr "``CHANGELOG.md`` 에 해당 버전 섹션 추가"
 
-#: ../../developer_guide.rst:143
+#: ../../developer_guide.rst:141
 msgid "Bump ``version.py``"
 msgstr "``version.py`` 버전 올리기"
 
-#: ../../developer_guide.rst:144
+#: ../../developer_guide.rst:142
 msgid "Tag ``vX.Y.Z`` and push"
 msgstr "``vX.Y.Z`` 태그를 붙여 push"
 
-#: ../../developer_guide.rst:146
+#: ../../developer_guide.rst:144
 msgid ""
 "``release.yml`` runs the tests, builds all three platforms, and publishes a "
 "release whose notes are the CHANGELOG section for that version — so the "
@@ -329,13 +326,26 @@ msgstr ""
 "발행합니다 — 그래서 CHANGELOG가 유일한 원본으로 유지됩니다. 빌드 번호는 커밋 수에서 나오므로 태그 빌드와 수동 빌드가 "
 "일관됩니다."
 
-#: ../../developer_guide.rst:152
+#: ../../developer_guide.rst:150
 msgid "Building the manual"
 msgstr "매뉴얼 빌드"
 
-#: ../../developer_guide.rst:159
+#: ../../developer_guide.rst:157
 msgid ""
 "Korean translations live in ``locale/ko/LC_MESSAGES/``. Refresh the catalogs"
 " after changing English text:"
 msgstr ""
 "한국어 번역은 ``locale/ko/LC_MESSAGES/`` 에 있습니다. 영어 원문을 수정한 뒤에는 카탈로그를 갱신하세요:"
+
+#~ msgid ""
+#~ "An installation predating this still has ``~/.papermeister``. That directory"
+#~ " keeps being used as long as the new one does not exist; nothing is moved "
+#~ "automatically, because a library here is gigabytes and may have a batch "
+#~ "running against it. ``scripts/migrate_data_dir.py`` does the move when "
+#~ "asked. Once the new directory exists it wins — after a migration both can be"
+#~ " present, and the leftover must not pull the app back to the stale copy."
+#~ msgstr ""
+#~ "이전 버전에서 설치한 경우 ``~/.papermeister`` 가 남아 있습니다. 새 디렉터리가 없는 한 그 디렉터리를 계속 사용하며, "
+#~ "자동으로 옮기지 않습니다 — 라이브러리는 기가바이트 단위이고 배치가 돌고 있을 수 있기 때문입니다. 이동은 "
+#~ "``scripts/migrate_data_dir.py`` 로 합니다. 새 디렉터리가 생기면 그쪽이 우선입니다 — 이동 후에는 둘 다 "
+#~ "존재할 수 있는데, 남은 쪽이 앱을 낡은 사본으로 되돌려서는 안 되기 때문입니다."

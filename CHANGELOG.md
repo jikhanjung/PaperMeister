@@ -17,11 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is untouched by install or uninstall — it lives in
   `%USERPROFILE%\PaleoBytes\PaperMeister`.
 - **User data now lives in `~/PaleoBytes/PaperMeister/`**, the layout shared with
-  Modan2 and CTHarvester, instead of `~/.papermeister/`. **Existing installations
-  are untouched and keep working** — the old location is still used when it is
-  the one that exists. To move, close the app and run
+  Modan2 and CTHarvester, instead of `~/.papermeister/`. If you still have data
+  in the old location, close the app and run
   `python scripts/migrate_data_dir.py --execute` (add `--copy` to leave the
-  original in place).
+  original in place) — the app will tell you at startup if it finds one.
 
 ---
 

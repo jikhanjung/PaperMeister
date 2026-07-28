@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PaperMeister 0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-28 15:22+0900\n"
+"POT-Creation-Date: 2026-07-28 15:44+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ko\n"
@@ -51,8 +51,8 @@ msgstr ""
 msgid "[Unreleased]"
 msgstr ""
 
-#: ../../../../CHANGELOG.md:12 ../../../../CHANGELOG.md:92
-#: ../../../../CHANGELOG.md:118
+#: ../../../../CHANGELOG.md:12 ../../../../CHANGELOG.md:91
+#: ../../../../CHANGELOG.md:117
 msgid "Changed"
 msgstr "변경"
 
@@ -70,26 +70,25 @@ msgstr ""
 #: ../../../../CHANGELOG.md:19
 msgid ""
 "**User data now lives in `~/PaleoBytes/PaperMeister/`**, the layout "
-"shared with Modan2 and CTHarvester, instead of `~/.papermeister/`. "
-"**Existing installations are untouched and keep working** — the old "
-"location is still used when it is the one that exists. To move, close the"
-" app and run `python scripts/migrate_data_dir.py --execute` (add `--copy`"
-" to leave the original in place)."
+"shared with Modan2 and CTHarvester, instead of `~/.papermeister/`. If you"
+" still have data in the old location, close the app and run `python "
+"scripts/migrate_data_dir.py --execute` (add `--copy` to leave the "
+"original in place) — the app will tell you at startup if it finds one."
 msgstr ""
 
-#: ../../../../CHANGELOG.md:28
+#: ../../../../CHANGELOG.md:27
 msgid "[0.1.3] - 2026-07-28"
 msgstr ""
 
-#: ../../../../CHANGELOG.md:30
+#: ../../../../CHANGELOG.md:29
 msgid "Keeps a paper's work when the model server restarts under it."
 msgstr ""
 
-#: ../../../../CHANGELOG.md:32 ../../../../CHANGELOG.md:51
+#: ../../../../CHANGELOG.md:31 ../../../../CHANGELOG.md:50
 msgid "Fixed"
 msgstr ""
 
-#: ../../../../CHANGELOG.md:33
+#: ../../../../CHANGELOG.md:32
 msgid ""
 "**A restarting model server no longer costs a paper's work.** When the "
 "container behind the LLM dies, extraction now waits for it to come back "
@@ -99,29 +98,29 @@ msgid ""
 "succeeded."
 msgstr ""
 
-#: ../../../../CHANGELOG.md:39 ../../../../CHANGELOG.md:76
-#: ../../../../CHANGELOG.md:105 ../../../../CHANGELOG.md:133
+#: ../../../../CHANGELOG.md:38 ../../../../CHANGELOG.md:75
+#: ../../../../CHANGELOG.md:104 ../../../../CHANGELOG.md:132
 msgid "Added"
 msgstr "추가"
 
-#: ../../../../CHANGELOG.md:40
+#: ../../../../CHANGELOG.md:39
 msgid ""
 "**Language switcher in the manual.** Every page links to its counterpart "
 "in the other language, keeping you on the same page rather than sending "
 "you back to the index. Already live on the documentation site."
 msgstr ""
 
-#: ../../../../CHANGELOG.md:46
+#: ../../../../CHANGELOG.md:45
 msgid "[0.1.2] - 2026-07-28"
 msgstr ""
 
-#: ../../../../CHANGELOG.md:48
+#: ../../../../CHANGELOG.md:47
 msgid ""
 "References extraction that reports what went wrong and recovers from most"
 " of it, plus a documentation site."
 msgstr ""
 
-#: ../../../../CHANGELOG.md:52
+#: ../../../../CHANGELOG.md:51
 msgid ""
 "**The Windows installer is attached to releases again.** It was built and"
 " checksummed but never uploaded — it sat deeper in the artifact tree than"
@@ -129,7 +128,7 @@ msgid ""
 "zip only."
 msgstr ""
 
-#: ../../../../CHANGELOG.md:55
+#: ../../../../CHANGELOG.md:54
 msgid ""
 "**References extraction no longer loses work silently.** A batch that hit"
 " a truncated model response, a crash-looping OCR/LLM server, or a "
@@ -138,29 +137,29 @@ msgid ""
 "of those now either recovers or leaves the paper to be retried:"
 msgstr ""
 
-#: ../../../../CHANGELOG.md:60
+#: ../../../../CHANGELOG.md:59
 msgid ""
 "a response cut off at the token limit is retried with more room, then "
 "split, before anything is given up on"
 msgstr ""
 
-#: ../../../../CHANGELOG.md:62
+#: ../../../../CHANGELOG.md:61
 msgid "a server that restarts mid-request is ridden through with a short retry"
 msgstr ""
 
-#: ../../../../CHANGELOG.md:63
+#: ../../../../CHANGELOG.md:62
 msgid ""
 "a paper that genuinely has no bibliography (a letter, plates, front "
 "matter) is recorded as checked rather than retried forever"
 msgstr ""
 
-#: ../../../../CHANGELOG.md:65
+#: ../../../../CHANGELOG.md:64
 msgid ""
 "a paper that *does* have one but returns nothing stays unchecked, so a "
 "later run tries again"
 msgstr ""
 
-#: ../../../../CHANGELOG.md:67
+#: ../../../../CHANGELOG.md:66
 msgid ""
 "**Batches no longer stall on an unsplittable request.** A request too "
 "large to finish was re-sent unchanged until the batch controller bottomed"
@@ -169,7 +168,7 @@ msgid ""
 "actually completed is not discarded nine seconds short."
 msgstr ""
 
-#: ../../../../CHANGELOG.md:72
+#: ../../../../CHANGELOG.md:71
 msgid ""
 "**The source tab stays put.** Switching to another source and then having"
 " the Zotero sync finish (or applying biblio) no longer snaps the tab bar "
@@ -177,7 +176,7 @@ msgid ""
 "disagreeing."
 msgstr ""
 
-#: ../../../../CHANGELOG.md:77
+#: ../../../../CHANGELOG.md:76
 msgid ""
 "**Released builds are now launched before being published.** Every "
 "platform's frozen executable is started headless and has to reach a live "
@@ -186,7 +185,7 @@ msgid ""
 "or native library — which no test against the source tree can see."
 msgstr ""
 
-#: ../../../../CHANGELOG.md:82
+#: ../../../../CHANGELOG.md:81
 msgid ""
 "**Documentation site.** A full manual in English and Korean at "
 "https://jikhanjung.github.io/PaperMeister/ — installation, a quick start "
@@ -194,7 +193,7 @@ msgid ""
 "from real failures, and a developer guide."
 msgstr ""
 
-#: ../../../../CHANGELOG.md:86
+#: ../../../../CHANGELOG.md:85
 msgid ""
 "**Diagnosable extraction.** A partial result now says why it was partial "
 "(truncated response, no JSON array, timeout) instead of just \"server?\","
@@ -203,24 +202,24 @@ msgid ""
 "the date, so a log excerpt from a multi-day run is unambiguous."
 msgstr ""
 
-#: ../../../../CHANGELOG.md:93
+#: ../../../../CHANGELOG.md:92
 msgid ""
 "Dependencies updated to current versions (peewee 4, pyzotero 1.13, "
 "PyMuPDF 1.28); Zotero write-back handles both the old and new pyzotero "
 "error classes and HTTP backends."
 msgstr ""
 
-#: ../../../../CHANGELOG.md:100
+#: ../../../../CHANGELOG.md:99
 msgid "[0.1.1] - 2026-07-24"
 msgstr ""
 
-#: ../../../../CHANGELOG.md:102
+#: ../../../../CHANGELOG.md:101
 msgid ""
 "Citation-network visualization, installers for all three desktop "
 "platforms, and dependency-security hardening."
 msgstr "인용 네트워크 시각화, 세 데스크톱 플랫폼 모두를 위한 설치본, 의존성 보안 강화."
 
-#: ../../../../CHANGELOG.md:106
+#: ../../../../CHANGELOG.md:105
 msgid ""
 "**Citation network graph.** Right-click a paper → an interactive ego-"
 "network of its citations: the papers it cites, the papers that cite it, "
@@ -234,7 +233,7 @@ msgstr ""
 "보유했는지·PDF 없이 보유했는지·외부 문헌(인용만)인지를 나타냅니다. 노드를 클릭하면 그 노드를 중심으로 다시 그리며 그래프를 "
 "따라갈 수 있습니다."
 
-#: ../../../../CHANGELOG.md:112
+#: ../../../../CHANGELOG.md:111
 msgid ""
 "**Installers for every platform.** In addition to the Windows portable "
 "zip, releases now include a Windows installer (Inno Setup), a Linux "
@@ -244,13 +243,13 @@ msgstr ""
 "**모든 플랫폼용 설치본.** Windows 포터블 zip에 더해, 이제 릴리스에 Windows 설치본(Inno Setup), "
 "Linux **AppImage**, macOS **DMG** 가 포함됩니다 — 모두 태그를 붙이면 CI가 빌드해 발행합니다."
 
-#: ../../../../CHANGELOG.md:115
+#: ../../../../CHANGELOG.md:114
 msgid ""
 "**Global crash handler.** An unexpected error now surfaces as a dialog "
 "and is logged, instead of silently closing the window."
 msgstr "**전역 크래시 핸들러.** 예기치 못한 오류가 창을 조용히 닫는 대신 다이얼로그로 표시되고 로그에 기록됩니다."
 
-#: ../../../../CHANGELOG.md:119
+#: ../../../../CHANGELOG.md:118
 msgid ""
 "The references (Qwen) read timeout was raised from 240 s to 360 s and "
 "made adjustable via a preference, so an occasional busy-GPU spike no "
@@ -259,11 +258,11 @@ msgstr ""
 "참고문헌 추출(Qwen)의 읽기 타임아웃을 240초에서 360초로 올리고 설정으로 조절할 수 있게 했습니다. GPU가 일시적으로 "
 "바빠도 작업이 중단되지 않습니다."
 
-#: ../../../../CHANGELOG.md:123
+#: ../../../../CHANGELOG.md:122
 msgid "Security"
 msgstr "보안"
 
-#: ../../../../CHANGELOG.md:124
+#: ../../../../CHANGELOG.md:123
 msgid ""
 "Removed the unused `python-dotenv` dependency and updated Pillow (→ 12.3)"
 " and requests (→ 2.33) to versions without known advisories; CI now runs "
@@ -272,15 +271,15 @@ msgstr ""
 "사용하지 않던 `python-dotenv` 의존성을 제거하고, Pillow(→ 12.3)와 requests(→ 2.33)를 알려진 "
 "취약점이 없는 버전으로 올렸습니다. CI가 push마다, 그리고 주간으로 `pip-audit` 을 실행합니다."
 
-#: ../../../../CHANGELOG.md:129
+#: ../../../../CHANGELOG.md:128
 msgid "[0.1.0] - 2026-07-23"
 msgstr ""
 
-#: ../../../../CHANGELOG.md:131
+#: ../../../../CHANGELOG.md:130
 msgid "Initial tagged release of the PaperMeister desktop app."
 msgstr "PaperMeister 데스크톱 앱의 첫 태그 릴리스."
 
-#: ../../../../CHANGELOG.md:134
+#: ../../../../CHANGELOG.md:133
 msgid ""
 "Turn a PDF paper collection into a searchable knowledge base: PDF library"
 " with Zotero sync, OCR (RunPod / Chandra2), LLM bibliographic extraction,"
@@ -290,7 +289,7 @@ msgstr ""
 "PDF 논문 모음을 검색 가능한 지식 베이스로 — Zotero 동기화가 되는 PDF 라이브러리, OCR(RunPod / "
 "Chandra2), LLM 서지 정보 추출, 제목 가중치 순위와 일치 부분 강조를 갖춘 전문 검색(FTS5)."
 
-#: ../../../../CHANGELOG.md:137
+#: ../../../../CHANGELOG.md:136
 msgid ""
 "**References & citation network.** Parse each paper's reference list, "
 "resolve citations to held papers, and normalize external cited works into"
@@ -299,7 +298,7 @@ msgstr ""
 "**참고문헌과 인용 네트워크.** 각 논문의 참고문헌 목록을 파싱하고, 보유 중인 논문으로 인용을 해소하며, 외부 인용 문헌을 대표"
 " 노드로 정규화합니다 — 인용 네트워크의 토대입니다."
 
-#: ../../../../CHANGELOG.md:140
+#: ../../../../CHANGELOG.md:139
 msgid ""
 "**Server-outage resilience.** References / biblio / OCR batches pause and"
 " auto-resume when the LLM or OCR server goes down, instead of failing "
@@ -308,15 +307,29 @@ msgstr ""
 "**서버 장애 복원력.** LLM이나 OCR 서버가 내려가면 참고문헌·서지·OCR 작업이 남은 항목을 모두 실패 처리하는 대신 "
 "일시정지했다가 자동으로 재개합니다."
 
-#: ../../../../CHANGELOG.md:143
+#: ../../../../CHANGELOG.md:142
 msgid "CJK author names shown surname-first joined (정직한) in the paper list."
 msgstr "논문 목록에서 CJK 저자명을 성-이름 순으로 붙여 표시(예: 정직한)."
 
-#: ../../../../CHANGELOG.md:144
+#: ../../../../CHANGELOG.md:143
 msgid ""
 "Windows portable build (PyInstaller) produced by CI, with a cross-"
 "platform test suite (ruff + mypy + pytest on Linux and Windows)."
 msgstr ""
 "CI가 만드는 Windows 포터블 빌드(PyInstaller), 그리고 크로스 플랫폼 테스트 모음(Linux·Windows에서 "
 "ruff + mypy + pytest)."
+
+#~ msgid ""
+#~ "**User data now lives in "
+#~ "`~/PaleoBytes/PaperMeister/`**, the layout shared"
+#~ " with Modan2 and CTHarvester, instead "
+#~ "of `~/.papermeister/`. **Existing installations "
+#~ "are untouched and keep working** — "
+#~ "the old location is still used "
+#~ "when it is the one that exists."
+#~ " To move, close the app and run"
+#~ " `python scripts/migrate_data_dir.py --execute` "
+#~ "(add `--copy` to leave the original "
+#~ "in place)."
+#~ msgstr ""
 

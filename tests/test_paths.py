@@ -2,8 +2,11 @@
 
 Getting this wrong is the expensive kind of bug: pointing at a directory that
 does not hold the library makes the app come up empty and start building a fresh
-one beside the real data. Modan2 hit exactly that once. So the resolution order
-is pinned rather than assumed.
+one beside the real data. Modan2 hit exactly that once.
+
+Resolution is deliberately unconditional — the location is a constant, with an
+env override for tests. The pre-0.1.4 directory is not read; it is only reported,
+so that same failure cannot happen quietly on a machine that still has one.
 """
 import importlib
 import os
@@ -29,32 +32,42 @@ def _resolve(monkeypatch, home, *, override=None):
 def test_fresh_install_uses_the_paleobytes_location(monkeypatch, tmp_path):
     paths = _resolve(monkeypatch, tmp_path)
     assert paths.DATA_DIR == os.path.join(str(tmp_path), 'PaleoBytes', 'PaperMeister')
-    assert not paths.using_legacy_dir()
 
 
 @pytest.mark.unit
-def test_existing_install_keeps_its_legacy_directory(monkeypatch, tmp_path):
-    """The whole point of the fallback: an upgrade must not orphan a library
-    that may be gigabytes, mid-batch, and the only copy."""
+def test_a_legacy_directory_does_not_change_where_data_goes(monkeypatch, tmp_path):
+    """No fallback: the location stays a constant even if old data is present."""
     (tmp_path / '.papermeister').mkdir()
 
     paths = _resolve(monkeypatch, tmp_path)
 
-    assert paths.DATA_DIR == os.path.join(str(tmp_path), '.papermeister')
-    assert paths.using_legacy_dir()
-    assert paths.DB_PATH.endswith(os.path.join('.papermeister', 'papermeister.db'))
+    assert paths.DATA_DIR == os.path.join(str(tmp_path), 'PaleoBytes', 'PaperMeister')
 
 
 @pytest.mark.unit
-def test_new_location_wins_once_it_exists(monkeypatch, tmp_path):
-    """After migration both directories may sit there — the new one is the live
-    library, and the leftover must not pull the app back."""
+def test_stray_legacy_data_is_reported(monkeypatch, tmp_path, caplog):
+    """Starting an empty library beside real data looks exactly like data loss,
+    so it has to be said out loud rather than found later."""
+    import logging
+    (tmp_path / '.papermeister').mkdir()
+    paths = _resolve(monkeypatch, tmp_path)
+
+    with caplog.at_level(logging.WARNING, logger='papermeister'):
+        assert paths.warn_if_legacy_dir() is True
+
+    text = '\n'.join(r.getMessage() for r in caplog.records)
+    assert '.papermeister' in text and 'migrate_data_dir' in text
+
+
+@pytest.mark.unit
+def test_nothing_is_reported_once_migrated(monkeypatch, tmp_path):
+    """Both directories can exist after a migration — that is not a warning."""
     (tmp_path / '.papermeister').mkdir()
     (tmp_path / 'PaleoBytes' / 'PaperMeister').mkdir(parents=True)
 
     paths = _resolve(monkeypatch, tmp_path)
 
-    assert not paths.using_legacy_dir()
+    assert paths.warn_if_legacy_dir() is False
 
 
 @pytest.mark.unit

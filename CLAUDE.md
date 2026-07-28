@@ -66,7 +66,7 @@ peewee가 생성하는 `id`/`<fk>_id`는 `models.py`에 `TYPE_CHECKING`으로 �
 - **OCR:** RunPod serverless (Chandra2-vllm) — Preferences에서 API 키 설정
 - **Zotero:** pyzotero — Preferences에서 user_id + api_key 설정
 - **Settings:** `~/PaleoBytes/PaperMeister/preferences.json` (RunPod, Zotero 자격증명)
-- **데이터 경로:** `papermeister/paths.py`가 **단일 소스**. PaleoBytes 규약(`~/PaleoBytes/<AppName>/`)을 Modan2·CTHarvester와 공유. 기존 `~/.papermeister`가 있고 새 경로가 없으면 **레거시를 그대로 사용**(자동 이동 안 함) — 이동은 `scripts/migrate_data_dir.py`. `PAPERMEISTER_DATA_DIR` 환경변수로 override 가능
+- **데이터 경로:** `papermeister/paths.py`가 **단일 소스**. PaleoBytes 규약(`~/PaleoBytes/<AppName>/`)을 Modan2·CTHarvester와 공유. **폴백 없음** — 경로는 조건 없는 상수이고 `PAPERMEISTER_DATA_DIR`로만 override. 옛 `~/.papermeister`는 읽지 않으며, 남아 있으면 시작 시 경고만 하고 `scripts/migrate_data_dir.py`를 안내
 - **LLM 서지 추출:** `claude -p` (Haiku 텍스트, Sonnet vision) — Max 플랜 사용량 차감
 - **Dependencies:** Pillow, requests, pyzotero
 

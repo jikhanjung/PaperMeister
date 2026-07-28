@@ -110,8 +110,9 @@
 **디렉터리 이름만 바뀌고 내부 구조·파일명은 동일**하다(`shutil.move` 통째 이동, 실측 검증).
 
 경로는 이제 `papermeister/paths.py`가 **단일 소스**(이전엔 23개 파일에 하드코딩).
-`PAPERMEISTER_DATA_DIR`로 override 가능. 신규 설치는 새 경로, 레거시가 있고 새 경로가 없으면
-레거시를 그대로 쓴다(자동 이동 안 함). 이동 도구는 `scripts/migrate_data_dir.py`.
+`PAPERMEISTER_DATA_DIR`로 override 가능. **레거시 폴백은 제거됨**(사용자 판단: 쓰던 사람이 없음)
+— 경로는 조건 없는 상수다. 옛 `~/.papermeister`가 남아 있으면 **시작 시 경고만** 하고
+`scripts/migrate_data_dir.py`를 안내한다(조용히 빈 라이브러리를 새로 만드는 것만은 막는다).
 
 **설치 프로그램**도 같이 맞췄다 — `AppId` GUID 고정(**절대 변경 금지**: 바꾸면 업그레이드가
 별개 프로그램으로 설치됨), `AppPublisher=PaleoBytes`, 설치 위치
