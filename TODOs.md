@@ -69,7 +69,7 @@
 - [x] 해시 고정 lock + `lock-check` 게이트 + CodeQL + 버전 일치 테스트
 - [x] Dependabot + lock 자동 재생성 워크플로 + `manual-release.yml` + 커버리지 측정
 - [x] **Sphinx 매뉴얼 (en/ko) → GitHub Pages** — https://jikhanjung.github.io/PaperMeister/ (한국어 번역 227/259 + 언어 스위처)
-- [x] **v0.1.2 릴리스** — 3플랫폼 + Windows 설치본. 노트는 CHANGELOG에서 자동 추출
+- [x] **릴리스 v0.1.2 / v0.1.3 / v0.1.4** — 3플랫폼 + Windows 설치본, 노트는 CHANGELOG 자동 추출. 매 릴리스 프로즌 빌드 스모크 통과
 - [x] **프로즌 빌드 스모크 테스트** (`--self-test`) — 3플랫폼 모두 빌드 직후 실제 실행. 이전엔 릴리스 파일을 한 번도 안 띄워봤음
 - [x] **Windows 설치본 첨부 수정** — 아티팩트 경로가 깊어 릴리스 글롭에 안 걸리던 문제(v0.1.1까지 누락)
 - [x] **데이터 경로 PaleoBytes 규약 정렬** (084) — `~/.papermeister` → `~/PaleoBytes/PaperMeister`. `papermeister/paths.py` 단일 소스(이전엔 23개 파일 하드코딩), 레거시 자동 이동 안 함 + `migrate_data_dir.py`. 라이브 이동 완료

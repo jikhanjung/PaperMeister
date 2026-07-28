@@ -8,7 +8,7 @@
 
 ## 현재 단계
 
-**Phase: 코어 기능 완성 — Phase 1~3 + Phase D 완료 / P11 references 추출 진행 중(본체 잔여 작업) / P12 CitedWork 정규화 + P13 FTS external-content 라이브 반영 완료 / P14 인용 네트워크(통계·export·ego 그래프) 완료 / P15 코드품질·CI 완료 → **v0.1.2 릴리스**(3플랫폼 + 설치본, 프로즌 빌드 스모크 테스트 통과) + **사용자 매뉴얼 en/ko 배포**(2026-07-28)**
+**Phase: 코어 기능 완성 — Phase 1~3 + Phase D 완료 / P11 references 추출 진행 중(본체 잔여 작업) / P12 CitedWork 정규화 + P13 FTS external-content 라이브 반영 완료 / P14 인용 네트워크(통계·export·ego 그래프) 완료 / P15 코드품질·CI 완료 → **v0.1.4 릴리스**(3플랫폼 + Windows 설치본, 프로즌 빌드 스모크 통과) + **사용자 매뉴얼 en/ko 배포** + **PaleoBytes 데이터·설치 경로 정렬**(2026-07-28)**
 
 > **라이브 DB 실측 (2026-07-23, Windows DB 6/28 사본 스키마 확인)**: P13 FTS 마이그레이션 **적용 완료**(external-content `passage_fts` + standalone `paper_fts` + 트리거 9종, `passage_fts_content` 없음, `pre-p13-backup` 4.3GB 존재, DB 2.3GB, `quick_check=ok`). references 추출 **부분 완료** — `references_checked=1` **1,733/9,889편(17.5%)**, `Reference` 104,755행(held 매칭 13,102 / CitedWork 매칭 58,360). P12 정규화도 라이브 실행됨 — `CitedWork` **49,728노드**. 즉 P11/P12/P13 모두 라이브 반영, references만 나머지 편수 재개 대기.
 
@@ -264,6 +264,12 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 ---
 
 ## 최근 세션 요약
+
+**2026-07-28 (세션 52, 마무리 2)** — **v0.1.3 / v0.1.4 릴리스** — [devlog 083](./devlog/20260728_083_Container_Restart_Recovery_Wait.md) · [devlog 084](./devlog/20260728_084_PaleoBytes_Paths_And_Installer.md)
+- **v0.1.3** — 컨테이너 재기동 대기(083). 502는 컨테이너가 죽었다 뜨는 것이라 분 단위인데 재시도는 20초 → **성공률 0%**(72/24 = 3:1로 전건 소진). 게이트웨이 계열은 in-place 재시도 빼고 **healthz 폴링 후 같은 배치 재개**로 전환 → **논문의 기파싱분 보존**. `ServerGuard` 로깅 추가(무인 실행 시 pause/복구 소요가 기록에 안 남던 문제)
+- **v0.1.4** — PaleoBytes 정렬(084). 데이터 `~/PaleoBytes/PaperMeister`(`paths.py` 단일 소스, 이전엔 23개 파일 하드코딩) + 설치본 `AppId`·`AppPublisher`·`%LOCALAPPDATA%\PaleoBytes\PaperMeister`·시작메뉴 PaleoBytes 그룹. **레거시 폴백은 사용자 판단으로 제거**(쓰던 사람 없음) — 경로는 조건 없는 상수, 대신 레거시 잔존 시 **경고만** 출력
+- 세 릴리스 모두 **3플랫폼 스모크 통과 + 자산 5종**(zip·설치본·AppImage·dmg·SHA256). 릴리스 노트는 CHANGELOG 자동 추출
+- ⚠️ **v0.1.4는 설치본 신원(AppId)이 바뀐 첫 릴리스** — v0.1.2/0.1.3 설치본은 별개 프로그램으로 잡히므로 제어판에서 수동 제거 필요(일회성)
 
 **2026-07-28 (세션 52, 마무리)** — **v0.1.2 릴리스 + 매뉴얼 배포** — [devlog 082](./devlog/20260728_082_Release_Smoke_Test_And_Installer_Fix.md)
 - **v0.1.2 발행 완료** — 절차대로(CHANGELOG 섹션 → `version.py` 범프 → 태그 push). `test_version_consistency`가 "CHANGELOG에 해당 버전 섹션 없으면 실패"라 순서를 강제함. 자산 4개+SHA256, 릴리스 노트는 CHANGELOG에서 자동 추출. 빌드번호는 커밋수(`build238`)
