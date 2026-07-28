@@ -162,7 +162,8 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
   (복사 금지). 한국어 번역은 `locale/ko/LC_MESSAGES/*.po`
   - ⚠️ 닫는 강조 표시 뒤에 조사가 바로 붙으면 RST가 마크업을 통째로 삼킨다.
     `**일시정지**한 뒤` → `**일시정지**\ 한 뒤` 처럼 이스케이프 공백(`\ `)을 넣을 것
-- **릴리스**: `CHANGELOG.md`에 섹션 추가 → `version.py` 범프 → `vX.Y.Z` 태그 push.
+- **릴리스**: `CHANGELOG.md`에 섹션 추가 → **ko 카탈로그 갱신**(`cd docs/manual && make gettext && sphinx-intl update -p _build/gettext -l ko` → `.po` 번역 → `sphinx-intl build`) → `version.py` 범프 → `vX.Y.Z` 태그 push.
+  ⚠️ CHANGELOG는 매뉴얼에 include되므로 **고치면 ko 번역도 같이 손봐야 한다** — 안 하면 한국어 changelog만 영어로 남는다(085에서 실제 발생).
   `release.yml`이 테스트→3플랫폼 빌드→CHANGELOG 섹션을 노트로 발행. 수동 발행은 `manual-release.yml`
 - **설치 프로그램**: `installer/PaperMeister.iss.template` — 사용자 단위(관리자 권한 불필요),
   `%LOCALAPPDATA%\Programs\PaleoBytes\PaperMeister`에 설치, 시작 메뉴 `PaleoBytes` 그룹.

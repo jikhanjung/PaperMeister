@@ -25,3 +25,8 @@ Trilobite Shape/
 
 # Sphinx manual build output
 docs/manual/_build/
+
+# Editor swap files
+*.swp
+*.swo
+*~

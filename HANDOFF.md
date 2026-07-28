@@ -124,7 +124,7 @@
 ⚠️ **WSL에서 라이브 DB를 볼 때 경로가 바뀌었다**:
 `/mnt/c/Users/Jikhan Jung/PaleoBytes/PaperMeister/papermeister.db`
 
-### ✅ 설정 파일 위치 분리 (2026-07-28) — [R02](./devlog/20260728_R02_Config_File_Location_Convention.md)
+### ✅ 설정 파일 위치 분리 (2026-07-28) — [085](./devlog/20260728_085_Per_Paper_Progress_And_Config_Split.md) · 규약 [R02](./devlog/20260728_R02_Config_File_Location_Convention.md)
 
 `preferences.json`이 데이터 디렉터리를 떠나 **OS 설정 위치**로 갔다:
 Windows `%LOCALAPPDATA%\PaleoBytes\PaperMeister` / macOS `~/Library/Application Support/…`

@@ -75,3 +75,18 @@ drift from the requirements files.
 - A real app icon (the AppImage/macOS build currently ship a generated placeholder /
   no custom icon).
 - CHANGELOG.md-sourced release notes — currently checksums + commit SHA only.
+
+## Korean catalogs
+
+`changelog.rst` includes the root `CHANGELOG.md`, so editing the changelog leaves
+the Korean manual out of date. Refresh before tagging:
+
+```bash
+cd docs/manual
+make gettext && sphinx-intl update -p _build/gettext -l ko
+# translate the new msgstr entries in locale/ko/LC_MESSAGES/changelog.po
+sphinx-intl build
+```
+
+Skipping this is how the Korean changelog ended up English from 0.1.2 to 0.1.4
+(devlog 085).
