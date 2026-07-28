@@ -20,9 +20,15 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      # NOTE: project dependencies are deliberately NOT installed here, so mypy
+      # sees peewee/pyzotero/PyMuPDF as untyped and skips them. peewee 4 ships
+      # annotations that model neither the implicit `id` primary key nor the
+      # `<fk>_id` attribute, which would flag ~28 false positives in code that
+      # runs correctly. Installing the deps here is the honest next step, but it
+      # needs those to be silenced first — see HANDOFF.
       - run: pip install ruff mypy
       - name: ruff check
         run: ruff check . --output-format=github
@@ -59,7 +65,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
