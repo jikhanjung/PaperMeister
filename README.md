@@ -41,7 +41,7 @@ pip install --require-hashes -r requirements.lock
 - **RunPod OCR**: Endpoint ID + API Key
 - **Zotero** (선택): User ID + API Key ([zotero.org/settings/keys](https://www.zotero.org/settings/keys))
 
-설정은 `~/.papermeister/preferences.json`에 저장. DB는 `~/.papermeister/papermeister.db`, OCR 결과 캐시는 `~/.papermeister/ocr_json/{hash}.json`.
+설정은 `~/PaleoBytes/PaperMeister/preferences.json`에 저장. DB는 `~/PaleoBytes/PaperMeister/papermeister.db`, OCR 결과 캐시는 `~/PaleoBytes/PaperMeister/ocr_json/{hash}.json`.
 
 ## 실행
 

@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PaperMeister 0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-27 19:14+0900\n"
+"POT-Creation-Date: 2026-07-28 13:28+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: ko <LL@li.org>\n"
@@ -121,10 +121,10 @@ msgstr "제한 시간 안에 응답이 없었습니다. 배치를 쪼개어 재�
 #: ../../troubleshooting.rst:48
 msgid ""
 "Details, including the offending response, go to "
-"``~/.papermeister/logs/biblio_YYYYMMDD.log``."
+"``~/PaleoBytes/PaperMeister/logs/biblio_YYYYMMDD.log``."
 msgstr ""
-"문제가 된 응답 본문을 포함한 상세 내용은 ``~/.papermeister/logs/biblio_YYYYMMDD.log`` 에 "
-"기록됩니다."
+"문제가 된 응답 본문을 포함한 상세 내용은 "
+"``~/PaleoBytes/PaperMeister/logs/biblio_YYYYMMDD.log`` 에 기록됩니다."
 
 #: ../../troubleshooting.rst:52
 msgid "Zotero write-back fails with 403"

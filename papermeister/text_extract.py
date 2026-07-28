@@ -5,8 +5,7 @@ import tempfile
 import fitz  # PyMuPDF
 
 from .models import Author, PaperFile, Passage, db
-
-OCR_JSON_DIR = os.path.join(os.path.expanduser('~'), '.papermeister', 'ocr_json')
+from .paths import OCR_JSON_DIR, PDF_CACHE_DIR  # noqa: F401  (re-exported)
 
 
 def ocr_json_filename(paper_file):
@@ -319,7 +318,7 @@ def _resolve_filepath(paper_file):
         # Check pdf_cache first
         filename = paper_file.path or f'{paper_file.zotero_key}.pdf'
         cache_dir = os.path.join(
-            os.path.expanduser('~'), '.papermeister', 'pdf_cache',
+            PDF_CACHE_DIR,
             paper_file.zotero_key,
         )
         cached_path = os.path.join(cache_dir, filename)

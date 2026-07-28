@@ -1,3 +1,5 @@
+from papermeister.paths import DB_PATH
+
 #!/usr/bin/env python3
 """P14 A2 — audit reference->held-paper matching quality (read-only).
 
@@ -28,7 +30,7 @@ import re
 import sqlite3
 import sys
 
-DEFAULT_DB = os.path.expanduser('~/.papermeister/papermeister.db')
+DEFAULT_DB = DB_PATH
 _STOP = {'the', 'and', 'for', 'from', 'with', 'una', 'der', 'die', 'und',
          'des', 'les', 'del', 'las', 'los', 'new', 'note', 'notes'}
 _TOKEN = re.compile(r'[a-z0-9一-鿿가-힣぀-ヿ]+')

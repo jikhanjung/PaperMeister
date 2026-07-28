@@ -3,7 +3,7 @@
 
 1) PaperFile.zotero_key로 storage 디렉토리에서 PDF 찾기
 2) SHA256 hash 계산 → PaperFile.hash 저장
-3) ~/.papermeister/ocr_json/{hash}.json 존재하면 status='processed'
+3) ~/PaleoBytes/PaperMeister/ocr_json/{hash}.json 존재하면 status='processed'
 """
 
 import hashlib
@@ -14,9 +14,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from papermeister.database import init_db
 from papermeister.models import PaperFile, db
+from papermeister.paths import OCR_JSON_DIR
 
 STORAGE_DIR = '/nas/JikhanJung/1. Large Data/storage'
-OCR_JSON_DIR = os.path.expanduser('~/.papermeister/ocr_json')
+OCR_JSON_DIR = OCR_JSON_DIR
 
 
 def sha256_file(filepath):

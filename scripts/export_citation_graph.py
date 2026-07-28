@@ -1,3 +1,5 @@
+from papermeister.paths import DB_PATH
+
 #!/usr/bin/env python3
 """P14 L1 — export the in-library citation graph (read-only).
 
@@ -25,7 +27,7 @@ import sqlite3
 import sys
 from xml.sax.saxutils import escape
 
-DEFAULT_DB = os.path.expanduser('~/.papermeister/papermeister.db')
+DEFAULT_DB = DB_PATH
 
 
 def connect_ro(db_path):

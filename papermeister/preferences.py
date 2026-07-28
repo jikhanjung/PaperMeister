@@ -1,7 +1,7 @@
 import json
 import os
 
-PREFS_PATH = os.path.join(os.path.expanduser('~'), '.papermeister', 'preferences.json')
+from .paths import PREFS_PATH  # noqa: F401  (re-exported)
 
 _cache = None
 

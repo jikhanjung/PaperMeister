@@ -5,7 +5,8 @@ import time
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-_LOG_DIR = os.path.join(os.path.expanduser('~'), '.papermeister', 'logs')
+from papermeister.paths import LOG_DIR as _LOG_DIR
+
 os.makedirs(_LOG_DIR, exist_ok=True)
 
 logger = logging.getLogger('zotero_sync')

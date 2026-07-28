@@ -46,7 +46,7 @@ The progress line names the reason:
    No answer within the time limit. The batch is split and retried.
 
 Details, including the offending response, go to
-``~/.papermeister/logs/biblio_YYYYMMDD.log``.
+``~/PaleoBytes/PaperMeister/logs/biblio_YYYYMMDD.log``.
 
 Zotero write-back fails with 403
 --------------------------------

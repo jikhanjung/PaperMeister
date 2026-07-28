@@ -5,7 +5,7 @@
 2) 컬렉션 전체 동기화
 3) 모든 컬렉션의 아이템 fetch (Paper + PaperFile 생성)
 
-OCR 결과 JSON 캐시(~/.papermeister/ocr_json/)는 보존됩니다.
+OCR 결과 JSON 캐시(~/PaleoBytes/PaperMeister/ocr_json/)는 보존됩니다.
 processed 상태 복원은 별도 스크립트(restore_processed.py 등)로 처리하세요.
 """
 

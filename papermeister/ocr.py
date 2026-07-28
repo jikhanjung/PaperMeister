@@ -20,7 +20,8 @@ import fitz
 import requests
 from PIL import Image
 
-_LOG_DIR = os.path.join(os.path.expanduser('~'), '.papermeister', 'logs')
+from .paths import LOG_DIR as _LOG_DIR
+
 os.makedirs(_LOG_DIR, exist_ok=True)
 
 logger = logging.getLogger('ocr')

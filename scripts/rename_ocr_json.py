@@ -3,7 +3,7 @@
 to `{pdf_basename}.{hash[:8]}.json`.
 
 Three layers updated per JSON PaperFile:
-1. Local cache file under ~/.papermeister/ocr_json/ — renamed
+1. Local cache file under ~/PaleoBytes/PaperMeister/ocr_json/ — renamed
 2. DB `PaperFile.path` — updated to new name
 3. Zotero attachment metadata (`data.filename`) — PATCHed via pyzotero
    so the sibling shows the pretty name in the Zotero GUI

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Changed
+- **User data now lives in `~/PaleoBytes/PaperMeister/`**, the layout shared with
+  Modan2 and CTHarvester, instead of `~/.papermeister/`. **Existing installations
+  are untouched and keep working** — the old location is still used when it is
+  the one that exists. To move, close the app and run
+  `python scripts/migrate_data_dir.py --execute` (add `--copy` to leave the
+  original in place).
+
+---
+
 ## [0.1.3] - 2026-07-28
 
 Keeps a paper's work when the model server restarts under it.

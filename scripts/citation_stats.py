@@ -1,3 +1,5 @@
+from papermeister.paths import DB_PATH
+
 #!/usr/bin/env python3
 """P14 L0 — in-library citation-network statistics (read-only).
 
@@ -23,7 +25,7 @@ import os
 import sqlite3
 import sys
 
-DEFAULT_DB = os.path.expanduser('~/.papermeister/papermeister.db')
+DEFAULT_DB = DB_PATH
 
 
 def connect_ro(db_path):

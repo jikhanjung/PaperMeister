@@ -6,6 +6,9 @@ import re
 
 from pyzotero import zotero
 
+from .paths import TMP_DIR
+from .paths import ZOTERO_COLLECTIONS_PATH as COLLECTIONS_CACHE  # noqa: F401
+
 # Fallback year extractor for the rare item where meta.parsedDate is missing.
 # Zotero's `data.date` is free-form: observed '2017', '2017-08-15', '08/2017',
 # '8/2006', '1865', 'September 2018'. Zotero's server-side parser normally
@@ -23,9 +26,6 @@ def extract_year_from_date(date_str: str) -> int | None:
     m = _YEAR_RE.search(date_str)
     return int(m.group(0)) if m else None
 
-COLLECTIONS_CACHE = os.path.join(
-    os.path.expanduser('~'), '.papermeister', 'zotero_collections.json'
-)
 
 
 def load_cached_collections():
@@ -324,7 +324,7 @@ class ZoteroClient:
 
         Caller is responsible for deleting the file.
         """
-        dest_dir = os.path.join(os.path.expanduser('~'), '.papermeister', 'tmp')
+        dest_dir = TMP_DIR
         os.makedirs(dest_dir, exist_ok=True)
 
         content = self.download_file_content(attachment_key)

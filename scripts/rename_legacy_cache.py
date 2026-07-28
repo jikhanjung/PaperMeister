@@ -9,7 +9,7 @@ kept the old full-hash name. `biblio.load_ocr_pages` globs for `*.{hash[:8]}.jso
 and so can't find them → "No OCR pages found" → biblio extraction fails for those
 papers even though the OCR cache is right there.
 
-This finds those files in ~/.papermeister/ocr_json/, matches each hash to a PDF
+This finds those files in ~/PaleoBytes/PaperMeister/ocr_json/, matches each hash to a PDF
 PaperFile to derive the basename, and renames. Cache-only — no DB or Zotero
 changes. Idempotent; dry-run by default.
 """

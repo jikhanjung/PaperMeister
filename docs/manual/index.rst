@@ -48,13 +48,13 @@ Where things live
 
    * - Path
      - Contents
-   * - ``~/.papermeister/papermeister.db``
+   * - ``~/PaleoBytes/PaperMeister/papermeister.db``
      - SQLite database (papers, authors, passages, references)
-   * - ``~/.papermeister/ocr_json/``
+   * - ``~/PaleoBytes/PaperMeister/ocr_json/``
      - Cached OCR output, one file per PDF
-   * - ``~/.papermeister/preferences.json``
+   * - ``~/PaleoBytes/PaperMeister/preferences.json``
      - Credentials and settings
-   * - ``~/.papermeister/logs/``
+   * - ``~/PaleoBytes/PaperMeister/logs/``
      - OCR, sync and extraction logs
 
 Indices and tables

@@ -65,5 +65,5 @@ Bibliographic extraction
    Choose the LLM backend — Claude via the ``claude`` CLI, or Qwen on your own
    server. Automatic and manual extraction are separate toggles.
 
-Settings are written to ``~/.papermeister/preferences.json``. It holds API keys
+Settings are written to ``~/PaleoBytes/PaperMeister/preferences.json``. It holds API keys
 in plain text, so treat it like any other credentials file.

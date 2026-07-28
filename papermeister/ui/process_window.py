@@ -560,11 +560,12 @@ class ProcessWindow(QWidget):
         self._poll_server_status()
 
     def _get_log_path(self):
-        """Return today's log file path, creating ~/.papermeister/logs/ if needed."""
-        log_dir = os.path.join(os.path.expanduser('~'), '.papermeister', 'logs')
-        os.makedirs(log_dir, exist_ok=True)
+        """Return today's log file path, creating the log directory if needed."""
+        from papermeister.paths import LOG_DIR
+
+        os.makedirs(LOG_DIR, exist_ok=True)
         fname = f'ocr_{datetime.now().strftime("%Y%m%d")}.log'
-        return os.path.join(log_dir, fname)
+        return os.path.join(LOG_DIR, fname)
 
     def _write_log_file(self, msg):
         """Append one line to the daily OCR log. Failures are swallowed (UI keeps working)."""

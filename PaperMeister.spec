@@ -19,7 +19,7 @@ Notes
 - `claude -p` (biblio extraction) is an EXTERNAL CLI shelled out via subprocess;
   it is NOT bundled. The packaged app needs `claude` on PATH for biblio work,
   exactly like `python -m desktop` does today.
-- User data (DB / OCR cache / preferences.json) lives in ~/.papermeister and is
+- User data (DB / OCR cache / preferences.json) lives in ~/PaleoBytes/PaperMeister and is
   created at runtime — never bundled.
 - `excludes` keeps a fat Anaconda base env (numpy/scipy/mkl/etc.) and rival Qt
   bindings out of the bundle. None of these are real dependencies.

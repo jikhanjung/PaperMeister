@@ -13,8 +13,9 @@ from papermeister.biblio import BiblioResult, extract_first_pages, load_ocr_page
 from papermeister.biblio_eval import overall_score
 from papermeister.database import init_db
 from papermeister.models import Author, Paper, PaperFile
+from papermeister.paths import DATA_DIR
 
-EVAL_SET_PATH = os.path.expanduser('~/.papermeister/eval_set.json')
+EVAL_SET_PATH = os.path.join(DATA_DIR, 'eval_set.json')
 
 DOI_RE = re.compile(r'10\.\d{4,9}/[-._;()/:A-Za-z0-9]+')
 YEAR_RE = re.compile(r'\b(19[0-9]{2}|20[0-2][0-9])\b')

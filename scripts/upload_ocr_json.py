@@ -26,11 +26,12 @@ requests.api.request = _no_verify_request
 from papermeister.database import init_db
 from papermeister.ingestion import hash_file
 from papermeister.models import Paper, PaperFile
+from papermeister.paths import OCR_JSON_DIR
 from papermeister.preferences import get_pref
 from papermeister.text_extract import ocr_json_filename
 from papermeister.zotero_client import ZoteroClient
 
-OCR_JSON_DIR = os.path.expanduser('~/.papermeister/ocr_json')
+OCR_JSON_DIR = OCR_JSON_DIR
 
 # 이전에 수동 업로드한 항목들 (PDF zotero_key → JSON zotero_key)
 MANUAL_BACKFILL = {

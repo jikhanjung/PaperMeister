@@ -1,3 +1,5 @@
+from papermeister.paths import DB_PATH
+
 #!/usr/bin/env python3
 """P11 — references-extraction progress monitor (read-only).
 
@@ -25,8 +27,8 @@ import sqlite3
 import sys
 import time
 
-DEFAULT_DB = os.path.expanduser('~/.papermeister/papermeister.db')
-STATE_FILE = os.path.expanduser('~/.papermeister/.refs_progress_state.json')
+DEFAULT_DB = DB_PATH
+STATE_FILE = os.path.expanduser('~/PaleoBytes/PaperMeister/.refs_progress_state.json')
 
 # Eligible = distinct papers with a processed, non-JSON PDF (mirrors
 # extract_references.fetch_targets). checked = those already stamped.

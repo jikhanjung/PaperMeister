@@ -20,7 +20,7 @@ text comparable across papers. The cost is paid once — results are cached.
 Where is my data?
 -----------------
 
-Everything is under ``~/.papermeister/``: the SQLite database, the OCR cache,
+Everything is under ``~/PaleoBytes/PaperMeister/``: the SQLite database, the OCR cache,
 preferences and logs. PDFs are not copied there; they stay in Zotero or in the
 folder you imported.
 

@@ -75,8 +75,8 @@ msgid ""
 "``~/.papermeister/ocr_json/``, so re-processing a paper is free."
 msgstr ""
 "Process 창이 파일별 진행 상황을 보여줍니다. 각 PDF는 내려받아 OCR 백엔드로 보내지고, 그 텍스트가 페이지 단위로 "
-"저장됩니다. 결과는 ``~/.papermeister/ocr_json/`` 에 캐시되므로 같은 논문을 다시 처리하는 데는 비용이 들지 "
-"않습니다."
+"저장됩니다. 결과는 ``~/PaleoBytes/PaperMeister/ocr_json/`` 에 캐시되므로 같은 논문을 다시 처리하는 데는"
+" 비용이 들지 않습니다."
 
 #: ../../quick_start.rst:29
 msgid "Watch the status pill in the paper list:"

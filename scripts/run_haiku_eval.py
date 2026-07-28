@@ -16,13 +16,14 @@ from papermeister.biblio import extract_first_pages, load_ocr_pages
 from papermeister.biblio_eval import overall_score
 from papermeister.database import init_db
 from papermeister.models import Author, Paper, PaperFile
+from papermeister.paths import DATA_DIR
 
-EVAL_SET_PATH = os.path.expanduser('~/.papermeister/eval_set.json')
+EVAL_SET_PATH = os.path.join(DATA_DIR, 'eval_set.json')
 
 
 def results_path_for(model):
     short = model.replace('claude-', '').split('-')[0]
-    return os.path.expanduser(f'~/.papermeister/eval_results_{short}.json')
+    return os.path.join(DATA_DIR, f'eval_results_{short}.json')
 
 PROMPT_TEMPLATE = """You are extracting bibliographic metadata from the first pages of an academic document (OCR'd text). The text below may contain noise, broken lines, and layout artifacts.
 

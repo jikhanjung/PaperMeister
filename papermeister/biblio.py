@@ -7,6 +7,9 @@ import re
 import time
 from dataclasses import asdict, dataclass, field
 
+from .paths import LOG_DIR as _LOG_DIR
+from .paths import OCR_JSON_DIR  # noqa: F401  (re-exported by this module)
+
 logger = logging.getLogger('biblio')
 
 # Log to a file, same as the `ocr` logger. Without this the desktop app never
@@ -15,7 +18,7 @@ logger = logging.getLogger('biblio')
 # parse came back PARTIAL — the one line that says whether the server timed out
 # or returned unparseable JSON — was never recorded anywhere. DEBUG level so the
 # offending response body is captured too; this is a diagnostic log, not a hot path.
-_LOG_DIR = os.path.join(os.path.expanduser('~'), '.papermeister', 'logs')
+
 os.makedirs(_LOG_DIR, exist_ok=True)
 
 
@@ -60,7 +63,6 @@ if not logger.handlers:
     ))
     logger.addHandler(_fh)
 
-OCR_JSON_DIR = os.path.join(os.path.expanduser('~'), '.papermeister', 'ocr_json')
 
 
 def _find_cache_by_hash(file_hash: str) -> str | None:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a stratified evaluation set of papers with reliable ground-truth metadata.
 
-Output: ~/.papermeister/eval_set.json
+Output: ~/PaleoBytes/PaperMeister/eval_set.json
   {"seed": 42, "size": 200, "strata": {...}, "paper_ids": [...]}
 """
 
@@ -15,8 +15,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from papermeister.database import init_db
 from papermeister.models import Author, Folder, Paper, PaperFile, Source
+from papermeister.paths import DATA_DIR
 
-EVAL_SET_PATH = os.path.expanduser('~/.papermeister/eval_set.json')
+EVAL_SET_PATH = os.path.join(DATA_DIR, 'eval_set.json')
 
 
 def fetch_candidates():

@@ -15,8 +15,7 @@ from .models import (
     Source,
     db,
 )
-
-DB_PATH = os.path.join(os.path.expanduser('~'), '.papermeister', 'papermeister.db')
+from .paths import DB_PATH  # noqa: F401  (re-exported: callers import it from here)
 
 ALL_TABLES = [Source, Folder, Paper, Author, PaperFile, PaperFolder, Passage,
               PaperBiblio, Reference, CitedWork]

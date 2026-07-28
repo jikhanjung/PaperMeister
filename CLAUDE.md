@@ -60,12 +60,13 @@ peewee가 생성하는 `id`/`<fk>_id`는 `models.py`에 `TYPE_CHECKING`으로 �
 - **GUI:** PyQt6
   - 기존 `papermeister/ui/` — **동결**. 신규 개발 없음. `main.py` 엔트리. Process/Preferences 다이얼로그는 새 desktop 앱에서 재사용 중
   - 신규 `desktop/` — 4-layer (views/services/components/workers), 다크 테마 design tokens, `python -m desktop` 엔트리
-- **DB:** SQLite with FTS5 — `~/.papermeister/papermeister.db`
+- **DB:** SQLite with FTS5 — `~/PaleoBytes/PaperMeister/papermeister.db`
 - **ORM:** Peewee 4.x (`peewee.DatabaseProxy` + `peewee.SqliteDatabase`)
 - **PDF:** PyMuPDF (fitz) — 메타데이터 추출 + 페이지 렌더링
 - **OCR:** RunPod serverless (Chandra2-vllm) — Preferences에서 API 키 설정
 - **Zotero:** pyzotero — Preferences에서 user_id + api_key 설정
-- **Settings:** `~/.papermeister/preferences.json` (RunPod, Zotero 자격증명)
+- **Settings:** `~/PaleoBytes/PaperMeister/preferences.json` (RunPod, Zotero 자격증명)
+- **데이터 경로:** `papermeister/paths.py`가 **단일 소스**. PaleoBytes 규약(`~/PaleoBytes/<AppName>/`)을 Modan2·CTHarvester와 공유. 기존 `~/.papermeister`가 있고 새 경로가 없으면 **레거시를 그대로 사용**(자동 이동 안 함) — 이동은 `scripts/migrate_data_dir.py`. `PAPERMEISTER_DATA_DIR` 환경변수로 override 가능
 - **LLM 서지 추출:** `claude -p` (Haiku 텍스트, Sonnet vision) — Max 플랜 사용량 차감
 - **Dependencies:** Pillow, requests, pyzotero
 
@@ -91,7 +92,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 - OCR 병렬 처리: `get_worker_status()`로 idle worker 수 확인 → `ThreadPoolExecutor`로 병렬 제출
 - `database.py`의 `_migrate()`가 기존 DB에 새 컬럼/인덱스 변경 자동 적용
 - Zotero: 시작 시 컬렉션 자동 동기화, 컬렉션 클릭 시 아이템 fetch, PDF는 OCR 시점에만 임시 다운로드
-- 설정: `~/.papermeister/preferences.json` (RunPod, Zotero). `.env` 사용하지 않음.
+- 설정: `~/PaleoBytes/PaperMeister/preferences.json` (RunPod, Zotero). `.env` 사용하지 않음.
 - OCR JSON → Zotero 자동 업로드: `zotero_upload_ocr_json` pref로 opt-in (기본 OFF)
 - Zotero attachment sync: 모든 타입(PDF+JSON) 수집, JSON은 status='processed'로 자동 설정
 - LLM 서지 추출: `PaperBiblio` 테이블에 비파괴 보관 (source 필드로 모델/버전 구분)
@@ -117,7 +118,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 - **SourceNav**: `QTabWidget` — 각 Source마다 탭 하나 (현재 Zotero 하나). 각 탭 내부는 단일 트리에 상단=Library 필터, 하단=hierarchical 컬렉션
 - **DetailPanel**: `QWidget` (not QScrollArea) + 내부 `QTabWidget#DetailTabs`. 탭 4개 — **Metadata / PDF / Text / References** (Biblio 대조는 Metadata 탭에 통합, PDF·Text·References는 첫 활성화 때 lazy 빌드). 각 탭 독립 스크롤, 논문 전환 시 직전 탭 복원. Stub 배너는 탭바 위에 고정
 - **Biblio 탭 대조 비교 UI**: Paper(Zotero) vs PaperBiblio(추출) 필드별 비교 테이블. diff가 있는 행에 라디오 버튼(Paper/Biblio 선택) + 편집 가능한 입력 필드(QPlainTextEdit: Title/Authors/Journal, QLineEdit: Year/DOI) + × 클리어 버튼. Apply 시 `apply_merged()`로 선택/편집된 값 반영. 저자는 한 줄 한 명, "Lastname, Firstname" 형식
-- **OCR 탭**: `papermeister.biblio.load_ocr_pages()`로 `~/.papermeister/ocr_json/{hash}.json` 페치 → `_sanitize_ocr_markdown()` 적용 → `QTextBrowser.setMarkdown()` 렌더
+- **OCR 탭**: `papermeister.biblio.load_ocr_pages()`로 `~/PaleoBytes/PaperMeister/ocr_json/{hash}.json` 페치 → `_sanitize_ocr_markdown()` 적용 → `QTextBrowser.setMarkdown()` 렌더
   - **Sanitizer 필수**: Chandra2 원본을 그대로 `setMarkdown()`에 넘기면 `-qt-list-indent` 누적으로 "텍스트가 계속 오른쪽으로 밀리는" 버그. 원인은 (a) 4+ leading space → indented code block, (b) 줄 시작 `숫자.` → ordered list, (c) 레퍼런스의 바 볼륨 번호(`88.`, `158.`) → 빈 OL이 인접하면 Qt가 nested로 해석해서 indent가 누적. Sanitizer가 모든 줄 `lstrip()` + `^(\d+)\.` regex를 backslash escape로 차단
 - **SVG 아이콘**: `desktop/theme/icons/*.svg`는 `stroke="currentColor"`로 작성하고 `icons.rail_icon()` 헬퍼가 런타임에 색을 치환해서 3-state QIcon(idle/checked/hover) 생성. 다크/라이트 테마 스왑도 같은 메커니즘으로 확장 가능
 - **QSS**: `desktop/theme/qss.py::build_stylesheet(colors)`가 `desktop/theme/tokens.py::COLORS_DARK`를 받아 풀 스타일시트 생성. QTree branch chevron SVG 경로는 `_icon_url()`이 `Path.as_posix()`로 Windows forward-slash 경로 주입
@@ -152,6 +153,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 | `export_citation_graph.py` | (P14 L1) nodes/edges CSV + GEXF(Gephi), `--with-external` |
 | `audit_matches.py` | (P14 A2) 참조 매칭 감사 (의심 FP / 미연결 FN 탐지) |
 | `verify_image.py` | OCR 이미지 경로(Pillow) 1-커맨드 검증 |
+| `migrate_data_dir.py` | 데이터 디렉터리 `~/.papermeister` → `~/PaleoBytes/PaperMeister` 이동 (`--execute`, `--copy`). **앱을 닫고 실행** |
 
 ## 문서 / 릴리스
 

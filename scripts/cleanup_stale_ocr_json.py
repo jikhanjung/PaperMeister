@@ -19,7 +19,7 @@ Rows failing 3 or 4 are SKIPPED and reported — never delete a paper's only OCR
 
 Three layers removed per row:
   - Zotero attachment item (data.key)  — skip with --skip-zotero
-  - local cache file ~/.papermeister/ocr_json/{hash}.json
+  - local cache file ~/PaleoBytes/PaperMeister/ocr_json/{hash}.json
   - DB PaperFile row
 
 Dry-run by default. Pass --execute to apply.

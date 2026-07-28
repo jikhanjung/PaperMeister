@@ -4,7 +4,7 @@ Tabs
 ----
 - Metadata   — Paper metadata + File card + Biblio comparison (if extracted)
 - PDF        — Rendered PDF pages via PyMuPDF
-- Text       — Rendered markdown from ~/.papermeister/ocr_json/{hash}.json
+- Text       — Rendered markdown from ~/PaleoBytes/PaperMeister/ocr_json/{hash}.json
                via QTextBrowser.setMarkdown (empty state if not processed)
 - References  — Citation relationships (P11): "Cited by" (library papers that
                cite this one, clickable) + this paper's own references as cards
@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import (
 from desktop.services import biblio_service, paper_service
 from desktop.theme.tokens import FONT, SPACING
 from desktop.workers.background import BackgroundTask
+from papermeister.paths import PDF_CACHE_DIR
 
 
 def _html_escape(text: str) -> str:
@@ -440,7 +441,7 @@ class DetailPanel(QWidget):
             # Check pdf_cache
             if d.file_zotero_key and d.file_path:
                 cached = os.path.join(
-                    os.path.expanduser('~'), '.papermeister', 'pdf_cache',
+                    PDF_CACHE_DIR,
                     d.file_zotero_key, d.file_path,
                 )
                 if os.path.isfile(cached):
@@ -541,7 +542,7 @@ class DetailPanel(QWidget):
         from papermeister.zotero_client import ZoteroClient
 
         cache_dir = os.path.join(
-            os.path.expanduser('~'), '.papermeister', 'pdf_cache', zotero_key,
+            PDF_CACHE_DIR, zotero_key,
         )
         cached = os.path.join(cache_dir, filename)
         if os.path.isfile(cached):
@@ -1039,7 +1040,7 @@ class DetailPanel(QWidget):
         """Render OCR markdown for processed papers.
 
         Uses `papermeister.biblio.load_ocr_pages()` which reads the raw
-        JSON cache at ~/.papermeister/ocr_json/{hash}.json. Pages are
+        JSON cache at ~/PaleoBytes/PaperMeister/ocr_json/{hash}.json. Pages are
         joined with horizontal rules + page markers so QTextBrowser's
         markdown renderer shows a continuous document.
         """
@@ -1068,7 +1069,7 @@ class DetailPanel(QWidget):
         if not pages:
             return self._ocr_empty_panel(
                 'OCR cache file missing or empty.\n'
-                f'Expected: ~/.papermeister/ocr_json/{d.file_hash[:16]}….json'
+                f'Expected: ~/PaleoBytes/PaperMeister/ocr_json/{d.file_hash[:16]}….json'
             )
 
         browser = QTextBrowser()
