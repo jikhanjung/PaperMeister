@@ -63,6 +63,21 @@ class ReferencesWindow(QWidget):
         prog_layout.addWidget(self.progress_count)
         layout.addLayout(prog_layout)
 
+        # Second bar for the paper being parsed. Entry counts differ by orders
+        # of magnitude — a nomenclator runs to 2,000 entries where an article
+        # has 30 — so the batch bar alone cannot distinguish a long paper from
+        # a stalled one. Hidden until there is something to show.
+        item_layout = QHBoxLayout()
+        self.item_bar = QProgressBar()
+        self.item_bar.setMaximumHeight(10)
+        self.item_bar.setTextVisible(False)
+        self.item_count = QLabel('')
+        self.item_count.setStyleSheet('font-size: 11px; color: #888;')
+        item_layout.addWidget(self.item_bar)
+        item_layout.addWidget(self.item_count)
+        layout.addLayout(item_layout)
+        self._show_item_progress(False)
+
         self.log = QTextEdit()
         self.log.setReadOnly(True)
         self.log.setStyleSheet('font-family: monospace; font-size: 12px;')
@@ -80,6 +95,20 @@ class ReferencesWindow(QWidget):
         self.close_btn.clicked.connect(self.close)
         bottom.addWidget(self.close_btn)
         layout.addLayout(bottom)
+
+    def _show_item_progress(self, visible: bool):
+        self.item_bar.setVisible(visible)
+        self.item_count.setVisible(visible)
+
+    def set_item_progress(self, done: int, total: int):
+        """Progress within the paper currently being parsed."""
+        if total <= 0:
+            self._show_item_progress(False)
+            return
+        self.item_bar.setRange(0, total)
+        self.item_bar.setValue(done)
+        self.item_count.setText(f'{done} / {total} refs  ({done * 100 // total}%)')
+        self._show_item_progress(True)
 
     def _on_cancel_clicked(self):
         # Disable immediately so it can't be double-fired; the main window will
@@ -142,9 +171,13 @@ class ReferencesWindow(QWidget):
 
     def set_current(self, text: str):
         self.current_label.setText(text)
+        # Clear the per-paper bar: a stale count from the previous paper is
+        # worse than none, since it looks like progress that isn't happening.
+        self._show_item_progress(False)
 
     def record(self, summary: str, kind: str = 'info', refs: int = 0):
         """Log one finished paper and advance the progress bar."""
+        self._show_item_progress(False)
         if kind in self._counts:
             self._counts[kind] += 1
         self._refs += refs

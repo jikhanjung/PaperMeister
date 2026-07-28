@@ -1070,6 +1070,7 @@ def describe_skips(skipped: dict) -> str:
 
 def extract_references_llm(
     file_hash: str, backend: str = 'qwen', base_url: str = '', label: str = '',
+    on_progress=None,
 ) -> tuple[list, str, str, bool, dict]:
     """Parse a paper's references section into structured entries via LLM.
 
@@ -1077,6 +1078,11 @@ def extract_references_llm(
         file_hash: SHA256 hash of the citing PDF.
         backend: 'qwen' (ocrserver, default) or 'claude'.
         base_url: ocrserver URL (qwen). If empty, read from preferences.
+        on_progress: optional `(done, total)` callback, invoked once before the
+            first call and again after each batch. Entry counts vary by three
+            orders of magnitude between papers — a nomenclator can hold 2,000
+            entries where an article holds 30 — so without this a caller cannot
+            tell a long paper from a stalled one.
 
     Returns:
         (entries, source_label, model_version, complete, skipped). `entries` is a
@@ -1135,6 +1141,8 @@ def extract_references_llm(
     # Position whose batch has already been retried at the token ceiling, so a
     # second truncation there escalates to splitting instead of looping.
     boost_at = -1
+    if on_progress:
+        on_progress(0, total)
     logger.info('%srefs: block confidence=%s, %d entries, %d chars',
                 tag, confidence, total, len(block))
     i = 0
@@ -1201,6 +1209,8 @@ def extract_references_llm(
                 skipped['timeout'] += 1
                 skipped['entries_lost'] += len(batch)
                 i += len(batch)
+                if on_progress:
+                    on_progress(i, total)
                 continue
             dt = time.monotonic() - t0
             _refs_batcher.update(dt)
@@ -1252,6 +1262,8 @@ def extract_references_llm(
             skipped[kind] += 1
             skipped['entries_lost'] += len(batch)
             i += len(batch)
+            if on_progress:
+                on_progress(i, total)
             continue
         # We split the entries ourselves, so attach the original text as `raw`
         # by position (store-first) instead of paying the LLM to echo it. Only
@@ -1263,6 +1275,8 @@ def extract_references_llm(
             item.setdefault('parse_confidence', confidence)
             parsed.append(item)
         i += len(batch)
+        if on_progress:
+            on_progress(i, total)
 
     # A 'low' confidence block is the last-2-pages fallback: no references
     # heading was ever found, so what we sent may not be a bibliography at all.

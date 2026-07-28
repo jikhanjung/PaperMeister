@@ -1295,10 +1295,16 @@ class MainWindow(QMainWindow):
             return n, resolved, complete, skipped
 
         task = BackgroundTask(_do_extract)
+        task.progress.connect(self._on_refs_item_progress)
         task.done.connect(lambda result: self._on_refs_extracted(paper_id, result))
         task.failed.connect(lambda msg: self._on_refs_failed(paper_id, msg))
         self._refs_task = task
         task.start()
+
+    def _on_refs_item_progress(self, done: int, total: int):
+        """Parsing progress within the current paper (queued from the worker)."""
+        if self._refs_window and self._refs_window.isVisible():
+            self._refs_window.set_item_progress(done, total)
 
     def _on_refs_extracted(self, paper_id: int, result):
         win = self._refs_window if (self._refs_window and self._refs_window.isVisible()) else None

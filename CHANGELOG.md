@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- **The references window now shows progress within the paper being parsed**, not
+  just how many papers are left. Bibliographies vary enormously — one paper in a
+  recent batch held 2,091 entries where a typical article holds thirty — so a
+  long one used to look identical to a stalled one for hours.
+
+---
+
 ## [0.1.4] - 2026-07-28
 
 Data and installation now follow the PaleoBytes layout shared with Modan2 and

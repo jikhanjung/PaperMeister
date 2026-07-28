@@ -434,3 +434,31 @@ def test_gateway_status_is_not_retried_in_place(monkeypatch):
     with pytest.raises(requests.exceptions.HTTPError):
         biblio._call_qwen('p', 'http://server')
     assert len(calls) == 1
+
+
+@pytest.mark.unit
+def test_progress_is_reported_per_batch(one_batch_at_a_time, monkeypatch):
+    """Entry counts span three orders of magnitude between papers — a
+    nomenclator ran to 2,091 entries the same day an article had 30. Without a
+    per-paper signal the window cannot tell a long paper from a stalled one, so
+    the callback fires before the first call and after every batch."""
+    monkeypatch.setattr(biblio, '_call_qwen', lambda *a, **k: '[{"title": "x"}]')
+    seen = []
+
+    biblio.extract_references_llm('h', on_progress=lambda d, t: seen.append((d, t)))
+
+    assert seen[0] == (0, 2), 'must report before the first call, not after'
+    assert seen[-1] == (2, 2)
+    assert [d for d, _ in seen] == sorted(d for d, _ in seen), 'must not go backwards'
+
+
+@pytest.mark.unit
+def test_progress_advances_past_a_skipped_batch(one_batch_at_a_time, monkeypatch):
+    """A batch that is given up on still consumed entries. Leaving the count
+    behind would stall the bar on exactly the papers having trouble."""
+    monkeypatch.setattr(biblio, '_call_qwen', lambda *a, **k: 'not json at all')
+    seen = []
+
+    biblio.extract_references_llm('h', on_progress=lambda d, t: seen.append((d, t)))
+
+    assert seen[-1] == (2, 2)

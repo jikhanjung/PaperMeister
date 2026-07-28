@@ -11,8 +11,12 @@ from PyQt6.QtCore import QThread, pyqtSignal
 class BackgroundTask(QThread):
     """Run a callable on a worker thread, emit result/error on finish."""
 
-    done = pyqtSignal(object)   # payload
-    failed = pyqtSignal(str)    # error message
+    done = pyqtSignal(object)      # payload
+    failed = pyqtSignal(str)       # error message
+    #: Optional (done, total) for work that reports sub-steps. The callable has
+    #: to emit it itself — nothing here calls it — which keeps the cross-thread
+    #: hop a queued signal rather than a direct call into a widget.
+    progress = pyqtSignal(int, int)
 
     def __init__(self, fn: Callable[..., Any], *args, **kwargs):
         super().__init__()
