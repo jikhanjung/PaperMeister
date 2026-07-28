@@ -165,7 +165,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 - **릴리스**: `CHANGELOG.md`에 섹션 추가 → `version.py` 범프 → `vX.Y.Z` 태그 push.
   `release.yml`이 테스트→3플랫폼 빌드→CHANGELOG 섹션을 노트로 발행. 수동 발행은 `manual-release.yml`
 - **설치 프로그램**: `installer/PaperMeister.iss.template` — 사용자 단위(관리자 권한 불필요),
-  `%LOCALAPPDATA%\PaleoBytes\PaperMeister`에 설치, 시작 메뉴 `PaleoBytes` 그룹.
+  `%LOCALAPPDATA%\Programs\PaleoBytes\PaperMeister`에 설치, 시작 메뉴 `PaleoBytes` 그룹.
   **`AppId` GUID는 절대 바꾸지 말 것**(바꾸면 업그레이드가 별개 프로그램으로 설치되고 옛 항목이 제어판에 남음).
   **런타임 데이터는 설치/제거가 건드리지 않는다** — `[UninstallDelete]` 추가 금지(그 디렉터리가 사용자 라이브러리)
 - **CI**: `test.yml`(ruff+mypy, Linux·Windows 테스트, 커버리지 ratchet) / `security.yml`(pip-audit + lock-check)

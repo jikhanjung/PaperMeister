@@ -73,7 +73,7 @@
 - [x] **프로즌 빌드 스모크 테스트** (`--self-test`) — 3플랫폼 모두 빌드 직후 실제 실행. 이전엔 릴리스 파일을 한 번도 안 띄워봤음
 - [x] **Windows 설치본 첨부 수정** — 아티팩트 경로가 깊어 릴리스 글롭에 안 걸리던 문제(v0.1.1까지 누락)
 - [x] **데이터 경로 PaleoBytes 규약 정렬** (084) — `~/.papermeister` → `~/PaleoBytes/PaperMeister`. `papermeister/paths.py` 단일 소스(이전엔 23개 파일 하드코딩), 레거시 자동 이동 안 함 + `migrate_data_dir.py`. 라이브 이동 완료
-- [x] **설치 프로그램 신원·위치** (084) — `AppId` GUID 고정, `AppPublisher=PaleoBytes`, `%LOCALAPPDATA%\PaleoBytes\PaperMeister`, 시작 메뉴 PaleoBytes 그룹. Build 워크플로로 ISCC 컴파일 확인
+- [x] **설치 프로그램 신원·위치** (084) — `AppId` GUID 고정, `AppPublisher=PaleoBytes`, `{userpf}\PaleoBytes\PaperMeister`(= `%LOCALAPPDATA%\Programs\…`), 시작 메뉴 PaleoBytes 그룹. Build 워크플로로 ISCC 컴파일 확인
 - [ ] **설치본 수동 확인** — 설치 위치·시작 메뉴 그룹·제어판 게시자, 설치 후 기존 라이브러리 인식 (스모크는 "기동한다"까지만 보증)
 - [x] **mypy 게이트 실질화** — lint에 의존성 설치(안 하면 ORM 코드가 `Any`로 미검사) + 버전 핀
 - [ ] `ruff format` 패스 후 `ruff format --check` 게이팅 (대량 diff 커밋 선행 필요, P15부터 보류)

@@ -116,7 +116,7 @@
 
 **설치 프로그램**도 같이 맞췄다 — `AppId` GUID 고정(**절대 변경 금지**: 바꾸면 업그레이드가
 별개 프로그램으로 설치됨), `AppPublisher=PaleoBytes`, 설치 위치
-`%LOCALAPPDATA%\PaleoBytes\PaperMeister`(Roaming 아님 — 180MB가 프로필 동기화됨),
+`%LOCALAPPDATA%\Programs\PaleoBytes\PaperMeister`(Roaming 아님 — 180MB가 프로필 동기화됨),
 시작 메뉴 `PaleoBytes` 그룹. Build 워크플로 수동 실행으로 **ISCC 실컴파일 확인**(6.7.3, 성공).
 런타임 데이터는 설치/제거가 건드리지 않음 — `[UninstallDelete]` 추가 금지.
 ⚠️ **실제 설치 동작은 사용자 수동 확인 대기**(스모크는 "기동한다"까지만 보증).
@@ -267,7 +267,7 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 
 **2026-07-28 (세션 52, 마무리 2)** — **v0.1.3 / v0.1.4 릴리스** — [devlog 083](./devlog/20260728_083_Container_Restart_Recovery_Wait.md) · [devlog 084](./devlog/20260728_084_PaleoBytes_Paths_And_Installer.md)
 - **v0.1.3** — 컨테이너 재기동 대기(083). 502는 컨테이너가 죽었다 뜨는 것이라 분 단위인데 재시도는 20초 → **성공률 0%**(72/24 = 3:1로 전건 소진). 게이트웨이 계열은 in-place 재시도 빼고 **healthz 폴링 후 같은 배치 재개**로 전환 → **논문의 기파싱분 보존**. `ServerGuard` 로깅 추가(무인 실행 시 pause/복구 소요가 기록에 안 남던 문제)
-- **v0.1.4** — PaleoBytes 정렬(084). 데이터 `~/PaleoBytes/PaperMeister`(`paths.py` 단일 소스, 이전엔 23개 파일 하드코딩) + 설치본 `AppId`·`AppPublisher`·`%LOCALAPPDATA%\PaleoBytes\PaperMeister`·시작메뉴 PaleoBytes 그룹. **레거시 폴백은 사용자 판단으로 제거**(쓰던 사람 없음) — 경로는 조건 없는 상수, 대신 레거시 잔존 시 **경고만** 출력
+- **v0.1.4** — PaleoBytes 정렬(084). 데이터 `~/PaleoBytes/PaperMeister`(`paths.py` 단일 소스, 이전엔 23개 파일 하드코딩) + 설치본 `AppId`·`AppPublisher`·`%LOCALAPPDATA%\Programs\PaleoBytes\PaperMeister`·시작메뉴 PaleoBytes 그룹. **레거시 폴백은 사용자 판단으로 제거**(쓰던 사람 없음) — 경로는 조건 없는 상수, 대신 레거시 잔존 시 **경고만** 출력
 - 세 릴리스 모두 **3플랫폼 스모크 통과 + 자산 5종**(zip·설치본·AppImage·dmg·SHA256). 릴리스 노트는 CHANGELOG 자동 추출
 - ⚠️ **v0.1.4는 설치본 신원(AppId)이 바뀐 첫 릴리스** — v0.1.2/0.1.3 설치본은 별개 프로그램으로 잡히므로 제어판에서 수동 제거 필요(일회성)
 

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The Windows installer now targets `%LOCALAPPDATA%\Programs\PaleoBytes\PaperMeister`**
+  — under Programs, where a per-user install belongs, still grouped with the
+  other PaleoBytes tools. An existing install is upgraded where it already sits;
+  only a fresh install uses the new path.
+
 ### Added
 - **The references window now shows progress within the paper being parsed**, not
   just how many papers are left. Bibliographies vary enormously — one paper in a
@@ -23,7 +29,7 @@ Data and installation now follow the PaleoBytes layout shared with Modan2 and
 CTHarvester.
 
 ### Changed
-- **The Windows installer now installs to `%LOCALAPPDATA%\PaleoBytes\PaperMeister`**
+- **The Windows installer now installs to `%LOCALAPPDATA%\Programs\PaleoBytes\PaperMeister`**
   and appears under a PaleoBytes group in the Start menu, alongside the other
   tools. It also carries a publisher name and a stable application id, so future
   versions upgrade in place instead of installing beside each other. Your library

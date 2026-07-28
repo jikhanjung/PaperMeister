@@ -23,7 +23,7 @@
 **릴리스 내려받기** (권장) — [releases](https://github.com/jikhanjung/PaperMeister/releases)에 태그마다
 Windows 포터블 zip·설치본, Linux AppImage, macOS DMG가 SHA256과 함께 올라옵니다.
 
-Windows 설치본은 관리자 권한 없이 `%LOCALAPPDATA%\PaleoBytes\PaperMeister`에 설치되고,
+Windows 설치본은 관리자 권한 없이 `%LOCALAPPDATA%\Programs\PaleoBytes\PaperMeister`에 설치되고,
 시작 메뉴 `PaleoBytes` 그룹에 등록됩니다. 제거해도 **데이터는 남습니다**(아래 참조).
 
 **소스에서 실행**:

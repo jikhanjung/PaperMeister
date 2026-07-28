@@ -68,7 +68,7 @@ Modan2는 `MdUtils`에 `COMPANY_NAME`/`PROGRAM_NAME` 상수와 `DEFAULT_DB_DIREC
 |------|------|------|
 | `AppId` | **없음**(AppName에서 유도) | `{AFA39013-CEDA-4056-9C78-9C66226B8B1F}` |
 | `AppPublisher` | 없음 | `PaleoBytes` |
-| 설치 위치 | `{localappdata}\Programs\PaperMeister` | `{localappdata}\PaleoBytes\PaperMeister` |
+| 설치 위치 | `{localappdata}\Programs\PaperMeister` | `{userpf}\PaleoBytes\PaperMeister` ¹ |
 | 시작 메뉴 | `PaperMeister` | `PaleoBytes\PaperMeister` |
 
 **AppId를 지금 넣은 게 타이밍상 중요하다.** 명시적 ID 없이 배포되면 Inno가 AppName에서
@@ -76,6 +76,14 @@ Modan2는 `MdUtils`에 `COMPANY_NAME`/`PROGRAM_NAME` 상수와 `DEFAULT_DB_DIREC
 옛 항목이 제어판에 남는다. 그런데 설치본은 **v0.1.2부터야 실제로 배포됐다**(v0.1.1은
 빌드됐지만 첨부 누락, devlog 082). 즉 지금은 설치본 보유자가 사실상 없어 신원 변경 비용이
 0이다. 더 퍼진 뒤였으면 못 했다.
+
+¹ **후속 변경 (같은 날)**: 처음엔 `{localappdata}\PaleoBytes\PaperMeister`로 넣었다가
+`{userpf}\PaleoBytes\PaperMeister`(= `%LOCALAPPDATA%\Programs\PaleoBytes\PaperMeister`)로
+한 번 더 옮겼다. `{userpf}`는 Inno의 **사용자 Program Files** 상수라, "Programs 아래"라는
+관례와 PaleoBytes 그룹핑을 동시에 만족한다. 처음 안은 그룹핑을 얻으려고 Programs를 버린
+셈이었다. **AppId가 고정돼 있어 기존 설치는 영향 없다** — Inno가 기록해둔 디렉터리를 재사용해
+제자리 업그레이드하고(`UsePreviousAppDir` 기본 동작), 새 경로는 신규 설치에만 적용된다.
+AppId를 먼저 넣어둔 덕에 위치를 바꿔도 설치본이 쪼개지지 않는다.
 
 **Roaming이 아니라 Local인 이유**: onedir 페이로드가 ~180MB라 도메인 가입 PC에서 로그인마다
 프로필과 동기화된다. Modan2도 같은 이유로 `{userappdata}` → `{localappdata}`로 옮겼다.

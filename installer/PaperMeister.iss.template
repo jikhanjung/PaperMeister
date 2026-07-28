@@ -19,10 +19,15 @@ AppId={{AFA39013-CEDA-4056-9C78-9C66226B8B1F}
 AppName=PaperMeister
 AppVersion={#AppVersion}
 AppPublisher=PaleoBytes
-; Local, not Roaming: the onedir payload is ~180 MB and would otherwise sync
-; with the user profile on domain-joined machines. Grouped under PaleoBytes to
-; match Modan2 and CTHarvester.
-DefaultDirName={localappdata}\PaleoBytes\PaperMeister
+; {userpf} is the per-user Program Files — %LOCALAPPDATA%\Programs — which is
+; where a per-user install belongs, with the PaleoBytes grouping kept alongside
+; Modan2 and CTHarvester. Deliberately not Roaming: the onedir payload is
+; ~180 MB and would otherwise sync with the profile on domain-joined machines.
+;
+; Existing installs are unaffected. AppId is stable, so Inno reuses the
+; directory it recorded (UsePreviousAppDir) and upgrades in place; only fresh
+; installs land here.
+DefaultDirName={userpf}\PaleoBytes\PaperMeister
 PrivilegesRequired=lowest
 DisableProgramGroupPage=yes
 OutputDir={{OUTPUT_DIR}}
