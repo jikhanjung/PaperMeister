@@ -207,6 +207,16 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 
 ## 최근 세션 요약
 
+**2026-07-28 (세션 52, 계속)** — **의존성 일괄 업그레이드** — [devlog 081](./devlog/20260728_081_Dependency_Upgrade_Sweep.md)
+- 080에서 Dependabot을 켜자 한 시간 만에 **PR 8건**. 각 버전을 **실제로 설치해 우리가 쓰는 API 면을 훑어** 검증 후 전부 머지 (CI 그린만으론 부족 — 커버리지 19.6%이고 실패 경로는 테스트가 안 닿음)
+- 🔴 **pyzotero 1.5→1.13은 코드 수정 필요** (`c630fb3`): (1) 에러 클래스 전면 개명(`UserNotAuthorised`→`UserNotAuthorisedError`) → 옛 이름 `except`가 **진짜 에러 전파 도중 AttributeError**를 냄 (2) **requests→httpx 전환** → 연결 blip이 httpx 타입으로 와서 재시도 판정에 안 걸림. 둘 다 **실패하는 순간에만** 드러나 CI로는 안 잡힘. 수정: 이름 여러 개로 조회 + **빈 튜플 폴백**(미래 개명 시 degrade), 재시도에 `httpx.TransportError` 추가(status 에러는 제외). **1.5.28/1.13.2 번갈아 설치해 전체 통과 확인** + `tests/test_zotero_compat.py` 6케이스
+- 🟢 **peewee 3.17→4.2 안전**: 우리 API 면 전체(FTS5 원시 SQL·트리거·snippet·bm25 포함)를 두 버전에서 나란히 돌려 **출력 동일** 확인. ⚠️ **CLAUDE.md의 "Peewee 4.x"가 그동안 사실과 달랐음**(실제 3.17.9) — 이 머지로 비로소 맞음
+- 🟢 **PyMuPDF 1.24→1.28 안전**(쓰는 API 6종 전부 동작, `fitz` 별칭 생존 확인) / requests·PyQt6는 **하한만 상향**(설치물 변화 0) / actions 3건은 표준 업그레이드 — 그중 `upload-artifact 4→7`과 pages 액션 2건은 **어제 내가 만든 불일치를 Dependabot이 잡아준 것**
+- **운영 지식 2건**: 워크플로 파일 PR은 토큰 `workflow` 스코프 없이 **API 머지 불가**(SSH push는 제약 없음 → #2·#9·#10은 main에 직접 적용, Dependabot이 자동 close) / **lock은 머지마다 충돌**하므로 `@dependabot rebase`→승인→머지를 한 건씩 반복. `dependabot-lock-refresh`는 **첫 실전에서 정상 작동**(#4·#5 `refresh-locks` 통과)
+- ⚠️ **드러난 것 — mypy 게이트가 보이는 것보다 약함**: lint 잡이 `ruff mypy`만 설치하고 **프로젝트 의존성을 안 깔아서** peewee를 `Any`로 처리 중. peewee 4는 타입 주석이 있는데 **암묵적 `id`/`<fk>_id`를 모델링 안 해** 로컬에선 오탐 28건(테스트 117개는 통과 = 실제 버그 아님). `test.yml` 주석에 명시. **다음 단계**: lint에 의존성 설치 + 오탐만 좁게 억제
+- **배포 후 확인 필요**(테스트 미도달 영역): peewee 4 → 라이브 DB `_migrate()` 경로 / pyzotero 1.13 → 실제 Zotero API 왕복(`logs/zotero_sync.log`)
+- 소소한 UX 변경 (devlog 없음, 커밋 메시지에 근거 기록): **SourceNav 탭 유지**(`a7020cd` — `refresh()`가 `tabs.clear()`로 선택을 잃어 동기화·Apply 후 첫 탭으로 튀던 것. **인덱스가 아니라 소스 신원으로 복원** — refresh 이유 자체가 소스 목록 변화라 인덱스 복원은 다른 소스로 착지 가능) / **진행창 로그에 날짜**(`465e0bc`) / **`biblio_YYYYMMDD.log` 자정 롤오버**(`971109d` — 핸들러가 import 때 한 번 생성되는데 배치가 며칠씩 도므로 파일명 고정 시 전부 시작일에 쌓임 → 레코드마다 날짜 확인)
+
 **2026-07-27 (세션 52, 이어서)** — **Modan2/CTHarvester 프로세스 정렬** — [devlog 080](./devlog/20260727_080_CI_Docs_Parity_With_Sibling_Repos.md)
 - 사용자 요청: 두 형제 리포의 테스트·CI·릴리스 프로세스를 충실히 따를 것 + 매뉴얼도 만들 것. 073에서 한 번 맞춘 뒤 벌어진 **격차 차분** 작업
 - **CI 추가** (`bdcd3d2`): `dependabot.yml`(pip+actions 주간) / `dependabot-lock-refresh.yml`(requirements 변경 PR에서 lock 자동 재생성 → lock-check 통과) / `manual-release.yml`(workflow_dispatch 릴리스, 프리릴리스·재컷용, 커밋수 build number 일관) / **커버리지 최초 측정 19.6% + floor 18% ratchet**(Linux leg, `papermeister`+`desktop` 스코프, coverage.xml 아티팩트) / C901 복잡도 리포트(비게이팅)
