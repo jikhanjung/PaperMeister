@@ -12,6 +12,8 @@ Layout
      - Contents
    * - ``papermeister/``
      - Core: models, database, ingestion, OCR, extraction, search, Zotero
+   * - ``papermeister/paths.py``
+     - Every user-data path. The only module that knows where data lives
    * - ``desktop/``
      - The current app — ``views/``, ``services/``, ``components/``,
        ``workers/``, ``windows/``, ``theme/``
@@ -55,6 +57,21 @@ Running things
    pytest                 # tests
    ruff check .           # lint
    make lock-check        # verify the lockfiles match requirements
+
+Where data lives
+----------------
+
+``papermeister/paths.py`` is the single source of truth. Everything sits under
+``~/PaleoBytes/PaperMeister`` — the layout shared with Modan2 and CTHarvester —
+and ``PAPERMEISTER_DATA_DIR`` overrides it, which is how the tests exercise path
+resolution without touching a real home directory.
+
+An installation predating this still has ``~/.papermeister``. That directory
+keeps being used as long as the new one does not exist; nothing is moved
+automatically, because a library here is gigabytes and may have a batch running
+against it. ``scripts/migrate_data_dir.py`` does the move when asked. Once the
+new directory exists it wins — after a migration both can be present, and the
+leftover must not pull the app back to the stale copy.
 
 Conventions
 -----------

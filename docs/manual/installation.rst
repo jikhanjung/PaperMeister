@@ -10,7 +10,12 @@ version, with SHA256 checksums.
 
 Windows
    Download the portable ``.zip`` and run ``PaperMeister.exe`` from the
-   extracted folder, or use the installer (``.exe``) for a per-user install.
+   extracted folder, or use the installer (``.exe``), which installs per-user
+   into ``%LOCALAPPDATA%\PaleoBytes\PaperMeister`` — no administrator rights
+   needed — and adds a shortcut under a **PaleoBytes** group in the Start menu.
+
+   Uninstalling removes the program only. Your library stays where it is (see
+   below), so reinstalling picks it up again.
 
 Linux
    Download the ``.AppImage``, make it executable (``chmod +x``) and run it.

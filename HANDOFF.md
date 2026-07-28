@@ -103,7 +103,7 @@
 > **현재 우선순위 (2026-07-28)**: 인프라·문서·릴리스는 한 바퀴 정리됨(v0.1.2 + 매뉴얼 배포).
 > **본체로 남은 건 references 추출 완주 하나**다. 그 외는 전부 후속·선택 사항.
 
-### ✅ 데이터 경로 이동 완료 (2026-07-28)
+### ✅ 데이터 경로 이동 + 설치 프로그램 정렬 (2026-07-28) — [devlog 084](./devlog/20260728_084_PaleoBytes_Paths_And_Installer.md)
 
 `~/.papermeister` → **`~/PaleoBytes/PaperMeister/`** (PaleoBytes 규약, Modan2·CTHarvester 공유).
 라이브 이동 확인됨 — DB 2.5GB 포함 전부 새 위치, 옛 디렉터리 소멸, 앱이 새 경로에서 정상 가동.
@@ -112,6 +112,13 @@
 경로는 이제 `papermeister/paths.py`가 **단일 소스**(이전엔 23개 파일에 하드코딩).
 `PAPERMEISTER_DATA_DIR`로 override 가능. 신규 설치는 새 경로, 레거시가 있고 새 경로가 없으면
 레거시를 그대로 쓴다(자동 이동 안 함). 이동 도구는 `scripts/migrate_data_dir.py`.
+
+**설치 프로그램**도 같이 맞췄다 — `AppId` GUID 고정(**절대 변경 금지**: 바꾸면 업그레이드가
+별개 프로그램으로 설치됨), `AppPublisher=PaleoBytes`, 설치 위치
+`%LOCALAPPDATA%\PaleoBytes\PaperMeister`(Roaming 아님 — 180MB가 프로필 동기화됨),
+시작 메뉴 `PaleoBytes` 그룹. Build 워크플로 수동 실행으로 **ISCC 실컴파일 확인**(6.7.3, 성공).
+런타임 데이터는 설치/제거가 건드리지 않음 — `[UninstallDelete]` 추가 금지.
+⚠️ **실제 설치 동작은 사용자 수동 확인 대기**(스모크는 "기동한다"까지만 보증).
 
 ⚠️ **WSL에서 라이브 DB를 볼 때 경로가 바뀌었다**:
 `/mnt/c/Users/Jikhan Jung/PaleoBytes/PaperMeister/papermeister.db`
