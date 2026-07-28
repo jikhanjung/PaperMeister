@@ -68,7 +68,10 @@
 - [x] 3-플랫폼 릴리스 (Windows zip·설치본 / Linux AppImage / macOS DMG) + CHANGELOG 소싱 릴리스 노트
 - [x] 해시 고정 lock + `lock-check` 게이트 + CodeQL + 버전 일치 테스트
 - [x] Dependabot + lock 자동 재생성 워크플로 + `manual-release.yml` + 커버리지 측정
-- [x] **Sphinx 매뉴얼 (en/ko) → GitHub Pages** — https://jikhanjung.github.io/PaperMeister/
+- [x] **Sphinx 매뉴얼 (en/ko) → GitHub Pages** — https://jikhanjung.github.io/PaperMeister/ (한국어 번역 227/259 + 언어 스위처)
+- [x] **v0.1.2 릴리스** — 3플랫폼 + Windows 설치본. 노트는 CHANGELOG에서 자동 추출
+- [x] **프로즌 빌드 스모크 테스트** (`--self-test`) — 3플랫폼 모두 빌드 직후 실제 실행. 이전엔 릴리스 파일을 한 번도 안 띄워봤음
+- [x] **Windows 설치본 첨부 수정** — 아티팩트 경로가 깊어 릴리스 글롭에 안 걸리던 문제(v0.1.1까지 누락)
 - [x] **mypy 게이트 실질화** — lint에 의존성 설치(안 하면 ORM 코드가 `Any`로 미검사) + 버전 핀
 - [ ] `ruff format` 패스 후 `ruff format --check` 게이팅 (대량 diff 커밋 선행 필요, P15부터 보류)
 - [ ] 앱 아이콘 / macOS 코드사이닝·공증

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Language switcher in the manual.** Every page links to its counterpart in the
+  other language, keeping you on the same page rather than sending you back to
+  the index. Already live on the documentation site.
+
+---
+
 ## [0.1.2] - 2026-07-28
 
 References extraction that reports what went wrong and recovers from most of it,
