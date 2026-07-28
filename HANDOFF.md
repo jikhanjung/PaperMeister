@@ -8,7 +8,7 @@
 
 ## 현재 단계
 
-**Phase: P07 Phase 2 완전 종료 / Phase 3 완료 + 기본 사용 가능 / Phase 4 hookup 진행 중 / Phase D 대량 운영 — 라이브러리 전체 biblio 완료 (~2026-06-15) / P02 PyInstaller 패키징 — `.exe` 빌드 성공 + 실행 검증 완료 (2026-06-15) / P11 References + P12 CitedWork 정규화 + P13 FTS external-content — 전부 라이브 DB 반영 완료 (~2026-06-26~28), references는 부분 진행 (1,733/9,889편) / 068 DB 복원력 — 손상 무손실 복구 + 자동 오프사이트 백업 (2026-06-26)**
+**Phase: 코어 기능 완성 — Phase 1~3 + Phase D 완료 / P11 references 추출 진행 중(본체 잔여 작업) / P12 CitedWork 정규화 + P13 FTS external-content 라이브 반영 완료 / P14 인용 네트워크(통계·export·ego 그래프) 완료 / P15 코드품질·CI 완료 → **v0.1.2 릴리스**(3플랫폼 + 설치본, 프로즌 빌드 스모크 테스트 통과) + **사용자 매뉴얼 en/ko 배포**(2026-07-28)**
 
 > **라이브 DB 실측 (2026-07-23, Windows DB 6/28 사본 스키마 확인)**: P13 FTS 마이그레이션 **적용 완료**(external-content `passage_fts` + standalone `paper_fts` + 트리거 9종, `passage_fts_content` 없음, `pre-p13-backup` 4.3GB 존재, DB 2.3GB, `quick_check=ok`). references 추출 **부분 완료** — `references_checked=1` **1,733/9,889편(17.5%)**, `Reference` 104,755행(held 매칭 13,102 / CitedWork 매칭 58,360). P12 정규화도 라이브 실행됨 — `CitedWork` **49,728노드**. 즉 P11/P12/P13 모두 라이브 반영, references만 나머지 편수 재개 대기.
 
@@ -100,7 +100,19 @@
 
 ## 다음 할 일
 
-> **현재 우선순위**: **P02 PyInstaller 패키징 완료** (`.exe` 빌드 + 실행 검증, 2026-06-15). 라이브러리 전체 biblio도 완료. 다음 자연스러운 초점은 잔여 **needs_review 일괄 검토**, 또는 패키징 후속(앱 아이콘/배포 자동화)·Phase 4 hookup 검증.
+> **현재 우선순위 (2026-07-28)**: 인프라·문서·릴리스는 한 바퀴 정리됨(v0.1.2 + 매뉴얼 배포).
+> **본체로 남은 건 references 추출 완주 하나**다. 그 외는 전부 후속·선택 사항.
+
+### 🔴 사용자 액션 대기 (다음 세션에서 먼저 확인할 것)
+
+- [ ] **앱 재기동** — 07-27~28 수정분이 반영되려면 필요. 마지막 확인 시점의 실행 빌드는 `a6609e1` 근처였고, 이후 **재시도 낭비 제거(`acee8ab`)·타임아웃 480초(`410425d`)·목차 오탐 루프 차단(`1749b4a`)·탭 유지·로그 날짜/롤오버**가 미반영. 특히 앞의 둘은 **논문당 25분→8분**을 좌우
+- [ ] **`reset_references.py --scope empty-checked --execute`** (재기동 후) — `[]` 탈출구 회귀(079)로 잘못 checked된 논문 복구. dry-run 실측 **77편**이었고, 그중 상당수가 비영어 논문(한/일/중/러/독) = 실제 피해. 지울 데이터가 0건이라 안전
+- [ ] **v0.1.2 Windows 설치본 수동 확인** — 스모크 테스트는 "기동한다"까지만 보증. 설치 자체와 실기능은 미검증
+- [ ] **peewee 4 / pyzotero 1.13 라이브 확인** — 테스트가 닿지 않는 두 경로: 라이브 DB `_migrate()`, 실제 Zotero API 왕복(`logs/zotero_sync.log`)
+
+### 진행 중 (본체)
+
+- [~] **references 추출 완주** — 마지막 실측 배치 기준 진행 중. 실패 경로 복원력은 devlog 075~079로 정리 완료(5xx·절단·무참고문헌·오탐 루프 전부 봉쇄). 완주 후 재-resolve + `normalize_works` 재실행(멱등)
 
 ### 즉시 착수 가능 (Phase 4 hookup)
 - [ ] **48편 extracted 잔존분 재시도** — 세션 18 폴더 처리 중 bookSection 400으로 멈춘 케이스 + needs_review 정상 케이스 혼재. 같은 폴더들 다시 Process 한 번 돌려서 `ITEM_TYPE_JOURNAL_FIELD` 픽스 효과 + biblio_state 메타 cross-machine sync 확인 (세션 35의 폴더 failed retry 포함 덕분에 한 번에 처리 가능해짐)
@@ -206,6 +218,18 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 ---
 
 ## 최근 세션 요약
+
+**2026-07-28 (세션 52, 마무리)** — **v0.1.2 릴리스 + 매뉴얼 배포** — [devlog 082](./devlog/20260728_082_Release_Smoke_Test_And_Installer_Fix.md)
+- **v0.1.2 발행 완료** — 절차대로(CHANGELOG 섹션 → `version.py` 범프 → 태그 push). `test_version_consistency`가 "CHANGELOG에 해당 버전 섹션 없으면 실패"라 순서를 강제함. 자산 4개+SHA256, 릴리스 노트는 CHANGELOG에서 자동 추출. 빌드번호는 커밋수(`build238`)
+- 🔴 **1차 발행에서 구멍 2개 발견 → 수정 후 재발행**:
+  - **설치본이 빌드되고도 첨부 안 됨** — `installer/Output/*.exe`로 업로드해 그 경로가 아티팩트에 보존됨 → `release-files/**/*.exe`가 **4단계 깊이에 못 닿음**(zip·AppImage는 2단계라 걸림). **v0.1.1도 같은 상태였음**(설치본 도입 이래 계속 누락). 업로드 전 zip 옆으로 이동해 같은 깊이로
+  - **릴리스 파일을 한 번도 실행해보지 않았음** — 형제 리포는 빌드 직후 프로즌 실행 파일을 `--self-test`로 띄우는데 우리에겐 없었음. **프로즌 실행 파일은 자기 번들의 Python·라이브러리를 쓰므로 소스 테스트가 구조적으로 못 보는 부류**(빠진 `--add-data`, 번들 안 된 네이티브 라이브러리, 누락된 Qt 플러그인/SQLite 드라이버)가 있음 — **devlog 061 conda DLL 사고가 정확히 그것**("빌드 성공, 실행 시 사망")
+- ✅ **`--self-test` 도입** (`desktop/app.py`): 정상 기동 경로 전부 타고 3초 뒤 exit 0. **argparse 미사용**(유일한 플래그인데 `-h`를 가져가고 Qt가 넘기는 `-platform` 등에 에러). 종료 전 top-level 위젯 close(모달 중첩 루프가 `quit()`보다 오래 살아 러너를 매다는 것 방지). 3레그 스모크 단계 — Windows `Start-Process -Wait`(windowed 앱이라 필수) / Linux `timeout 120` / **macOS는 러너에 `timeout`이 없어 앱 내부 워치독이 상한**. 패키징 *전에* 실행(깨진 번들이 AppImage/DMG로 감싸지기 전에 실패). `tests/test_self_test_flag.py` 4케이스 — **self-test가 조용히 안 걸리면 CI가 아무것도 검사하지 않으면서 통과**하므로(081 mypy와 같은 실패 방식) 양쪽 고정
+  - **라이브 검증**: 3플랫폼 스모크 전부 통과, 자산 4개(설치본 **처음 첨부됨**)
+  - **남은 한계**: 스모크는 "기동한다"까지만 보증. 설치본 실제 설치·기능 동작은 **사용자 수동 확인 영역**
+- **문서 일괄 갱신** (`35d1063`): README(상세패널 3탭→**4탭**, Rail 버튼 누락 3개, OCR 1→3 backend, Python 3.11→**3.12**, **릴리스 존재 자체가 누락돼 있었음**, 참고문헌·개발 워크플로 추가, 로드맵 현행화) / CLAUDE.md(같은 탭 오류, P14 스크립트 5개, 매뉴얼·릴리스·CI 섹션, **mypy 함정 명문화**) / TODOs(완료분 표시 + 인프라 섹션 신설) / CHANGELOG(`[Unreleased]` 신설)
+- **매뉴얼 한국어 번역 + 언어 스위처** (`53bb902`, `6e8a056`): 259개 중 **227개 번역**(나머지 32개는 경로·파일명 등 리터럴이라 원문 유지). 스위처는 Modan2 이식하되 **JS `onclick` 대신 실제 `<a href>`** — Sphinx가 `pagename`을 알고 두 언어가 형제 디렉터리라 빌드 시점에 경로가 정해짐 → 새 탭/가운데 클릭/키보드/JS-off 모두 동작. 전제: **두 언어 트리가 평평해야 함**(하위 디렉터리 생기면 `pathto()` 필요, README에 기록). 배포본에서 링크 20개 전부 실재 파일 확인
+  - ⚠️ **한국어 RST 함정**: 닫는 `**` 뒤에 조사가 바로 붙으면 마크업이 통째로 사라짐 → `**강조**\ 조사` 이스케이프 공백 필요. CLAUDE.md·매뉴얼 README에 기록
 
 **2026-07-28 (세션 52, 계속)** — **의존성 일괄 업그레이드** — [devlog 081](./devlog/20260728_081_Dependency_Upgrade_Sweep.md)
 - 080에서 Dependabot을 켜자 한 시간 만에 **PR 8건**. 각 버전을 **실제로 설치해 우리가 쓰는 API 면을 훑어** 검증 후 전부 머지 (CI 그린만으론 부족 — 커버리지 19.6%이고 실패 경로는 테스트가 안 닿음)
