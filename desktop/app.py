@@ -48,6 +48,42 @@ def _install_excepthook():
     sys.excepthook = _hook
 
 
+def _self_test_requested() -> bool:
+    """True when launched as `--self-test`.
+
+    Parsed by hand rather than with argparse: this is the app's only flag, and
+    argparse would take over `-h`/`--help` and error out on anything Qt passes
+    through (`-platform`, `-style`, ...).
+    """
+    return '--self-test' in sys.argv[1:]
+
+
+def _arm_self_test(app) -> None:
+    """Boot normally, then quit with 0 once the window is up.
+
+    CI runs this against the *frozen* build, where it is the only thing that
+    exercises the bundle end to end — every heavy import, the Qt platform
+    plugin, the SQLite driver, the theme's SVG resources, the main window. A
+    missing --add-data entry or an unbundled native library produces a working
+    source tree and an executable that dies on launch; that is precisely how the
+    conda-DLL packaging failure presented (devlog 061), and no source-tree test
+    can see it.
+
+    The timer lets the event loop spin first so deferred startup work runs. Top
+    level windows are closed before quitting so a stray modal's nested loop
+    cannot outlive quit() and hang the runner.
+    """
+    from PyQt6.QtCore import QTimer
+
+    def _exit():
+        logger.info('Self-test: main window reached; exiting cleanly')
+        for w in QApplication.topLevelWidgets():
+            w.close()
+        app.quit()
+
+    QTimer.singleShot(3000, _exit)
+
+
 def main() -> int:
     _install_excepthook()
     init_db()
@@ -66,6 +102,10 @@ def main() -> int:
 
     window = MainWindow()
     window.show()
+
+    if _self_test_requested():
+        _arm_self_test(app)
+
     return app.exec()
 
 

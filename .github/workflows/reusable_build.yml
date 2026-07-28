@@ -67,6 +67,33 @@ jobs:
           $env:BUILD_NUMBER = "${{ inputs.build_number }}"
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer/PaperMeister.iss"
           echo "=== installer output ==="; Get-ChildItem "installer/Output" -Name
+          # Move it beside the zip so the artifact is flat. Uploading it from
+          # installer/Output preserved that path, and the release step's
+          # `release-files/**/*.exe` did not reach four levels down — the
+          # installer was downloaded and checksummed but never attached, in
+          # v0.1.1 and v0.1.2 both. Same depth as every other artifact now.
+          Move-Item "installer/Output/*.exe" -Destination "." -Force
+          echo "=== to upload ==="; Get-ChildItem "PaperMeister*" -Name
+
+      # Launch the frozen build headless and assert it boots to a live main
+      # window then exits 0 (`--self-test`). The executable is self-contained —
+      # it uses its bundled Python and libraries, not the build environment — so
+      # this catches the "works from source, dies when frozen" class: a missing
+      # --add-data entry, an unbundled native library, a Qt platform plugin or
+      # SQLite driver that never made it into the bundle. That is exactly how the
+      # conda-DLL failure presented (devlog 061), and no source-tree test can
+      # reach it. Until this existed, released artifacts had never been run.
+      - name: Smoke-test frozen build (Windows)
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $exe = "dist/PaperMeister/PaperMeister.exe"
+          if (-not (Test-Path $exe)) { echo "ERROR: $exe not found"; exit 1 }
+          # Start-Process -Wait so a windowed (--noconsole) app is actually awaited.
+          $p = Start-Process -FilePath $exe -ArgumentList "--self-test" -Wait -PassThru -NoNewWindow
+          if ($p.ExitCode -ne 0) { echo "Smoke test FAILED: exit $($p.ExitCode)"; exit 1 }
+          echo "Smoke test passed"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
@@ -74,7 +101,7 @@ jobs:
           name: papermeister-windows
           path: |
             PaperMeister-Windows-*.zip
-            installer/Output/*.exe
+            PaperMeister_*_Installer.exe
 
   # Linux leg — wraps the PyInstaller onedir as an AppImage. No code signing
   # needed (unlike macOS). Note: like the Windows build it bundles Qt but not
@@ -115,6 +142,18 @@ jobs:
       - name: Build (PyInstaller onedir)
         run: pyinstaller PaperMeister.spec
 
+      # Same rationale as the Windows smoke test. Run before packaging, so a
+      # broken bundle fails here rather than being wrapped into an AppImage.
+      # `timeout` bounds it in case the app never reaches the exit path.
+      - name: Smoke-test frozen build (Linux)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          exe="dist/PaperMeister/PaperMeister"
+          if [ ! -x "$exe" ]; then echo "ERROR: $exe not found"; ls -la dist/ 2>/dev/null; exit 1; fi
+          timeout 120 "$exe" --self-test
+          echo "Smoke test passed"
+
       - name: Create AppImage
         run: |
           chmod +x packaging/linux/create_appimage.sh
@@ -150,6 +189,17 @@ jobs:
 
       - name: Build (PyInstaller onedir)
         run: pyinstaller PaperMeister.spec
+
+      # Same rationale as the Windows smoke test. macOS runners have no
+      # `timeout`, so the in-app --self-test watchdog is what bounds this.
+      - name: Smoke-test frozen build (macOS)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          exe="dist/PaperMeister/PaperMeister"
+          if [ ! -x "$exe" ]; then echo "ERROR: $exe not found"; ls -la dist/ 2>/dev/null; exit 1; fi
+          "$exe" --self-test
+          echo "Smoke test passed"
 
       - name: Create .app + .dmg
         run: |

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **The Windows installer is attached to releases again.** It was built and
+  checksummed but never uploaded — it sat deeper in the artifact tree than the
+  release step's file pattern reached, so v0.1.1 and v0.1.2 shipped the portable
+  zip only.
+
+### Added
+- **Released builds are now launched before being published.** Every platform's
+  frozen executable is started headless and has to reach a live main window and
+  exit cleanly, or the build fails. This catches the "works from source, dies
+  when packaged" class — a missing bundled file or native library — which no
+  test against the source tree can see.
+
+---
+
 ## [0.1.2] - 2026-07-28
 
 References extraction that reports what went wrong and recovers from most of it,
