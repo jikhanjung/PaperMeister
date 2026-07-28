@@ -58,26 +58,40 @@ def qwen(monkeypatch):
 
 
 @pytest.mark.unit
-def test_502_blip_is_retried_and_succeeds(qwen):
-    """Engine restarting: 502, 502, then back up. Caller sees only the result."""
-    assert qwen([_Resp(502), _Resp(502), _Resp(200, 'refs')]) == 'refs'
+def test_500_blip_is_retried_and_succeeds(qwen):
+    """Engine hiccup while the process is up: 500, 500, then fine."""
+    assert qwen([_Resp(500), _Resp(500), _Resp(200, 'refs')]) == 'refs'
     assert len(qwen.calls) == 3
     assert qwen.slept == [5.0, 15.0]  # backoff grows, then holds
 
 
 @pytest.mark.unit
+def test_gateway_statuses_are_not_retried(qwen):
+    """A restarting container will not be back inside the backoff, so burning it
+    only delays handing the problem to code that can actually wait."""
+    for status in (502, 503, 504):
+        qwen.calls.clear()
+        qwen.slept.clear()
+        with pytest.raises(requests.exceptions.HTTPError):
+            qwen([_Resp(status)])
+        assert len(qwen.calls) == 1, status
+        assert qwen.slept == [], status
+
+
+@pytest.mark.unit
 def test_500_engine_core_is_retried(qwen):
-    """The 500 the engine emits as it dies is transient too, not a bad request."""
+    """The 500 the engine emits is worth one wait — unlike a gateway status, it
+    does not necessarily mean the process is gone."""
     assert qwen([_Resp(500), _Resp(200, 'refs')]) == 'refs'
     assert len(qwen.calls) == 2
 
 
 @pytest.mark.unit
-def test_sustained_5xx_still_raises(qwen):
+def test_sustained_500_still_raises(qwen):
     """A server that is really down must surface, so ServerGuard pauses the
     batch. Absorbing it here would spin through every paper doing nothing."""
     with pytest.raises(requests.exceptions.HTTPError):
-        qwen([_Resp(502)] * 3)
+        qwen([_Resp(500)] * 3)
     assert len(qwen.calls) == 3  # initial + server_retries, then give up
 
 
@@ -94,7 +108,7 @@ def test_4xx_is_not_retried(qwen):
 def test_timeout_budget_is_separate_from_5xx_budget(qwen):
     """`retries=0` (what the references batcher uses, since it shrinks instead)
     must still get the 5xx retries — the two failures are unrelated."""
-    assert qwen([_Resp(502), _Resp(200, 'refs')], retries=0) == 'refs'
+    assert qwen([_Resp(500), _Resp(200, 'refs')], retries=0) == 'refs'
 
     with pytest.raises(requests.exceptions.Timeout):
         qwen([requests.exceptions.Timeout()], retries=0)

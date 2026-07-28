@@ -362,3 +362,75 @@ def test_a_substantial_located_block_must_not_come_back_empty(one_batch_at_a_tim
 
     assert complete is False
     assert skipped['empty_result'] == 1
+
+
+def _http_error(status):
+    import requests
+    resp = requests.Response()
+    resp.status_code = status
+    return requests.exceptions.HTTPError(str(status), response=resp)
+
+
+@pytest.mark.unit
+def test_gateway_error_waits_for_recovery_and_keeps_the_batch(one_batch_at_a_time,
+                                                              monkeypatch):
+    """A 502 means the model container is restarting, which takes minutes.
+
+    Failing the paper there discards every batch already parsed for it. Waiting
+    for the server and resuming the same batch keeps that work — and, crucially,
+    does not skip the batch that hit the error.
+    """
+    calls = []
+
+    def fake(prompt, url, max_tokens=0, **k):
+        calls.append(1)
+        if len(calls) == 1:
+            raise _http_error(502)
+        return '[{"title": "recovered"}]'
+
+    monkeypatch.setattr(biblio, '_call_qwen', fake)
+    monkeypatch.setattr(biblio, '_wait_for_server', lambda url, tag, w: True)
+
+    entries, _, _, complete, skipped = biblio.extract_references_llm('h')
+
+    assert complete is True                  # not a failure — it recovered
+    assert skipped == biblio._no_skips()     # and nothing was skipped
+    assert len(entries) == 2                 # both references still parsed
+
+
+@pytest.mark.unit
+def test_gateway_error_raises_when_the_server_never_returns(one_batch_at_a_time,
+                                                            monkeypatch):
+    """The wait is capped; a server that stays down has to surface as a failure
+    so ServerGuard can pause the queue instead of the batch hanging."""
+    import requests
+
+    monkeypatch.setattr(biblio, '_call_qwen',
+                        lambda *a, **k: (_ for _ in ()).throw(_http_error(502)))
+    monkeypatch.setattr(biblio, '_wait_for_server', lambda url, tag, w: False)
+
+    with pytest.raises(requests.exceptions.HTTPError):
+        biblio.extract_references_llm('h')
+
+
+@pytest.mark.unit
+def test_gateway_status_is_not_retried_in_place(monkeypatch):
+    """_call_qwen must not burn its backoff on a container restart — twenty
+    seconds cannot outlast one. It raises so the caller can wait properly."""
+    import requests
+
+    class Resp:
+        status_code = 502
+        text = 'upstream: All connection attempts failed'
+
+        def raise_for_status(self):
+            raise requests.exceptions.HTTPError('502', response=self)
+
+    calls = []
+    monkeypatch.setattr(requests, 'post',
+                        lambda url, **k: (calls.append(1), Resp())[1])
+    monkeypatch.setattr(biblio.time, 'sleep', lambda s: pytest.fail('must not back off'))
+
+    with pytest.raises(requests.exceptions.HTTPError):
+        biblio._call_qwen('p', 'http://server')
+    assert len(calls) == 1

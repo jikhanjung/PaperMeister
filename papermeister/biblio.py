@@ -265,14 +265,56 @@ def _call_claude(prompt: str) -> str:
     return envelope.get('result', '').strip()
 
 
-# Backoff between retries of a 5xx. The vLLM engine worker can die (OOM, CUDA
-# fault) and take a moment to come back; while it is down the front proxy answers
-# 502 `upstream: All connection attempts failed`, and the engine itself reports
-# 500 `EngineCore encountered an issue` on the way out. Both are transient and
-# the request is idempotent, so a short wait rides through a restart. Kept short
-# on purpose: a server that is genuinely down should fall through to the caller
-# so ServerGuard can pause the batch and poll, rather than being absorbed here.
+# Backoff between retries of a 500. `EngineCore encountered an issue` is the
+# engine erroring while the process is still up, which can be a one-off, so one
+# short wait is worth trying. Kept short on purpose: a server that is genuinely
+# down should fall through to the caller so ServerGuard can pause the batch and
+# poll, rather than being absorbed here.
 _QWEN_5XX_BACKOFF = (5.0, 15.0)
+
+# Gateway statuses are NOT retried. In this deployment a 502
+# (`upstream: All connection attempts failed`) means the model container died and
+# is restarting — the proxy is up and telling us there is nothing behind it — and
+# that takes minutes, not seconds. Twenty seconds of backoff cannot outlast it:
+# on 2026-07-28 every one of 24 such incidents burned both retries and still
+# failed, exactly 3 log lines to 1. Failing immediately instead gets the batch to
+# ServerGuard sooner, which is built for outages of this length (pause, poll
+# every 60s, resume) and keeps the queue intact while it waits.
+_QWEN_NO_RETRY_STATUSES = frozenset({502, 503, 504})
+
+# How long to wait for the container to come back, and how often to check.
+# Bounded so a server that never returns eventually surfaces as a failure rather
+# than hanging the batch; `refs_recovery_wait` overrides it.
+_REFS_RECOVERY_MAX_WAIT = 900
+_REFS_RECOVERY_POLL = 15
+
+
+def _wait_for_server(url: str, tag: str, max_wait: int = _REFS_RECOVERY_MAX_WAIT) -> bool:
+    """Poll the LLM endpoint until it answers, or give up. True if it came back.
+
+    A gateway error means the model container is restarting, which takes minutes.
+    Failing the paper at that point throws away every batch already parsed for
+    it — a long bibliography can be most of a paper's work — and it all has to be
+    redone on a later run. Waiting keeps that progress and resumes the same
+    batch where it left off.
+
+    Runs on the extraction worker thread, not the UI thread; the OCR worker
+    already waits inline the same way. Cancelling the batch takes effect once
+    this returns, so the wait is capped rather than open-ended.
+    """
+    deadline = time.monotonic() + max_wait
+    logger.warning('%swaiting for the server to come back (up to %ds, checking '
+                   'every %ds)', tag, max_wait, _REFS_RECOVERY_POLL)
+    started = time.monotonic()
+    while time.monotonic() < deadline:
+        time.sleep(_REFS_RECOVERY_POLL)
+        if references_server_alive(url):
+            logger.warning('%sserver came back after %ds — resuming the same batch',
+                           tag, int(time.monotonic() - started))
+            return True
+    logger.error('%sserver still down after %ds — giving up on this paper',
+                 tag, max_wait)
+    return False
 
 
 def _call_qwen(prompt: str, base_url: str, max_tokens: int = 2048,
@@ -313,7 +355,8 @@ def _call_qwen(prompt: str, base_url: str, max_tokens: int = 2048,
                 break
             transport_left -= 1
             continue
-        if resp.status_code >= 500 and server_left > 0:
+        if (resp.status_code >= 500 and server_left > 0
+                and resp.status_code not in _QWEN_NO_RETRY_STATUSES):
             wait = _QWEN_5XX_BACKOFF[min(server_retries - server_left,
                                          len(_QWEN_5XX_BACKOFF) - 1)]
             logger.warning('%sQwen %d (%s) — engine restarting? retrying in %.0fs',
@@ -1064,6 +1107,7 @@ def extract_references_llm(
     entries = split_reference_entries(block)
 
     read_timeout = _REFS_READ_TIMEOUT
+    recovery_wait = _REFS_RECOVERY_MAX_WAIT
     if backend == 'qwen':
         from .preferences import get_pref
         url = base_url or get_pref('ocr_pod_url', '')
@@ -1074,6 +1118,11 @@ def extract_references_llm(
                                or _REFS_READ_TIMEOUT)
         except (TypeError, ValueError):
             read_timeout = _REFS_READ_TIMEOUT
+        try:
+            recovery_wait = int(get_pref('refs_recovery_wait', _REFS_RECOVERY_MAX_WAIT)
+                                or _REFS_RECOVERY_MAX_WAIT)
+        except (TypeError, ValueError):
+            recovery_wait = _REFS_RECOVERY_MAX_WAIT
 
     import requests as _req
     total = len(entries)
@@ -1119,6 +1168,14 @@ def extract_references_llm(
             try:
                 raw = _call_qwen(prompt, url, max_tokens=mt, read_timeout=read_timeout,
                                  retries=0, label=label)
+            except _req.exceptions.HTTPError as ex:
+                # Gateway error = the model container is restarting. Wait for it
+                # rather than losing the batches already parsed for this paper.
+                status = getattr(ex.response, 'status_code', 0)
+                if status in _QWEN_NO_RETRY_STATUSES and _wait_for_server(
+                        url, tag, recovery_wait):
+                    continue          # same batch, server is back
+                raise
             except (_req.exceptions.Timeout, _req.exceptions.ConnectionError):
                 # Too slow at this size — shrink and retry the SAME refs, but
                 # only when that can actually make the request smaller. Gating on

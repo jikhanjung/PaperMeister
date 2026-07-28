@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **A restarting model server no longer costs a paper's work.** When the
+  container behind the LLM dies, extraction now waits for it to come back and
+  resumes the same batch, instead of failing the paper and discarding every
+  reference already parsed for it. Previously the retry gave up after twenty
+  seconds — a container restart takes minutes, so it never once succeeded.
+
 ### Added
 - **Language switcher in the manual.** Every page links to its counterpart in the
   other language, keeping you on the same page rather than sending you back to
