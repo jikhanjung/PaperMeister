@@ -1,0 +1,86 @@
+{% extends "!layout.html" %}
+
+{#
+  Language switcher, ported from Modan2's manual.
+
+  Modan2 computes the target URL in JavaScript by rewriting `/en/` to `/ko/` in
+  window.location. Here it is a plain link instead: Sphinx already knows the
+  current page as `pagename`, and docs.yml publishes the two languages as
+  sibling directories, so `../ko/<pagename>.html` is the answer at build time.
+
+  That buys the things an onclick handler gives up — opening in a new tab,
+  middle-click, keyboard focus, a visible target in the status bar, and working
+  with JavaScript disabled. It assumes both language trees are flat, which they
+  are; a page in a subdirectory would need pathto() or the JS approach back.
+#}
+
+{% set other_lang = 'en' if language == 'ko' else 'ko' %}
+{% set other_label = 'English' if language == 'ko' else '한국어' %}
+{% set this_label = '한국어' if language == 'ko' else 'English' %}
+
+{% block extrahead %}
+{{ super() }}
+<style>
+  .language-switcher {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    background: #2c3e50;
+    border: 1px solid #34495e;
+    border-radius: 4px;
+    padding: 8px 15px;
+    font-size: 13px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+  .language-switcher a {
+    margin: 0 5px;
+    text-decoration: none;
+    color: #3498db;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+  .language-switcher a:hover,
+  .language-switcher a:focus {
+    color: #5dade2;
+    text-decoration: underline;
+  }
+  .language-switcher .current {
+    color: #ecf0f1;
+    font-weight: 600;
+    margin: 0 5px;
+  }
+  .language-switcher .separator {
+    color: #7f8c8d;
+    margin: 0 3px;
+  }
+  .language-switcher .icon {
+    margin-right: 5px;
+  }
+  /* On narrow screens the RTD theme puts its own menu button top-right, and a
+     fixed overlay would sit on top of it. Let it scroll with the page there. */
+  @media screen and (max-width: 768px) {
+    .language-switcher {
+      position: static;
+      display: inline-block;
+      margin: 10px;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block document %}
+<div class="language-switcher">
+  <span class="icon">🌐</span>
+  {% if language == 'ko' %}
+    <a href="../{{ other_lang }}/{{ pagename }}.html" hreflang="{{ other_lang }}">{{ other_label }}</a>
+    <span class="separator">|</span>
+    <span class="current">{{ this_label }}</span>
+  {% else %}
+    <span class="current">{{ this_label }}</span>
+    <span class="separator">|</span>
+    <a href="../{{ other_lang }}/{{ pagename }}.html" hreflang="{{ other_lang }}">{{ other_label }}</a>
+  {% endif %}
+</div>
+{{ super() }}
+{% endblock %}

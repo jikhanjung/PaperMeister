@@ -7,6 +7,9 @@ directory.
 - `.rst` is what gets published. Markdown is pulled in only where a file has to
   live elsewhere — currently just the repository-root `CHANGELOG.md`.
 - The version shown in the docs is single-sourced from `version.py`.
+- `_templates/layout.html` adds the en/ko switcher. It links to
+  `../<lang>/<pagename>.html`, which only holds while both language trees stay
+  flat — a page in a subdirectory would need `pathto()` instead.
 
 Local preview:
 
