@@ -7,29 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
-
-### Fixed
-- **The Windows installer is attached to releases again.** It was built and
-  checksummed but never uploaded — it sat deeper in the artifact tree than the
-  release step's file pattern reached, so v0.1.1 and v0.1.2 shipped the portable
-  zip only.
-
-### Added
-- **Released builds are now launched before being published.** Every platform's
-  frozen executable is started headless and has to reach a live main window and
-  exit cleanly, or the build fails. This catches the "works from source, dies
-  when packaged" class — a missing bundled file or native library — which no
-  test against the source tree can see.
-
----
-
 ## [0.1.2] - 2026-07-28
 
 References extraction that reports what went wrong and recovers from most of it,
 plus a documentation site.
 
 ### Fixed
+- **The Windows installer is attached to releases again.** It was built and
+  checksummed but never uploaded — it sat deeper in the artifact tree than the
+  release step's file pattern reached, so v0.1.1 shipped the portable zip only.
 - **References extraction no longer loses work silently.** A batch that hit a
   truncated model response, a crash-looping OCR/LLM server, or a document with
   no bibliography used to drop the affected references and, in some cases, mark
@@ -52,6 +38,11 @@ plus a documentation site.
   the first tab, which left the selected tab and the listed papers disagreeing.
 
 ### Added
+- **Released builds are now launched before being published.** Every platform's
+  frozen executable is started headless and has to reach a live main window and
+  exit cleanly, or the build fails. This catches the "works from source, dies
+  when packaged" class — a missing bundled file or native library — which no
+  test against the source tree can see.
 - **Documentation site.** A full manual in English and Korean at
   https://jikhanjung.github.io/PaperMeister/ — installation, a quick start
   through the whole pipeline, a user guide, an FAQ, troubleshooting drawn from
