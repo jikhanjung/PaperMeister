@@ -16,9 +16,19 @@ really down it invokes `on_pause(remaining)`, then polls off the UI thread every
 `poll_ms`; when the server answers it invokes `on_resume(remaining)` then
 `on_drain()` to continue.
 """
+import logging
+import time
+
 from PyQt6.QtCore import QObject, QTimer
 
 from desktop.workers.background import BackgroundTask
+
+# Share the biblio logger: these decisions belong beside the extraction lines
+# they interrupt, in the same daily file. Until this existed the guard only
+# talked to the UI, so an overnight batch left no record of whether it had been
+# paused — the morning log showed failures stopping and resuming with no reason
+# given.
+logger = logging.getLogger('biblio')
 
 
 class ServerGuard(QObject):
@@ -36,6 +46,7 @@ class ServerGuard(QObject):
         self._paused = False
         self._timer = None
         self._poll_task = None
+        self._paused_at = 0.0
 
     def paused(self) -> bool:
         return self._paused
@@ -52,16 +63,27 @@ class ServerGuard(QObject):
                 or self._remaining() == 0):
             return False
         if self._health():           # transient blip — server still answers
+            logger.info('ServerGuard: %d consecutive failures but the server '
+                        'still answers — treating as a blip, continuing',
+                        self._fail_stop)
             self._streak = 0
             return False
         self._paused = True
         self._streak = 0
+        self._paused_at = time.monotonic()
+        logger.warning('ServerGuard: server is down after %d consecutive '
+                       'failures — PAUSING with %d item(s) queued, polling '
+                       'every %ds', self._fail_stop, self._remaining(),
+                       self._poll_ms // 1000)
         self._on_pause(self._remaining())
         self._start_poll()
         return True
 
     def cancel(self):
         """The batch was cancelled — stop polling and clear paused state."""
+        if self._paused:
+            logger.info('ServerGuard: cancelled while paused (%s down)',
+                        _duration(time.monotonic() - self._paused_at))
         self._stop_poll()
         self._paused = False
         self._streak = 0
@@ -96,5 +118,19 @@ class ServerGuard(QObject):
         self._stop_poll()
         self._paused = False
         self._streak = 0
+        logger.warning('ServerGuard: server recovered after %s — RESUMING '
+                       '%d item(s)', _duration(time.monotonic() - self._paused_at),
+                       self._remaining())
         self._on_resume(self._remaining())
         self._on_drain()
+
+
+def _duration(seconds: float) -> str:
+    """Human-readable outage length — the number you want when reading back a
+    batch that ran unattended overnight."""
+    seconds = int(seconds)
+    if seconds < 60:
+        return f'{seconds}s'
+    if seconds < 3600:
+        return f'{seconds // 60}m {seconds % 60}s'
+    return f'{seconds // 3600}h {(seconds % 3600) // 60}m'
