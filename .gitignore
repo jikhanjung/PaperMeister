@@ -30,3 +30,7 @@ docs/manual/_build/
 *.swp
 *.swo
 *~
+
+# 공통 PaleoBytes 가이드 체크아웃(비공개 devdocs)을 가리키는 심볼릭 링크.
+# 복사하지 않고 참조만 한다 — 사본은 원본과 어긋난다. devlog 087 참조.
+.guides

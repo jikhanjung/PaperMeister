@@ -80,6 +80,10 @@
   런타임 데이터는 설치/제거가 건드리지 않는다(`[UninstallDelete]` 추가 금지)
 - **설정은 데이터와 분리돼 있다** — OS 설정 위치의 `PaleoBytes/PaperMeister/preferences.json`.
   규약·근거는 [R02](./devlog/20260728_R02_Config_File_Location_Convention.md)
+- **공통 규약은 `.guides/`(심볼릭 링크)에 있고 이 저장소에 커밋하지 않는다** — 비공개 가이드
+  체크아웃을 참조만 한다. 링크가 없으면 체크아웃이 안 걸린 머신이고, **끊어진 링크는 빈
+  디렉터리처럼 보이므로** 가이드에 내용이 없다고 판단하기 전에 링크부터 확인할 것.
+  거는 법은 [devlog 087](./devlog/20260729_087_Shared_Guides_Checkout.md)
 - **ocrserver 간헐적 5xx**: 502/503/504는 컨테이너가 죽었다 다시 뜨는 것이라 분 단위가 걸린다. 그래서 in-place
   재시도가 아니라 **healthz 폴링으로 복구를 기다렸다 같은 배치를 이어서** 한다(`refs_recovery_wait` pref, 상한 900초).
   **근본 원인은 서버 측(OOM 유력)** — 확정하려면 서버 vLLM 로그의 스택 트레이스가 필요하다.
