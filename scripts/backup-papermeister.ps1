@@ -24,7 +24,6 @@
 $ErrorActionPreference = 'Stop'
 
 # --- config (edit to taste) -------------------------------------------------
-$Db         = Join-Path $env:USERPROFILE '.papermeister\papermeister.db'
 $RemoteHost = 'jikhanserver'
 $RemoteDir  = '~/backups'        # server-side directory (created once, see above)
 $Keep       = 24                 # number of recent backups to retain on the server
@@ -36,6 +35,16 @@ if (-not (Test-Path $Python)) { $Python = 'python' }
 # ---------------------------------------------------------------------------
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot  = Split-Path -Parent $scriptDir
+
+# Ask the app where its database is rather than spelling the path out again.
+# Hardcoding it is what broke this script when the data directory moved in
+# v0.1.4: it kept pointing at ~/.papermeister and the backup quietly stopped.
+# Going through paths.py also means PAPERMEISTER_DATA_DIR is honoured here.
+$Db = (& $Python -c "import sys; sys.path.insert(0, r'$repoRoot'); from papermeister.paths import DB_PATH; print(DB_PATH)")
+if ($LASTEXITCODE -ne 0 -or -not $Db) { throw "could not resolve the database path via $repoRoot\papermeister\paths.py" }
+$Db = $Db.Trim()
+
 $stamp     = Get-Date -Format 'yyyyMMdd-HHmmss'
 $name      = "papermeister-$stamp.db.gz"
 $localGz   = Join-Path $env:TEMP $name

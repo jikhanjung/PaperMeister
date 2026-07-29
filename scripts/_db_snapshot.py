@@ -26,6 +26,13 @@ def main():
         sys.exit(2)
     src, out_gz = sys.argv[1], sys.argv[2]
 
+    # sqlite3.connect() CREATES a missing database, so a wrong source path would
+    # otherwise snapshot an empty one and report success — the failure mode that
+    # matters here, since nobody reads a scheduled task's output.
+    if not os.path.exists(src):
+        print(f'source database does not exist: {src}', file=sys.stderr)
+        sys.exit(1)
+
     fd, tmp = tempfile.mkstemp(suffix='.db', dir=os.path.dirname(out_gz) or None)
     os.close(fd)
     try:
