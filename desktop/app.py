@@ -23,7 +23,12 @@ from desktop.theme.qss import build_stylesheet
 from desktop.theme.tokens import COLORS_DARK, FONT
 from desktop.windows.main_window import MainWindow
 from papermeister.database import init_db
-from papermeister.paths import ensure_directories, warn_if_legacy_dir
+from papermeister.paths import (
+    DataDirUnavailable,
+    check_configured_data_dir,
+    ensure_directories,
+    warn_if_legacy_dir,
+)
 
 
 def _install_excepthook():
@@ -91,6 +96,16 @@ def main() -> int:
     # needs, so this is not load-bearing — but without it a fresh install shows
     # a half-populated folder until the user happens to trigger an OCR download
     # or a Zotero fetch, which reads as something having gone wrong.
+    try:
+        check_configured_data_dir()
+    except DataDirUnavailable as exc:
+        # A windowed app needs a window to say anything, so build the minimum
+        # one required to deliver the message. Printing would go nowhere: the
+        # Windows build has no console attached.
+        from PyQt6.QtWidgets import QMessageBox
+        QApplication(sys.argv)
+        QMessageBox.critical(None, 'PaperMeister', str(exc))
+        return 1
     warn_if_legacy_dir()
     ensure_directories()
     init_db()

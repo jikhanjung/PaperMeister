@@ -16,11 +16,21 @@ from papermeister.models import (
     Passage,
     Source,
 )
-from papermeister.paths import ensure_directories, warn_if_legacy_dir
+from papermeister.paths import (
+    DataDirUnavailable,
+    check_configured_data_dir,
+    ensure_directories,
+    warn_if_legacy_dir,
+)
 
 
 def _init():
     """Create the data directories and initialize the DB (call before any command)."""
+    try:
+        check_configured_data_dir()
+    except DataDirUnavailable as exc:
+        print(exc, file=sys.stderr)
+        sys.exit(1)
     warn_if_legacy_dir()
     ensure_directories()
     init_db()

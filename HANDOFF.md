@@ -148,7 +148,7 @@
 
 - **데이터 경로 설정 가능화의 전제 두 가지** (착수 전 반드시 처리 — Modan2 P03 조사 2·위험 7의 우리 판)
   - **import 시점 바인딩**: 프로덕션 코드 20여 곳이 전부 `from .paths import DB_PATH` 형태라 값을 자기 네임스페이스에 복사해 둔다. 지금은 `PAPERMEISTER_DATA_DIR`가 프로세스 시작 전에 정해지므로 무해하지만, **런타임에 바꿀 수 있게 되는 순간 전부 stale해진다**(다시 읽는 쪽은 새 위치, 복사본을 든 쪽은 옛 위치). 상수를 접근자 함수로 바꾸는 게 선결
-  - **설정된 경로가 사라졌을 때**: 외장 드라이브 미연결·폴더 이동 시 지금 구조라면 `ensure_directories()`가 그 자리에 **빈 라이브러리를 새로 만든다** = 사용자에겐 데이터 소실로 보인다. 명시적으로 알리고 멈춰야 하고, 기본값으로 조용히 되돌아가는 것도 같은 이유로 안 된다
+  - ~~**설정된 경로가 사라졌을 때**~~ ✅ (2026-07-29) — `check_configured_data_dir()`가 `PAPERMEISTER_DATA_DIR`의 **부모**가 없으면 시작을 거부한다(CLI는 stderr+exit 1, desktop은 QMessageBox). 부모를 보는 이유는 새 위치를 처음 지정하는 것과 드라이브 미연결을 구분하기 위해서. 기본값 경로는 검사 대상이 아니다 — 그건 우리가 만들 자리고, 사용자가 지정한 자리는 사용자가 제공할 자리다. **UI를 붙일 때 같은 함수를 재사용하면 된다**
 - **`ocr_json/` 1.8GB(9,832개)에 백업이 없다** — 오프사이트 백업은 DB만 대상이다. Zotero sibling 업로드(`zotero_upload_ocr_json`)가 켜져 있는 만큼만 부분적으로 사본이 있다. OCR 비용 전체가 여기 들어 있으므로 재생성이 가장 비싼 자산
 - 컬렉션-수준 메타데이터 (issue 모음 마킹 등)
 - **systematic** Zotero → DB pull sync (현재는 on-demand: `resync_zotero.py`는 destructive, 타겟 in-place refresh는 수동 one-off)

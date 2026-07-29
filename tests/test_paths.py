@@ -106,3 +106,40 @@ def test_ensure_directories_is_repeatable(monkeypatch, tmp_path):
     for d in (paths.DATA_DIR, paths.OCR_JSON_DIR, paths.PDF_CACHE_DIR,
               paths.LOG_DIR, paths.TMP_DIR):
         assert os.path.isdir(d), d
+
+
+@pytest.mark.unit
+def test_a_configured_location_on_a_missing_drive_is_refused(monkeypatch, tmp_path):
+    """An unplugged drive looks exactly like a first run, and the two want
+    opposite responses. Building the library anyway shows an empty window,
+    which the user reads as having lost everything."""
+    paths = _resolve(monkeypatch, tmp_path,
+                     override=tmp_path / 'not-mounted' / 'library')
+
+    with pytest.raises(paths.DataDirUnavailable) as exc:
+        paths.check_configured_data_dir()
+
+    assert 'not-mounted' in str(exc.value)
+
+
+@pytest.mark.unit
+def test_a_configured_location_can_still_be_used_for_the_first_time(
+        monkeypatch, tmp_path):
+    """The check is on the parent, so naming a new directory under somewhere
+    that exists stays a normal first run rather than an error."""
+    (tmp_path / 'drive').mkdir()
+    paths = _resolve(monkeypatch, tmp_path, override=tmp_path / 'drive' / 'library')
+
+    paths.check_configured_data_dir()   # must not raise
+    paths.ensure_directories()
+
+    assert os.path.isdir(paths.DATA_DIR)
+
+
+@pytest.mark.unit
+def test_the_default_location_is_never_refused(monkeypatch, tmp_path):
+    """The default is ours to create; only a location the user named is theirs
+    to provide. A brand-new machine has no ~/PaleoBytes yet."""
+    paths = _resolve(monkeypatch, tmp_path)
+
+    paths.check_configured_data_dir()   # must not raise

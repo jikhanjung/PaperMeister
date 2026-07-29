@@ -72,6 +72,37 @@ LOG_DIR = os.path.join(DATA_DIR, 'logs')
 TMP_DIR = os.path.join(DATA_DIR, 'tmp')
 
 
+class DataDirUnavailable(RuntimeError):
+    """A configured data directory is not there to be used."""
+
+
+def check_configured_data_dir() -> None:
+    """Refuse to start when a configured data directory has gone missing.
+
+    An external drive that is not plugged in looks exactly like a first run, and
+    the two want opposite responses: create the library, or do not touch
+    anything and say so. Guess wrong in the second case and the user is shown an
+    empty window, which reads as having lost everything.
+
+    Only `PAPERMEISTER_DATA_DIR` is checked. The default location is ours to
+    create; one the user named is theirs to provide, so its absence is a fact to
+    report rather than a directory to make.
+
+    The test is on the parent rather than the directory itself, so that pointing
+    at a new location for the first time still works. What it catches is the
+    drive or share that is not mounted at all.
+    """
+    if not os.environ.get('PAPERMEISTER_DATA_DIR'):
+        return
+    parent = os.path.dirname(DATA_DIR.rstrip(os.sep))
+    if parent and not os.path.isdir(parent):
+        raise DataDirUnavailable(
+            f'The configured data directory is not available:\n  {DATA_DIR}\n\n'
+            f'{parent} does not exist — is the drive connected?\n\n'
+            'Check PAPERMEISTER_DATA_DIR, or unset it to use the default '
+            f'location:\n  {DEFAULT_DATA_DIR}')
+
+
 def warn_if_legacy_dir() -> bool:
     """Log if pre-0.1.4 data is sitting unused. True when it is.
 
