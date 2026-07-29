@@ -63,8 +63,26 @@ Where data lives
 
 ``papermeister/paths.py`` is the single source of truth. Everything sits under
 ``~/PaleoBytes/PaperMeister`` — the layout shared with Modan2 and CTHarvester —
-and ``PAPERMEISTER_DATA_DIR`` overrides it, which is how the tests exercise path
-resolution without touching a real home directory.
+except settings, which live in the OS configuration location instead.
+
+Two independent environment variables name those directories outright, and the
+vendor segment is not appended to either:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Variable
+     - Overrides
+   * - ``PAPERMEISTER_DATA_DIR``
+     - the library: database, OCR cache, PDF cache, logs
+   * - ``PAPERMEISTER_CONFIG_DIR``
+     - ``preferences.json``
+
+Both exist so the test suite can resolve paths without touching real files.
+The config one is not redundant with setting ``XDG_CONFIG_HOME``: on Windows
+``platformdirs`` resolves through ctypes, so no variable the OS itself knows
+about can redirect it, and a test that tries ends up reading and writing the
+live profile.
 
 Data used to live in ``~/.papermeister``. Nothing reads that location any more.
 If one is still lying around, the app says so at startup and points at

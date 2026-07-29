@@ -40,10 +40,22 @@ DEFAULT_DATA_DIR = os.path.join(os.path.expanduser('~'), COMPANY_NAME, PROGRAM_N
 #: Pre-0.1.4 location. Not used — only reported by `warn_if_legacy_dir`.
 LEGACY_DATA_DIR = os.path.join(os.path.expanduser('~'), '.papermeister')
 
+#: Environment variable naming the data directory outright.
+DATA_DIR_ENV_VAR = 'PAPERMEISTER_DATA_DIR'
+#: Environment variable naming the config directory outright.
+#:
+#: Both overrides name the directory itself — the vendor segment is not appended
+#: to them, the same as the sibling projects. Having one for config as well as
+#: data is what keeps a test run out of the developer's real settings: on Windows
+#: `platformdirs` resolves through ctypes, so no environment variable the OS
+#: knows about can redirect it, and a test that tries ends up reading and writing
+#: the live profile. That is not hypothetical — see devlog 086.
+CONFIG_DIR_ENV_VAR = 'PAPERMEISTER_CONFIG_DIR'
+
 #: `PAPERMEISTER_DATA_DIR` overrides it — handy for tests, and for pointing a
 #: second machine at a copied library without moving anything.
 DATA_DIR = os.path.expanduser(
-    os.environ.get('PAPERMEISTER_DATA_DIR') or DEFAULT_DATA_DIR)
+    os.environ.get(DATA_DIR_ENV_VAR) or DEFAULT_DATA_DIR)
 
 DB_PATH = os.path.join(DATA_DIR, 'papermeister.db')
 ZOTERO_COLLECTIONS_PATH = os.path.join(DATA_DIR, 'zotero_collections.json')
@@ -60,8 +72,9 @@ ZOTERO_COLLECTIONS_PATH = os.path.join(DATA_DIR, 'zotero_collections.json')
 #: platformdirs drops `appauthor` on macOS and Linux, where it is not the
 #: convention — the PaleoBytes grouping is shared with the rest of the suite, and
 #: each of the three paths is a legitimate location for its platform.
-CONFIG_DIR = os.path.join(
-    platformdirs.user_config_dir(), COMPANY_NAME, PROGRAM_NAME)
+CONFIG_DIR = os.path.expanduser(
+    os.environ.get(CONFIG_DIR_ENV_VAR)
+    or os.path.join(platformdirs.user_config_dir(), COMPANY_NAME, PROGRAM_NAME))
 PREFS_PATH = os.path.join(CONFIG_DIR, 'preferences.json')
 #: Where settings lived before 0.1.5. Copied forward by `migrate_legacy_config`.
 LEGACY_PREFS_PATH = os.path.join(DATA_DIR, 'preferences.json')
@@ -92,7 +105,7 @@ def check_configured_data_dir() -> None:
     at a new location for the first time still works. What it catches is the
     drive or share that is not mounted at all.
     """
-    if not os.environ.get('PAPERMEISTER_DATA_DIR'):
+    if not os.environ.get(DATA_DIR_ENV_VAR):
         return
     parent = os.path.dirname(DATA_DIR.rstrip(os.sep))
     if parent and not os.path.isdir(parent):

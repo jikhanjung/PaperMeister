@@ -12,7 +12,6 @@ import importlib
 import os
 import sys
 
-import platformdirs
 import pytest
 
 
@@ -21,10 +20,9 @@ def _resolve(monkeypatch, home, *, override=None):
     monkeypatch.setenv('HOME', str(home))
     monkeypatch.setenv('USERPROFILE', str(home))     # Windows
     # See test_config_location._resolve: the Windows config root comes from
-    # ctypes, so it has to be patched rather than set. ensure_directories()
+    # ctypes, so the product's own override is what pins it. ensure_directories()
     # creates CONFIG_DIR, and without this it creates the real one.
-    monkeypatch.setattr(platformdirs, 'user_config_dir',
-                        lambda *a, **k: str(home / 'config'))
+    monkeypatch.setenv('PAPERMEISTER_CONFIG_DIR', str(home / 'config'))
     if override is None:
         monkeypatch.delenv('PAPERMEISTER_DATA_DIR', raising=False)
     else:

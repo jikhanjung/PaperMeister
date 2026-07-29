@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- **`PAPERMEISTER_CONFIG_DIR` names where settings go**, alongside the existing
+  `PAPERMEISTER_DATA_DIR` for the library. The two are independent, so settings
+  and data can sit on different volumes.
+
+---
+
 ## [0.1.5] - 2026-07-29
 
 Where your data lives, and what happens when it is not there.

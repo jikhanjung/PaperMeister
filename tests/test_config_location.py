@@ -11,24 +11,34 @@ import json
 import os
 import sys
 
-import platformdirs
 import pytest
 
+DATA_DIR_ENV_VAR = 'PAPERMEISTER_DATA_DIR'
+CONFIG_DIR_ENV_VAR = 'PAPERMEISTER_CONFIG_DIR'
 
-def _resolve(monkeypatch, home):
-    monkeypatch.setenv('HOME', str(home))
-    monkeypatch.setenv('USERPROFILE', str(home))
-    monkeypatch.delenv('PAPERMEISTER_DATA_DIR', raising=False)
-    # Patch the resolver rather than the environment. On Windows platformdirs
-    # goes through ctypes (SHGetFolderPath), which no environment variable can
-    # redirect — pinning XDG_CONFIG_HOME isolated Linux and left Windows reading
-    # and writing the real profile. That made these tests order-dependent there:
-    # one wrote settings to the live location and the next one read them back.
-    monkeypatch.setattr(platformdirs, 'user_config_dir',
-                        lambda *a, **k: str(home / 'config'))
+
+def _reimport():
     for name in [m for m in sys.modules if m.startswith('papermeister')]:
         del sys.modules[name]
     return importlib.import_module('papermeister.paths')
+
+
+def _resolve(monkeypatch, home):
+    """Re-resolve paths.py with both locations pointed inside `home`.
+
+    The config directory is pinned through the product's own override rather
+    than the environment the OS reads. On Windows `platformdirs` resolves via
+    ctypes, so `%LOCALAPPDATA%` cannot be redirected — an earlier version of this
+    helper set `XDG_CONFIG_HOME`, which isolated Linux only and left the Windows
+    run reading and writing the live profile. These tests then became
+    order-dependent there: one wrote settings to the real location and the next
+    read them back instead of migrating (devlog 086).
+    """
+    monkeypatch.setenv('HOME', str(home))
+    monkeypatch.setenv('USERPROFILE', str(home))
+    monkeypatch.delenv(DATA_DIR_ENV_VAR, raising=False)
+    monkeypatch.setenv(CONFIG_DIR_ENV_VAR, str(home / 'config'))
+    return _reimport()
 
 
 @pytest.mark.unit
@@ -42,8 +52,31 @@ def test_the_config_location_is_isolated_from_the_real_profile(monkeypatch, tmp_
 
 
 @pytest.mark.unit
+def test_the_config_override_names_the_directory_itself(monkeypatch, tmp_path):
+    """No vendor segment is appended to an override — the same meaning the
+    sibling projects give theirs, so one habit works across the family."""
+    elsewhere = tmp_path / 'somewhere' / 'else'
+    monkeypatch.setenv(CONFIG_DIR_ENV_VAR, str(elsewhere))
+
+    paths = _reimport()
+
+    assert paths.CONFIG_DIR == str(elsewhere)
+    assert paths.PREFS_PATH == os.path.join(str(elsewhere), 'preferences.json')
+
+
+@pytest.mark.unit
 def test_settings_are_outside_the_data_directory(monkeypatch, tmp_path):
-    paths = _resolve(monkeypatch, tmp_path)
+    """Asserted with both overrides cleared, so the real resolution runs.
+
+    Pointing the two somewhere different and then asserting they differ would
+    restate what the test just did rather than check the layout.
+    """
+    monkeypatch.setenv('HOME', str(tmp_path))
+    monkeypatch.setenv('USERPROFILE', str(tmp_path))
+    monkeypatch.delenv(DATA_DIR_ENV_VAR, raising=False)
+    monkeypatch.delenv(CONFIG_DIR_ENV_VAR, raising=False)
+
+    paths = _reimport()
 
     assert not paths.PREFS_PATH.startswith(paths.DATA_DIR), (
         'settings in the library would have to travel with it')
@@ -52,8 +85,14 @@ def test_settings_are_outside_the_data_directory(monkeypatch, tmp_path):
 @pytest.mark.unit
 def test_vendor_grouping_is_applied(monkeypatch, tmp_path):
     """platformdirs drops `appauthor` on macOS and Linux, so the PaleoBytes
-    segment is appended by hand — the suite shares it on every platform."""
-    paths = _resolve(monkeypatch, tmp_path)
+    segment is appended by hand — the suite shares it on every platform.
+
+    Checked against real resolution: the override names a directory outright, so
+    asserting the tail while one is set would only measure the override.
+    """
+    monkeypatch.delenv(CONFIG_DIR_ENV_VAR, raising=False)
+
+    paths = _reimport()
 
     assert paths.CONFIG_DIR.endswith(os.path.join('PaleoBytes', 'PaperMeister'))
 

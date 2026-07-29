@@ -90,10 +90,10 @@
 
 ### 데이터 경로 설정 가능화와 함께 처리 (§5 · §7)
 
-- [ ] **`PAPERMEISTER_CONFIG_DIR` override 추가** — 지금은 `PAPERMEISTER_DATA_DIR`만 있다.
-      가이드 §7이 두 개를 요구하며 근거를 *"이것이 테스트 스위트가 개발자의 실제 파일에서
-      벗어나는 방법"* 이라고 적어 뒀는데, **그게 2026-07-29에 CI를 하루 red로 만든 바로 그 버그다**
-      (devlog 086 §5). 현재 수정은 테스트 쪽 우회(platformdirs 함수 패치)이고, 제품 쪽 override가 정답
+- [x] ~~**`PAPERMEISTER_CONFIG_DIR` override 추가**~~ (2026-07-29) — 두 override는 독립이고
+      **디렉터리를 통째로 지정**한다(벤더 세그먼트 안 붙임, 형제 리포와 같은 의미론).
+      테스트는 platformdirs 함수 패치 우회를 버리고 이 override를 쓴다. **검증: 전체 테스트 실행 후에도
+      실제 `~/.config/PaleoBytes/PaperMeister`가 생기지 않는다** — 가이드가 말한 그 효과
 - [ ] **경로를 import가 아니라 호출마다 해석** (§7 마지막 항목, §5 "Default arguments are evaluated at import")
       — 프로덕션 20여 곳이 `from .paths import DB_PATH`로 값을 복사해 둔다. 런타임 변경이 가능해지는
       순간 "읽기는 새 위치, 쓰기는 옛 위치"로 갈린다. 접근자 함수로 전환
@@ -101,10 +101,9 @@
 
 ### 테스트 (§7)
 
-- [ ] **분리 검증의 tautology 제거** — `test_settings_are_outside_the_data_directory`가 override로
-      갈라놓고 다르다고 단언한다. 가이드가 명시적으로 경고하는 형태(*"Splitting them with environment
-      variables and then asserting they differ is a tautology"*). **override를 전부 끄고 실제 해석으로**
-      검증할 것
+- [x] ~~**분리 검증의 tautology 제거**~~ (2026-07-29) — `test_settings_are_outside_the_data_directory`가
+      이제 두 override를 모두 끄고 실제 해석으로 단언한다. 같은 작업에서 `test_vendor_grouping_is_applied`도
+      드러났다 — **그것도 패치된 값을 보고 있었다**(override가 벤더 세그먼트를 안 붙이므로 실패로 노출됨)
 - [ ] `test_the_log_stays_with_the_data` — 없음. 가이드가 "나중에 누군가 '한 곳으로 정리'하는 변경"을
       막으려고 고정하라고 지목한 테스트
 - [ ] **인스톨러가 사용자 데이터 루트에 쓰지 않는다는 테스트** — 설치한 것은 제거도 하므로,
