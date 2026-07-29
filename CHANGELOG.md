@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.1.5] - 2026-07-29
+
+Where your data lives, and what happens when it is not there.
 
 ### Changed
 - **Settings moved out of the library folder** into the OS location for them —
@@ -26,6 +28,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   just how many papers are left. Bibliographies vary enormously — one paper in a
   recent batch held 2,091 entries where a typical article holds thirty — so a
   long one used to look identical to a stalled one for hours.
+
+### Fixed
+- **A data directory that has gone missing now stops startup instead of being
+  recreated empty.** If you point `PAPERMEISTER_DATA_DIR` at an external drive
+  and start the app without it connected, a brand-new empty library used to
+  appear in its place — which looks exactly like having lost everything.
+  PaperMeister now says which location it could not reach and stops. The default
+  location is unaffected; it is still created for you on a fresh install.
+- **The database backup script follows the data directory.** It still pointed at
+  the pre-0.1.4 location, so scheduled backups had been failing since that move
+  — silently, as scheduled tasks do. It now asks the app where the database is,
+  and refuses to snapshot one that is not there rather than shipping an empty
+  file. Backups already on the server were never at risk.
 
 ---
 

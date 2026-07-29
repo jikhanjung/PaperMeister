@@ -95,6 +95,7 @@
 - [ ] 에러 핸들링 보강 (암호화된 PDF, 파손된 파일 등)
 - [ ] DB 삭제 후 복구 경로 실증 테스트 (Phase 1 잔여)
 - [ ] 커버리지 끌어올리기 — 현재 floor 18%(측정 19.6%). 실패 경로가 특히 얇다
+- [ ] **한국어 매뉴얼에서 코드 스팬이 `<cite>`(이탤릭)로 렌더된다** — 번역문은 MyST가 아니라 **RST 인라인 규칙으로 재파싱**되므로 단일 백틱이 코드가 아니라 title-reference가 된다(ko changelog 기준 cite 10 : code 1). 고치려면 `.po`의 msgstr만 이중 백틱으로 바꿔야 하는데, **리터럴 안에서는 백슬래시가 이스케이프가 아니라서** `%LOCALAPPDATA%\\PaleoBytes`류를 같이 `\\`→`\`로 줄여야 한다. 기계적이지만 함정이 있어 릴리스와 분리
 
 ### Zotero sync 양방향성 보강
 - [ ] **PaperFolder remove (컬렉션 멤버십 양방향 sync)** — 현재 `sync_zotero_items`는 `PaperFolder.get_or_create`만 호출 → add-only. 사용자가 Zotero에서 컬렉션 멤버십을 빼거나 다른 컬렉션으로 옮겨도 옛 링크가 잔존. 정책 결정 필요: "Zotero source of truth로 mirror" vs "add-only 보존". 전자라면 item의 `collections` 배열 기준으로 set-difference로 제거
