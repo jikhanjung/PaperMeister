@@ -179,7 +179,12 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 
 ## 최근 세션 요약
 
-**2026-07-29 (세션 53)** — 상태 점검 + HANDOFF 정리
+**2026-07-29 (세션 53)** — 상태 점검 + 백업 경로 드리프트 + 데이터 위치 가드 — [devlog 086](./devlog/20260729_086_Backup_Path_Drift_And_Data_Dir_Guard.md)
+- 🔴 **오프사이트 DB 백업이 7/28 이후 죽어 있었다** (`a071ef0`) — `backup-papermeister.ps1`이 옛 `~/.papermeister`를 가리킨 채였다.
+  084가 23개 파일의 하드코딩을 `paths.py`로 모을 때 **파이썬이 아닌 이 스크립트가 빠졌다.** Task Scheduler 실패는 보이지 않는다.
+  서버 보존 정리가 scp 성공 뒤에만 도는 덕에 기존 백업은 무사. 이제 경로를 `paths.py`에 물어본다
+- **데이터 위치 설정 가능화** — Modan2 P03 대조 후 **전체는 references 완주 후로 미루고**(리팩터 값이 오늘은 0, 무인 배치와의 결합이 나쁨),
+  이미 열려 있던 위험 7만 막았다 (`9885011`, `check_configured_data_dir()`)
 - **라이브 실측**(WSL read-only, `?mode=ro&immutable=1`): references `references_checked` **4,248/9,891편(43%)**,
   `Reference` 199,719행(held 36,218), `CitedWork` 108,075노드. OCR은 사실상 완료(processed 19,894 / pending 3 / **failed 0** / skipped 110).
   오늘 로그 10시간 기준 **161편 처리, PARTIAL 1건, `empty_result`/`no_array` 0건** — 075~079의 가드가 오탐 없이 조용하다.
