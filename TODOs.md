@@ -51,14 +51,14 @@
 
 상세는 HANDOFF.md 참조.
 
-- [ ] **needs_review 일괄 검토** — Library "Needs Review" 필터 + Biblio 탭 대조 UI (Phase D 후처리, 현 자연스러운 다음 초점)
-- [ ] **48편 extracted 잔존분 재시도** — bookSection 400 픽스 효과 + cross-machine meta sync 확인
+- [ ] **needs_review 일괄 검토** — 실측 **5,229편**(2026-07-29). Library "Needs Review" 필터 + Biblio 탭 대조 UI (Phase D 후처리, 현 자연스러운 다음 초점)
+- [ ] **`extracted` 잔존분 재시도** — 실측 **10편**(2026-07-29). bookSection 400 픽스 효과 + cross-machine meta sync 확인
 - [ ] **Apply Biblio Zotero write-back 추가 검증** — auto_commit 1건 Zotero version 증가 + papermeister_meta in-place replace + cross-machine `BiblioAlreadyApplied` 스킵
 - [ ] **Process / Settings 액션 end-to-end 실증** (Rail 버튼 → 다이얼로그 → 실제 동작)
 - [ ] desktop: source/folder 단위 batch Reflect 트리거 + 결과 다이얼로그
 - [ ] **PaperFolder remove (컬렉션 멤버십 양방향 sync)** — 현재 add-only, 정책 결정 필요
 - [ ] 에러 핸들링 보강 (암호화/파손 PDF)
-- [~] **테스트 코드** — P15에서 도입, 현재 117개 / 커버리지 19.6%(floor 18% ratchet). "픽스마다 회귀 테스트" 관례로 증가 중
+- [~] **테스트 코드** — P15에서 도입, 현재 **146개** / 커버리지 19.6%(floor 18% ratchet). "픽스마다 회귀 테스트" 관례로 증가 중
 
 ---
 
@@ -69,13 +69,63 @@
 - [x] 해시 고정 lock + `lock-check` 게이트 + CodeQL + 버전 일치 테스트
 - [x] Dependabot + lock 자동 재생성 워크플로 + `manual-release.yml` + 커버리지 측정
 - [x] **Sphinx 매뉴얼 (en/ko) → GitHub Pages** — https://jikhanjung.github.io/PaperMeister/ (한국어 번역 227/259 + 언어 스위처)
-- [x] **릴리스 v0.1.2 / v0.1.3 / v0.1.4** — 3플랫폼 + Windows 설치본, 노트는 CHANGELOG 자동 추출. 매 릴리스 프로즌 빌드 스모크 통과
+- [x] **릴리스 v0.1.2 ~ v0.1.5** — 3플랫폼 + Windows 설치본, 노트는 CHANGELOG 자동 추출. 매 릴리스 프로즌 빌드 스모크 통과. v0.1.5는 ko 매뉴얼 번역까지 같은 커밋에서 처리
 - [x] **프로즌 빌드 스모크 테스트** (`--self-test`) — 3플랫폼 모두 빌드 직후 실제 실행. 이전엔 릴리스 파일을 한 번도 안 띄워봤음
 - [x] **Windows 설치본 첨부 수정** — 아티팩트 경로가 깊어 릴리스 글롭에 안 걸리던 문제(v0.1.1까지 누락)
 - [x] **데이터 경로 PaleoBytes 규약 정렬** (084) — `~/.papermeister` → `~/PaleoBytes/PaperMeister`. `papermeister/paths.py` 단일 소스(이전엔 23개 파일 하드코딩), 레거시 자동 이동 안 함 + `migrate_data_dir.py`. 라이브 이동 완료
 - [x] **설치 프로그램 신원·위치** (084) — `AppId` GUID 고정, `AppPublisher=PaleoBytes`, `{userpf}\PaleoBytes\PaperMeister`(= `%LOCALAPPDATA%\Programs\…`), 시작 메뉴 PaleoBytes 그룹. Build 워크플로로 ISCC 컴파일 확인
-- [ ] **설치본 수동 확인** — 설치 위치·시작 메뉴 그룹·제어판 게시자, 설치 후 기존 라이브러리 인식 (스모크는 "기동한다"까지만 보증)
+- [ ] **v0.1.5 설치본 수동 확인** — 설치 위치·시작 메뉴 그룹·제어판 게시자, 설치 후 기존 라이브러리 인식 (스모크는 "기동한다"까지만 보증). AppId가 v0.1.4부터 고정됐으므로 **제자리 업그레이드로 깔려야 한다**
 - [x] **mypy 게이트 실질화** — lint에 의존성 설치(안 하면 ORM 코드가 `Any`로 미검사) + 버전 핀
 - [ ] `ruff format` 패스 후 `ruff format --check` 게이팅 (대량 diff 커밋 선행 필요, P15부터 보류)
 - [ ] 앱 아이콘 / macOS 코드사이닝·공증
 - [ ] 커버리지 floor 점진 상향
+
+---
+
+## 공통 가이드 미준수 항목 (`.guides/desktop/file-locations.md`)
+
+2026-07-29 대조. 규약 원본은 `.guides/`(심볼릭 링크, 이 저장소에 커밋 안 함 — [devlog 087](./devlog/20260729_087_Shared_Guides_Checkout.md)).
+**정면으로 어긋나는 건 없었다** — 설정 분리·platformdirs·벤더 세그먼트·로그 위치·마이그레이션 비대칭·
+기본값 유지+백업·WAL 단서·인스톨러 신원 4종은 전부 준수. 아래는 미준수분이고, 전부 기존 상태다.
+
+### 데이터 경로 설정 가능화와 함께 처리 (§5 · §7)
+
+- [ ] **`PAPERMEISTER_CONFIG_DIR` override 추가** — 지금은 `PAPERMEISTER_DATA_DIR`만 있다.
+      가이드 §7이 두 개를 요구하며 근거를 *"이것이 테스트 스위트가 개발자의 실제 파일에서
+      벗어나는 방법"* 이라고 적어 뒀는데, **그게 2026-07-29에 CI를 하루 red로 만든 바로 그 버그다**
+      (devlog 086 §5). 현재 수정은 테스트 쪽 우회(platformdirs 함수 패치)이고, 제품 쪽 override가 정답
+- [ ] **경로를 import가 아니라 호출마다 해석** (§7 마지막 항목, §5 "Default arguments are evaluated at import")
+      — 프로덕션 20여 곳이 `from .paths import DB_PATH`로 값을 복사해 둔다. 런타임 변경이 가능해지는
+      순간 "읽기는 새 위치, 쓰기는 옛 위치"로 갈린다. 접근자 함수로 전환
+- [x] ~~설정된 경로가 사라졌을 때 시작 거부~~ (2026-07-29, `check_configured_data_dir()`) — §5 ordering rule 2
+
+### 테스트 (§7)
+
+- [ ] **분리 검증의 tautology 제거** — `test_settings_are_outside_the_data_directory`가 override로
+      갈라놓고 다르다고 단언한다. 가이드가 명시적으로 경고하는 형태(*"Splitting them with environment
+      variables and then asserting they differ is a tautology"*). **override를 전부 끄고 실제 해석으로**
+      검증할 것
+- [ ] `test_the_log_stays_with_the_data` — 없음. 가이드가 "나중에 누군가 '한 곳으로 정리'하는 변경"을
+      막으려고 고정하라고 지목한 테스트
+- [ ] **인스톨러가 사용자 데이터 루트에 쓰지 않는다는 테스트** — 설치한 것은 제거도 하므로,
+      살아남아야 하는 디렉터리에 쓰면 안 된다. 현재는 placeholder 테스트만 있음
+- [ ] 템플릿의 모든 `{{PLACEHOLDER}}`를 빌드가 실제로 치환하는지 + 아이콘·라이선스 경로 실재 확인
+
+### 백업 (§5)
+
+- [ ] **`ocr_json/` 1.8GB(9,832개)가 어느 백업에도 없다** — 오프사이트 백업은 DB만 대상.
+      다른 장치로 나가는 것은 ✓(가이드가 지적한 "같은 디스크" 실패는 우리에게 해당 없음).
+      **OCR 비용 전체가 여기 들어 있어 재생성이 가장 비싼 자산**인데 대비가 없다
+- [ ] **앱 내 "라이브러리 백업" 액션** — 지금은 운영 스크립트뿐. 가이드는 자족적 아카이브 하나를
+      만들어 사용자가 아무 데나 두게 하라고 한다(*"A ZIP is safe to sync. A live SQLite database is not."*)
+
+### 로그 (§3)
+
+- [ ] **파일명 패밀리 통일 여부 결정** — 우리는 서브시스템별(`ocr.log` / `zotero_sync.log` /
+      `biblio_YYYYMMDD.log`)이고 가이드는 `<App>.<YYYYMMDD>.log` 계열 + 일별을 말한다.
+      셋 중 `biblio`만 일별이다. 형제 프로젝트와 맞출지, 서브시스템 분리를 유지할지 결정 필요
+      (가이드의 경고: *"한 글자 차이가 나중에 툴링을 프로젝트별로 만든다"*)
+
+**준수 확인된 것 중 기록해 둘 것**: `platformdirs`가 `requirements.lock`·`requirements-dev.lock`
+양쪽에 `4.11.0`으로 고정돼 있다 — 가이드가 *"이 체크리스트 항목이 잡아낸 것"* 이라며 특별히
+지목한 함정(dev 환경에 전이 의존으로 있어서 로컬은 통과하지만 프로즌 빌드가 죽는다)인데 통과다.
