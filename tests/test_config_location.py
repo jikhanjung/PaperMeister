@@ -11,17 +11,34 @@ import json
 import os
 import sys
 
+import platformdirs
 import pytest
 
 
 def _resolve(monkeypatch, home):
     monkeypatch.setenv('HOME', str(home))
     monkeypatch.setenv('USERPROFILE', str(home))
-    monkeypatch.setenv('XDG_CONFIG_HOME', str(home / '.config'))   # pin on Linux
     monkeypatch.delenv('PAPERMEISTER_DATA_DIR', raising=False)
+    # Patch the resolver rather than the environment. On Windows platformdirs
+    # goes through ctypes (SHGetFolderPath), which no environment variable can
+    # redirect — pinning XDG_CONFIG_HOME isolated Linux and left Windows reading
+    # and writing the real profile. That made these tests order-dependent there:
+    # one wrote settings to the live location and the next one read them back.
+    monkeypatch.setattr(platformdirs, 'user_config_dir',
+                        lambda *a, **k: str(home / 'config'))
     for name in [m for m in sys.modules if m.startswith('papermeister')]:
         del sys.modules[name]
     return importlib.import_module('papermeister.paths')
+
+
+@pytest.mark.unit
+def test_the_config_location_is_isolated_from_the_real_profile(monkeypatch, tmp_path):
+    """Guards the helper above. Without it these tests touch the developer's (or
+    the runner's) actual settings, which shows up as nothing on Linux and as an
+    order-dependent failure on Windows."""
+    paths = _resolve(monkeypatch, tmp_path)
+
+    assert paths.CONFIG_DIR.startswith(str(tmp_path)), paths.CONFIG_DIR
 
 
 @pytest.mark.unit
