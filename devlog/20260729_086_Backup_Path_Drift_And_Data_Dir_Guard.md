@@ -163,7 +163,62 @@ exit 1 + **아무것도 생성되지 않음** 확인. 145 passed, ruff·mypy cle
 수치는 이어받지 않고 다시 쟀다(1절). 그리고 `~/.papermeister` 잔재 경로가 결정 표에 세 곳
 남아 있던 것을 고쳤다.
 
-## 5. 남은 것
+## 5. v0.1.5 릴리스, 그리고 하루 동안 몰랐던 red CI
+
+절차대로 갔다 — CHANGELOG `[0.1.5]` → **ko 카탈로그 갱신**(085에서 빠뜨렸던 단계) → `version.py`
+범프 → 태그. 배포된 ko 매뉴얼에서 0.1.5 섹션이 실제로 한국어로 나오는 것까지 확인했다.
+
+**그런데 첫 태그가 Windows 테스트에서 막혔다.** 확인해 보니 `test.yml`이 **`516b5b5` 이후
+6런 연속 red**였다. 마지막 green은 `7882f16`. 어제 설정 분리가 깨뜨렸고, **그 뒤로 릴리스를
+안 컷했으니 아무도 안 봤다.** 나도 오늘 커밋 4개를 확인 없이 그 위에 올렸다.
+
+### 원인 — 환경변수로는 Windows의 config 위치를 못 옮긴다
+
+`tests/test_config_location.py`의 헬퍼가 `XDG_CONFIG_HOME`을 고정해 격리한다고 적어 뒀는데,
+주석 자체가 `# pin on Linux`였다. Windows에는 대응물이 없었다.
+
+`platformdirs`는 Windows에서 **ctypes(`SHGetFolderPath`)로 해석**한다(`_pick_get_win_folder`가
+ctypes → 레지스트리 → 환경변수 순으로 고른다). 즉 `%LOCALAPPDATA%`를 세팅해도 소용이 없다.
+
+결과가 두 겹이었다:
+
+1. Windows CI가 **러너의 실제 프로필을 읽고 썼다**
+2. 그래서 테스트가 **순서 의존**이 됐다 — "마이그레이션이 기존 설정을 덮지 않는다"를 증명하려고
+   `{'ocr_pod_url': 'current'}`를 써 둔 테스트가 그걸 실제 위치에 남겼고, 다음 테스트가
+   마이그레이션 대신 그 값을 주워 읽었다(`assert 'current' == 'http://server'`)
+
+**Linux에선 `HOME` 패치로 우연히 격리돼 완전히 안 보였다.**
+
+### 수정 (`702774c`)
+
+환경변수가 아니라 **resolver 자체를 패치**한다 — `monkeypatch.setattr(platformdirs,
+'user_config_dir', ...)`. 세 플랫폼 모두 `tmp_path` 안으로 떨어지고, OS 해석 방식에 의존하지
+않는다. `test_paths.py`에도 같은 처리를 했다(`ensure_directories()`가 실제 CONFIG_DIR을
+만들고 있었다).
+
+그리고 **격리가 유지되는지 검사하는 테스트를 따로 뒀다.** 이 실패는 Linux에서 안 보이므로
+가정이 아니라 명시적 가드여야 한다.
+
+### 형제 리포는 둘 다 면역이었다 — 그리고 둘 다 우리보다 낫다
+
+| | 방식 | 왜 면역인가 |
+|---|---|---|
+| **Modan2** | 테스트가 `mu.DEFAULT_CONFIG_PATH`·`LEGACY_CONFIG_PATHS`를 **해석된 상수째로** monkeypatch | OS 해석을 리다이렉트하려 들지 않는다. 위치 검증은 `startswith(user_config_dir())` **읽기 전용 단언**이라 쓰지 않는다 |
+| **CTHarvester** | 제품에 **`CTHARVESTER_CONFIG_DIR`** override가 있고 테스트는 그 문서화된 override를 쓴다 | 테스트 훅이 아니라 실제 기능. 제품이 env를 먼저 보고 platformdirs로 폴백 |
+| **PaperMeister** | `XDG_CONFIG_HOME` 고정 | Linux에서만 통했다 |
+
+**OS 해석과 싸우려 든 건 우리뿐이었다.** 그리고 CTHarvester는 3절에서 우리가 선결 조건으로
+꼽은 두 가지 — **접근자 함수**(`get_data_dir()`/`get_config_path()`)와 **데이터·설정 양쪽
+env override** — 를 이미 갖고 있다. 설정 가능화에 착수할 때 새로 설계할 게 아니라
+`../CTHarvester/utils/paths.py`를 따라가면 된다.
+
+### 태그 처리
+
+v0.1.5는 아무것도 발행하지 못했으므로(`create-release` skip, 릴리스·draft 없음) 태그를 지우고
+고친 커밋에 다시 걸었다. 0.1.6으로 올리는 것보다 낫다고 봤다 — **소비된 적이 없는 태그**다.
+재실행은 8개 잡 전부 success, 자산 5종.
+
+## 6. 남은 것
 
 - **백업 복구는 Windows에서 한 번 돌려봐야 한다.** WSL에서는 경로 해석과 가드까지만
   검증했고, 서버 scp까지 타는 경로는 여기서 확인이 안 된다

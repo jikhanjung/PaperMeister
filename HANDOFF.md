@@ -8,7 +8,7 @@
 
 ## 현재 단계
 
-**Phase: 코어 기능 완성 — Phase 1~3 + Phase D 완료 / P11 references 추출 진행 중(본체 잔여 작업) / P12 CitedWork 정규화 + P13 FTS external-content 라이브 반영 완료 / P14 인용 네트워크(통계·export·ego 그래프) 완료 / P15 코드품질·CI 완료 → **v0.1.4 릴리스**(3플랫폼 + Windows 설치본, 프로즌 빌드 스모크 통과) + **사용자 매뉴얼 en/ko 배포** + **PaleoBytes 데이터·설치 경로 정렬**(2026-07-28)**
+**Phase: 코어 기능 완성 — Phase 1~3 + Phase D 완료 / P11 references 추출 진행 중(본체 잔여 작업) / P12 CitedWork 정규화 + P13 FTS external-content 라이브 반영 완료 / P14 인용 네트워크(통계·export·ego 그래프) 완료 / P15 코드품질·CI 완료 → **v0.1.5 릴리스**(3플랫폼 + Windows 설치본, 자산 5종, 프로즌 빌드 스모크 통과) + **사용자 매뉴얼 en/ko 배포** + **PaleoBytes 데이터·설치 경로 정렬**(2026-07-28)**
 
 > **라이브 DB 실측 (2026-07-29, WSL read-only)**: Paper 9,891 / PaperFile processed 19,894·pending 3·skipped 110 — **OCR은 사실상 완료**.
 > references 추출 진행 중 — `references_checked` **4,248편(43%)**, `Reference` **199,719행**(held 매칭 36,218), `CitedWork` **108,075노드**.
@@ -53,7 +53,7 @@
 
 ## 다음 할 일
 
-> **현재 우선순위 (2026-07-29)**: 인프라·문서·릴리스는 한 바퀴 정리됐다(v0.1.4 + 매뉴얼 en/ko 배포).
+> **현재 우선순위 (2026-07-29)**: 인프라·문서·릴리스는 한 바퀴 정리됐다(v0.1.5 + 매뉴얼 en/ko 배포).
 > **본체로 남은 건 references 추출 완주 하나**이고, 그 외는 전부 후속·선택 사항이다.
 
 ### 진행 중 (본체)
@@ -65,7 +65,10 @@
 
 ### 🔴 사용자 액션 대기
 
-- [ ] **v0.1.4 Windows 설치본 수동 확인** — CI 스모크는 "기동한다"까지만 보증한다. 설치 자체와 실기능은 미검증
+- [ ] **v0.1.5 Windows 설치본 수동 확인** — CI 스모크는 "기동한다"까지만 보증한다. 설치 자체와 실기능은 미검증.
+  AppId가 v0.1.4부터 고정됐으므로 **이번엔 제자리 업그레이드로 깔려야 한다** — 그게 곧 이 항목의 검증이다
+- [ ] **앱 재시작 후 `%LOCALAPPDATA%\PaleoBytes\PaperMeister\preferences.json` 생성 확인** — 설정 분리 코드가 라이브에서 아직 안 돌았다
+- [ ] **백업 스크립트 Windows 실행** — 7/28 이후 첫 성공 백업이 되는지
 
 ### 환경·운영 상수 (매 세션 전제)
 
@@ -149,6 +152,7 @@
 
 - **데이터 경로 설정 가능화의 전제 두 가지** (착수 전 반드시 처리 — Modan2 P03 조사 2·위험 7의 우리 판)
   - **import 시점 바인딩**: 프로덕션 코드 20여 곳이 전부 `from .paths import DB_PATH` 형태라 값을 자기 네임스페이스에 복사해 둔다. 지금은 `PAPERMEISTER_DATA_DIR`가 프로세스 시작 전에 정해지므로 무해하지만, **런타임에 바꿀 수 있게 되는 순간 전부 stale해진다**(다시 읽는 쪽은 새 위치, 복사본을 든 쪽은 옛 위치). 상수를 접근자 함수로 바꾸는 게 선결
+  - 📌 **참조 구현이 옆 리포에 있다** — `../CTHarvester/utils/paths.py`는 이미 **접근자 함수**(`get_data_dir()`/`get_config_path()`) + **데이터·설정 양쪽 env override**(`CTHARVESTER_DATA_DIR`/`CTHARVESTER_CONFIG_DIR`) 구조다. 우리가 선결 조건으로 꼽은 두 가지를 그쪽은 이미 풀어놨으므로, 착수 시 새로 설계하지 말고 그 모양을 따라갈 것
   - ~~**설정된 경로가 사라졌을 때**~~ ✅ (2026-07-29) — `check_configured_data_dir()`가 `PAPERMEISTER_DATA_DIR`의 **부모**가 없으면 시작을 거부한다(CLI는 stderr+exit 1, desktop은 QMessageBox). 부모를 보는 이유는 새 위치를 처음 지정하는 것과 드라이브 미연결을 구분하기 위해서. 기본값 경로는 검사 대상이 아니다 — 그건 우리가 만들 자리고, 사용자가 지정한 자리는 사용자가 제공할 자리다. **UI를 붙일 때 같은 함수를 재사용하면 된다**
 - **`ocr_json/` 1.8GB(9,832개)에 백업이 없다** — 오프사이트 백업은 DB만 대상이다. Zotero sibling 업로드(`zotero_upload_ocr_json`)가 켜져 있는 만큼만 부분적으로 사본이 있다. OCR 비용 전체가 여기 들어 있으므로 재생성이 가장 비싼 자산
 - 컬렉션-수준 메타데이터 (issue 모음 마킹 등)
@@ -174,6 +178,7 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 - HANDOFF.md "다음 할 일" / "현재 단계" 갱신
 - P07 매트릭스에 오늘 바뀐 항목 반영 (세션 10에서 이걸 놓쳐서 stale했음)
 - devlog NNN 작성 (결정 과정과 근거 위주, 단순 diff는 git이 기록)
+- **push 후 CI 결과 확인** — red면 그 위에 다음 커밋을 쌓지 않는다. 7/28~29에 `test.yml`이 6런 연속 red였는데 릴리스 태그가 실패하고서야 발견했다(릴리스를 안 컷하는 동안은 아무도 안 본다)
 - git commit + push (commit 분리는 논리 단위로)
 
 ---
@@ -195,6 +200,16 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 - ⚠️ **설정 위치 분리(`516b5b5`) 코드는 라이브에서 아직 한 번도 안 돌았다** — `%LOCALAPPDATA%\PaleoBytes\PaperMeister\`가
   아직 없고 `preferences.json`은 데이터 디렉터리에 그대로다. 실행 중인 빌드가 그 커밋보다 앞선다.
   **다음 앱 재시작 때 `migrate_legacy_config()`가 복사해 간다**(원본은 남긴다) — 그때 새 경로가 생겼는지 확인할 것
+- ✅ **v0.1.5 릴리스** — 자산 5종(설치본·portable zip·AppImage·dmg·SHA256), 3플랫폼 스모크 통과, `build262`.
+  **배포된 ko 매뉴얼에서 0.1.5 섹션이 한국어로 나오는 것까지 확인**했다(085에서 놓쳤던 지점)
+- 🔴 **CI가 `516b5b5` 이후 6런 연속 red였는데 하루 동안 몰랐다** — 릴리스 태그가 실패하고서야 발견.
+  원인은 `test_config_location.py`의 격리 실패: **Windows에서 platformdirs는 ctypes(`SHGetFolderPath`)로 해석해
+  어떤 환경변수로도 리다이렉트되지 않는다.** `XDG_CONFIG_HOME` 고정은 Linux만 격리했고, Windows CI는
+  러너의 **실제 `%LOCALAPPDATA%`를 읽고 썼다** → 테스트가 순서 의존이 됨(한 테스트가 남긴 설정을 다음이 주워 읽음).
+  Linux에선 완전히 안 보였다. 수정(`702774c`)은 환경변수가 아니라 **resolver 자체를 패치** + 격리 유지 검사 테스트 추가
+  - **형제 리포는 둘 다 면역**이고 방식이 다르다 — Modan2는 해석된 상수(`DEFAULT_CONFIG_PATH`)를 통째로 monkeypatch하고
+    위치 검증은 읽기 전용 단언이라 아무것도 안 쓴다 / CTHarvester는 **제품에 `CTHARVESTER_CONFIG_DIR` override**가 있어
+    테스트가 문서화된 경로로 지정한다. **OS 해석과 싸우려 든 건 우리뿐이었다**
 - **HANDOFF 정리**: 749줄 → 약 300줄. 세션 1~49 요약(355줄)은 devlog 001~068이 연속으로 덮으므로 이정표 표로 대체,
   완료된 ✅/[x] 항목·shipped 기능의 구현 서사 제거, `~/.papermeister` 잔재 경로를 현재 경로로 수정.
   실측으로 갱신한 것: `extracted` 잔존 48편 → **10편**, `failed` → **0편**, **needs_review 5,229편**(가장 큰 실제 백로그)
