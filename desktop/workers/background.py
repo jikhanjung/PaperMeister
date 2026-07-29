@@ -17,6 +17,10 @@ class BackgroundTask(QThread):
     #: to emit it itself — nothing here calls it — which keeps the cross-thread
     #: hop a queued signal rather than a direct call into a widget.
     progress = pyqtSignal(int, int)
+    #: Optional (kind, message) for something worth showing mid-task that is
+    #: neither progress nor the outcome — e.g. the LLM server went away and the
+    #: task is waiting it out. Emitted by the callable, same as `progress`.
+    notice = pyqtSignal(str, str)
 
     def __init__(self, fn: Callable[..., Any], *args, **kwargs):
         super().__init__()

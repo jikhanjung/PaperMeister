@@ -291,7 +291,8 @@ _REFS_RECOVERY_MAX_WAIT = 900
 _REFS_RECOVERY_POLL = 15
 
 
-def _wait_for_server(url: str, tag: str, max_wait: int = _REFS_RECOVERY_MAX_WAIT) -> bool:
+def _wait_for_server(url: str, tag: str, max_wait: int = _REFS_RECOVERY_MAX_WAIT,
+                     notify=None) -> bool:
     """Poll the LLM endpoint until it answers, or give up. True if it came back.
 
     A gateway error means the model container is restarting, which takes minutes.
@@ -303,6 +304,10 @@ def _wait_for_server(url: str, tag: str, max_wait: int = _REFS_RECOVERY_MAX_WAIT
     Runs on the extraction worker thread, not the UI thread; the OCR worker
     already waits inline the same way. Cancelling the batch takes effect once
     this returns, so the wait is capped rather than open-ended.
+
+    `notify` is the caller's `on_notice` (see `extract_references_llm`): the wait
+    is minutes long and otherwise indistinguishable from a hang, so a UI driving
+    this has to be told the outage started and when it ended.
     """
     deadline = time.monotonic() + max_wait
     logger.warning('%swaiting for the server to come back (up to %ds, checking '
@@ -311,11 +316,18 @@ def _wait_for_server(url: str, tag: str, max_wait: int = _REFS_RECOVERY_MAX_WAIT
     while time.monotonic() < deadline:
         time.sleep(_REFS_RECOVERY_POLL)
         if references_server_alive(url):
+            waited = int(time.monotonic() - started)
             logger.warning('%sserver came back after %ds — resuming the same batch',
-                           tag, int(time.monotonic() - started))
+                           tag, waited)
+            if notify:
+                notify('server_up', f'LLM server came back after {waited}s — '
+                                    f'resuming the same batch')
             return True
     logger.error('%sserver still down after %ds — giving up on this paper',
                  tag, max_wait)
+    if notify:
+        notify('server_gone', f'LLM server still down after {max_wait}s — '
+                              f'giving up on this paper')
     return False
 
 
@@ -1070,7 +1082,7 @@ def describe_skips(skipped: dict) -> str:
 
 def extract_references_llm(
     file_hash: str, backend: str = 'qwen', base_url: str = '', label: str = '',
-    on_progress=None,
+    on_progress=None, on_notice=None,
 ) -> tuple[list, str, str, bool, dict]:
     """Parse a paper's references section into structured entries via LLM.
 
@@ -1083,6 +1095,15 @@ def extract_references_llm(
             orders of magnitude between papers — a nomenclator can hold 2,000
             entries where an article holds 30 — so without this a caller cannot
             tell a long paper from a stalled one.
+        on_notice: optional `(kind, message)` callback for things that happen
+            *inside* a paper and take long enough that silence reads as a hang.
+            `kind` is one of 'server_down' (the gateway answered 5xx: the model
+            container is restarting and we are waiting it out), 'server_up' (it
+            came back, same batch resumes) or 'server_gone' (the wait ran out).
+            None of the three ends the paper, so they are not reportable through
+            the return value — without this the UI shows "Parsing…" unchanged for
+            up to `refs_recovery_wait` seconds with no hint that anything is
+            wrong.
 
     Returns:
         (entries, source_label, model_version, complete, skipped). `entries` is a
@@ -1182,9 +1203,14 @@ def extract_references_llm(
                 # Gateway error = the model container is restarting. Wait for it
                 # rather than losing the batches already parsed for this paper.
                 status = getattr(ex.response, 'status_code', 0)
-                if status in _QWEN_NO_RETRY_STATUSES and _wait_for_server(
-                        url, tag, recovery_wait):
-                    continue          # same batch, server is back
+                if status in _QWEN_NO_RETRY_STATUSES:
+                    if on_notice:
+                        on_notice('server_down',
+                                  f'HTTP {status} from the LLM server — the model '
+                                  f'container is restarting; waiting up to '
+                                  f'{recovery_wait}s, then resuming this paper')
+                    if _wait_for_server(url, tag, recovery_wait, notify=on_notice):
+                        continue      # same batch, server is back
                 raise
             except (_req.exceptions.Timeout, _req.exceptions.ConnectionError):
                 # Too slow at this size — shrink and retry the SAME refs, but

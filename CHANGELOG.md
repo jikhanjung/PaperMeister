@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`PAPERMEISTER_CONFIG_DIR` names where settings go**, alongside the existing
   `PAPERMEISTER_DATA_DIR` for the library. The two are independent, so settings
   and data can sit on different volumes.
+- **The References window now says when the LLM server goes away.** A 502 means
+  the model container is restarting, which takes minutes — the app waits it out
+  so the references already parsed for that paper are not lost, but until now it
+  did that silently and looked frozen. The outage, and the recovery, are logged
+  in the window and the status bar. Progress within the current paper (refs
+  parsed of total) is shown too.
 
 ---
 

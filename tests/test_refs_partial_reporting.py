@@ -389,7 +389,7 @@ def test_gateway_error_waits_for_recovery_and_keeps_the_batch(one_batch_at_a_tim
         return '[{"title": "recovered"}]'
 
     monkeypatch.setattr(biblio, '_call_qwen', fake)
-    monkeypatch.setattr(biblio, '_wait_for_server', lambda url, tag, w: True)
+    monkeypatch.setattr(biblio, '_wait_for_server', lambda url, tag, w, notify=None: True)
 
     entries, _, _, complete, skipped = biblio.extract_references_llm('h')
 
@@ -407,10 +407,55 @@ def test_gateway_error_raises_when_the_server_never_returns(one_batch_at_a_time,
 
     monkeypatch.setattr(biblio, '_call_qwen',
                         lambda *a, **k: (_ for _ in ()).throw(_http_error(502)))
-    monkeypatch.setattr(biblio, '_wait_for_server', lambda url, tag, w: False)
+    monkeypatch.setattr(biblio, '_wait_for_server', lambda url, tag, w, notify=None: False)
 
     with pytest.raises(requests.exceptions.HTTPError):
         biblio.extract_references_llm('h')
+
+
+@pytest.mark.unit
+def test_gateway_error_is_announced_to_the_caller(one_batch_at_a_time, monkeypatch):
+    """The recovery wait lasts minutes with no other output, so a UI showing
+    'Parsing…' cannot tell it from a hang. The 502 has to be announced when it
+    happens, and again when the wait ends."""
+    notices = []
+    calls = []
+
+    def fake(prompt, url, max_tokens=0, **k):
+        calls.append(1)
+        if len(calls) == 1:
+            raise _http_error(502)
+        return '[{"title": "recovered"}]'
+
+    def fake_wait(url, tag, w, notify=None):
+        notify('server_up', 'LLM server came back after 30s — resuming the same batch')
+        return True
+
+    monkeypatch.setattr(biblio, '_call_qwen', fake)
+    monkeypatch.setattr(biblio, '_wait_for_server', fake_wait)
+
+    biblio.extract_references_llm('h', on_notice=lambda k, m: notices.append((k, m)))
+
+    kinds = [k for k, _ in notices]
+    assert kinds == ['server_down', 'server_up']
+    assert '502' in notices[0][1]            # the status itself, not just "server error"
+
+
+@pytest.mark.unit
+def test_wait_for_server_reports_both_outcomes(monkeypatch):
+    """_wait_for_server owns the end of the outage, so it — not the caller —
+    has to report whether the server came back or the wait ran out."""
+    monkeypatch.setattr(biblio.time, 'sleep', lambda s: None)
+
+    notices = []
+    monkeypatch.setattr(biblio, 'references_server_alive', lambda url: True)
+    assert biblio._wait_for_server('u', '', 60, notify=lambda k, m: notices.append(k))
+    assert notices == ['server_up']
+
+    notices.clear()   # max_wait=0 → the deadline is already past, so it gives up at once
+    monkeypatch.setattr(biblio, 'references_server_alive', lambda url: False)
+    assert not biblio._wait_for_server('u', '', 0, notify=lambda k, m: notices.append(k))
+    assert notices == ['server_gone']
 
 
 @pytest.mark.unit

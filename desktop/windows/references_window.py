@@ -45,6 +45,7 @@ class ReferencesWindow(QWidget):
         self._refs = 0
         self._cancelled = False
         self._stop_label = 'Cancelled'   # label shown on finish() when stopped
+        self._current_text = 'Idle'      # restored after a mid-paper server wait
         self._active = False   # a batch is in progress (drives begin() extend)
         self._counts = {'ok': 0, 'empty': 0, 'error': 0}
         self._setup_ui()
@@ -164,12 +165,31 @@ class ReferencesWindow(QWidget):
         self.current_label.setText('Resuming…')
         self._log(f'Server back — resuming ({remaining} paper(s) left).', 'info')
 
+    def mark_server_wait(self, detail: str):
+        """A gateway 5xx hit the paper being parsed: the model container is
+        restarting and the worker is waiting it out.
+
+        Not the same thing as `mark_paused` — the batch is not paused and the
+        queue is untouched; the wait happens inside the current paper and the
+        same batch resumes afterwards. Shown because it lasts minutes, during
+        which "Parsing: <title>" alone is indistinguishable from a hang."""
+        self.current_label.setText('LLM server down — waiting for it to come back…')
+        self._log(detail, 'error')
+
+    def mark_server_back(self, detail: str, recovered: bool = True):
+        """The mid-paper wait ended — either the server answered again (parsing
+        resumes) or the wait ran out (the paper will fail and be retried
+        later). Either way the label goes back to whatever we were parsing."""
+        self.current_label.setText(self._current_text)
+        self._log(detail, 'info' if recovered else 'error')
+
     def add_total(self, n: int):
         self._total += n
         self.progress_bar.setRange(0, self._total)
         self.progress_count.setText(f'{self._done} / {self._total}')
 
     def set_current(self, text: str):
+        self._current_text = text
         self.current_label.setText(text)
         # Clear the per-paper bar: a stale count from the previous paper is
         # worse than none, since it looks like progress that isn't happening.

@@ -16,9 +16,12 @@ but the model worker behind it died and is restarting. The 500 is that worker on
 its way out. Repeating in a cycle means it is crash-looping, usually out of GPU
 memory.
 
-**What the app does** — brief outages are absorbed by a short retry. A sustained
-one pauses the batch, polls the server, and resumes automatically when it comes
-back, keeping the queue intact.
+**What the app does** — brief outages are absorbed by a short retry. A gateway
+error hit while a paper is being parsed is not retried in place: the References
+window says the server went away, waits for the container to come back, and
+resumes the same batch, so the references already parsed for that paper are
+kept. A sustained outage pauses the batch, polls the server, and resumes
+automatically when it comes back, keeping the queue intact.
 
 **What to check** — the server's own log for the actual crash (out of memory, a
 CUDA fault). Running OCR and the language model on the same GPU makes this more

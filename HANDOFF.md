@@ -86,6 +86,7 @@
   거는 법은 [devlog 087](./devlog/20260729_087_Shared_Guides_Checkout.md)
 - **ocrserver 간헐적 5xx**: 502/503/504는 컨테이너가 죽었다 다시 뜨는 것이라 분 단위가 걸린다. 그래서 in-place
   재시도가 아니라 **healthz 폴링으로 복구를 기다렸다 같은 배치를 이어서** 한다(`refs_recovery_wait` pref, 상한 900초).
+  그 대기는 이제 **References 창과 status bar에 보인다**(멈춘 것과 구분되도록, [devlog 088](./devlog/20260729_088_Refs_Server_Outage_Visible_In_UI.md)).
   **근본 원인은 서버 측(OOM 유력)** — 확정하려면 서버 vLLM 로그의 스택 트레이스가 필요하다.
   [devlog 083](./devlog/20260728_083_Container_Restart_Recovery_Wait.md)
 
@@ -193,6 +194,15 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 ---
 
 ## 최근 세션 요약
+
+**2026-07-29 (세션 54)** — references 서버 장애를 화면에 노출 — [devlog 088](./devlog/20260729_088_Refs_Server_Outage_Visible_In_UI.md)
+- **502가 나면 났다고 보여준다**(사용자 요청). 083의 "재시도 말고 복구를 기다린다"는 옳았지만 **그 대기가 화면에
+  전혀 안 나왔다** — 논문이 안 끝났으니 `record()`도, 배치가 멈춘 게 아니니 `mark_paused()`도 안 불려서
+  최대 900초 동안 `Parsing: <title>` 그대로였다. **멈춤과 대기가 구분 불가.**
+  `extract_references_llm(on_notice=…)` → `BackgroundTask.notice` → References 창 + status bar로 배선.
+  복구 후 라벨을 원래 `Parsing: …`로 되돌리고, 대기 중에는 진행바를 전진시키지 않는다(끝날 때 이중 계산 방지)
+- **덤**: `on_progress`가 있는데 desktop이 안 넘겨서 **논문 내 진행바가 한 번도 뜬 적이 없었다** — 같이 물렸다
+- biblio 경로는 이미 502가 `failed: …`로 보인다. 조용한 건 references의 인-페이퍼 대기뿐이었다
 
 **2026-07-29 (세션 53)** — 상태 점검 + 백업 경로 드리프트 + 데이터 위치 가드 — [devlog 086](./devlog/20260729_086_Backup_Path_Drift_And_Data_Dir_Guard.md)
 - 🔴 **오프사이트 DB 백업이 7/28 이후 죽어 있었다** (`a071ef0`) — `backup-papermeister.ps1`이 옛 `~/.papermeister`를 가리킨 채였다.

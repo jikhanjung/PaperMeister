@@ -1274,7 +1274,9 @@ class MainWindow(QMainWindow):
             from papermeister import references as refs_mod
             from papermeister.biblio import extract_references_llm
             entries, source, model_version, complete, skipped = extract_references_llm(
-                file_hash, backend=backend)
+                file_hash, backend=backend,
+                on_progress=task.progress.emit,
+                on_notice=task.notice.emit)
             n = refs_mod.save_references(paper_id, entries, source, model_version)
             # Auto-resolve the freshly-saved references against held papers so
             # the 'in library' badge is populated without a separate step, and
@@ -1296,6 +1298,7 @@ class MainWindow(QMainWindow):
 
         task = BackgroundTask(_do_extract)
         task.progress.connect(self._on_refs_item_progress)
+        task.notice.connect(self._on_refs_notice)
         task.done.connect(lambda result: self._on_refs_extracted(paper_id, result))
         task.failed.connect(lambda msg: self._on_refs_failed(paper_id, msg))
         self._refs_task = task
@@ -1305,6 +1308,20 @@ class MainWindow(QMainWindow):
         """Parsing progress within the current paper (queued from the worker)."""
         if self._refs_window and self._refs_window.isVisible():
             self._refs_window.set_item_progress(done, total)
+
+    def _on_refs_notice(self, kind: str, msg: str):
+        """Something happened inside the paper being parsed that the user should
+        see — today, the LLM gateway answering 5xx and the worker waiting for the
+        container to restart. That wait runs for minutes with the queue intact,
+        so without this the window sits on 'Parsing: …' and looks stuck."""
+        self.status_bar.set_task(f'References — {msg}')
+        win = self._refs_window if (self._refs_window and self._refs_window.isVisible()) else None
+        if not win:
+            return
+        if kind == 'server_down':
+            win.mark_server_wait(msg)
+        else:
+            win.mark_server_back(msg, recovered=(kind == 'server_up'))
 
     def _on_refs_extracted(self, paper_id: int, result):
         win = self._refs_window if (self._refs_window and self._refs_window.isVisible()) else None
