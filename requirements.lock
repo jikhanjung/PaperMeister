@@ -288,9 +288,9 @@ pyqt6-sip==13.11.1 \
     --hash=sha256:f532144c43f2fddcccf2e25df50cdb4a744edb4ce4ba5ed2d0f2cef825197f2f \
     --hash=sha256:fcadd68e09ee24cdda8f8bfcba52e59c9b297055d2c450f0eb89afa61a8dc31a
     # via pyqt6
-pyzotero==1.13.2 \
-    --hash=sha256:17673a9a225de49e152f14621f62d8c5f67103612b859f25a256ef04ea08e65d \
-    --hash=sha256:56b8f82646e8c757933a9ef1baeec7ea84191faef9a626ed221113ef418e7af4
+pyzotero==1.13.3 \
+    --hash=sha256:323ba09a7a4341a70ed2289874b5d5a17d5501160d51041c242c549c81d4ffbe \
+    --hash=sha256:a9ff1c3f633f5365f23f7a6e7b98e05cec44e09bc249d91d21d5cf360f86871f
     # via -r requirements.txt
 requests==2.34.2 \
     --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0 \
