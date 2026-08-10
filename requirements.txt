@@ -1,6 +1,6 @@
 PyQt6>=6.11.0,<6.12
 peewee~=4.2.6
-PyMuPDF~=1.28.0
+PyMuPDF~=1.28.2
 Pillow>=12.3.0
 requests>=2.34.2
 pyzotero~=1.13.2
