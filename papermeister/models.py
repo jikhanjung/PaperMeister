@@ -34,8 +34,7 @@ class Folder(BaseModel):
 
     source = peewee.ForeignKeyField(Source, backref='folders', on_delete='CASCADE')
     name = peewee.TextField()
-    # peewee's overloads don't cover the string form of a self-referential FK.
-    parent = peewee.ForeignKeyField(  # type: ignore[call-overload]
+    parent = peewee.ForeignKeyField(
         'self', null=True, backref='children', on_delete='CASCADE')
     path = peewee.TextField(default='')  # full path for directory folders
     zotero_key = peewee.TextField(default='')  # Zotero collection key
