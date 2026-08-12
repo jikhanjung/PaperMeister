@@ -6,7 +6,7 @@ Build (on Windows, from the repo root, in the env that has the runtime deps):
     pip install pyinstaller
     pyinstaller PaperMeister.spec --noconfirm
 
-Output: dist/PaperMeister/PaperMeister.exe (+ _internal/ with Qt, fitz, etc.).
+Output: dist/PaperMeister/PaperMeister.exe (+ _internal/ with Qt, pymupdf, etc.).
 Distribute the whole dist/PaperMeister/ folder (zip it).
 
 Notes

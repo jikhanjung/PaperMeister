@@ -2,7 +2,7 @@
 """Verify the OCR image path works with the installed Pillow / PyMuPDF.
 
 Exercises exactly what papermeister/ocr.py does to render a PDF page for the OCR
-server: fitz pixmap -> PIL Image.frombytes('RGB', ...) -> save JPEG -> base64.
+server: pymupdf pixmap -> PIL Image.frombytes('RGB', ...) -> save JPEG -> base64.
 Self-contained (builds a 1-page PDF in memory), so it needs no data files.
 
 Run after bumping Pillow (requirements went 10.x -> 12.x):
@@ -15,14 +15,14 @@ import sys
 
 
 def main() -> int:
-    import fitz
     import PIL
+    import pymupdf
     from PIL import Image
 
-    print(f"Pillow {PIL.__version__}, PyMuPDF {getattr(fitz, 'VersionBind', '?')}")
+    print(f"Pillow {PIL.__version__}, PyMuPDF {getattr(pymupdf, 'VersionBind', '?')}")
 
     # A tiny 1-page PDF in memory.
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page(width=200, height=120)
     page.insert_text((20, 60), "PaperMeister image check", fontsize=14)
 

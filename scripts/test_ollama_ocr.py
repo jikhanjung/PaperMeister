@@ -14,7 +14,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-import fitz
+import pymupdf
 import requests
 from PIL import Image
 
@@ -26,8 +26,8 @@ OUTPUT_DIR = "docs/ocr_results"
 
 def render_page(pdf_path: str, page_idx: int, dpi: int = 150, quality: int = 85) -> str:
     """PDF 페이지를 base64 JPEG로 렌더링."""
-    doc = fitz.open(pdf_path)
-    mat = fitz.Matrix(dpi / 72, dpi / 72)
+    doc = pymupdf.open(pdf_path)
+    mat = pymupdf.Matrix(dpi / 72, dpi / 72)
     pix = doc[page_idx].get_pixmap(matrix=mat)
     img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
     doc.close()
@@ -60,7 +60,7 @@ def main():
     parser.add_argument("--dpi", type=int, default=150, help="Render DPI")
     args = parser.parse_args()
 
-    doc = fitz.open(args.pdf)
+    doc = pymupdf.open(args.pdf)
     total_pages = doc.page_count
     doc.close()
     n_pages = min(args.pages, total_pages)

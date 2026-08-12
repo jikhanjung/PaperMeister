@@ -102,9 +102,9 @@ class _LazyPdfView(QScrollArea):
         self.setWidgetResizable(True)
         self.setFrameShape(QScrollArea.Shape.NoFrame)
 
-        import fitz
+        import pymupdf
         self._doc = doc
-        self._matrix = fitz.Matrix(self._ZOOM, self._ZOOM)
+        self._matrix = pymupdf.Matrix(self._ZOOM, self._ZOOM)
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -458,9 +458,9 @@ class DetailPanel(QWidget):
 
     def _render_pdf(self, pdf_path: str) -> QWidget:
         """Open the PDF and hand it to the lazy-render scroll view."""
-        import fitz
+        import pymupdf
         try:
-            doc = fitz.open(pdf_path)
+            doc = pymupdf.open(pdf_path)
         except Exception as exc:
             return self._ocr_empty_panel(f'Failed to open PDF: {exc}')
         return _LazyPdfView(doc)

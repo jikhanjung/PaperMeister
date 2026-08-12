@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 
-import fitz  # PyMuPDF
+import pymupdf
 
 from .models import Author, PaperFile, Passage, db
 from .paths import OCR_JSON_DIR, PDF_CACHE_DIR  # noqa: F401  (re-exported)
@@ -28,7 +28,7 @@ def ocr_json_filename(paper_file):
 
 def extract_metadata_from_pdf(filepath):
     """Extract title, author, year from PDF metadata."""
-    doc = fitz.open(filepath)
+    doc = pymupdf.open(filepath)
     meta = doc.metadata or {}
     doc.close()
 
@@ -56,7 +56,7 @@ def _pdf_is_encrypted(filepath):
     (corrupt) returns False so the normal OCR path surfaces — and records — its
     actual error rather than mislabelling it 'encrypted'."""
     try:
-        doc = fitz.open(filepath)
+        doc = pymupdf.open(filepath)
     except Exception:
         return False
     try:

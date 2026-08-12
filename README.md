@@ -146,7 +146,7 @@ make lock-check         # lock 파일이 requirements와 맞는지 확인
 - **GUI**: PyQt6
 - **DB**: SQLite + FTS5
 - **ORM**: Peewee 4
-- **PDF**: PyMuPDF (fitz)
+- **PDF**: PyMuPDF
 - **OCR**: RunPod serverless (Chandra2-vllm)
 - **Zotero**: pyzotero
 - **LLM**: `claude -p` (Haiku + Sonnet, Max 플랜) 또는 자체 서버의 Qwen3

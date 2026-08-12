@@ -16,7 +16,7 @@ import os
 import time
 from datetime import datetime
 
-import fitz
+import pymupdf
 import requests
 from PIL import Image
 
@@ -103,8 +103,8 @@ def _ensure_config():
 
 def render_page(pdf_path: str, page_idx: int, dpi: int = 150, quality: int = 85) -> str:
     """Render a single PDF page to base64 JPEG."""
-    doc = fitz.open(pdf_path)
-    mat = fitz.Matrix(dpi / 72, dpi / 72)
+    doc = pymupdf.open(pdf_path)
+    mat = pymupdf.Matrix(dpi / 72, dpi / 72)
     pix = doc[page_idx].get_pixmap(matrix=mat)
     img = Image.frombytes('RGB', [pix.width, pix.height], pix.samples)
     doc.close()
@@ -394,8 +394,8 @@ def wrapper_submit(pdf_path: str, *, force: bool = False) -> tuple[str, int, boo
 
     local_pages = 0
     try:
-        import fitz
-        doc = fitz.open(pdf_path)
+        import pymupdf
+        doc = pymupdf.open(pdf_path)
         try:
             local_pages = doc.page_count
         finally:
@@ -592,7 +592,7 @@ def ocr_pdf(
         }
         return results, raw_result
 
-    doc = fitz.open(pdf_path)
+    doc = pymupdf.open(pdf_path)
     total_pages = doc.page_count
     doc.close()
 

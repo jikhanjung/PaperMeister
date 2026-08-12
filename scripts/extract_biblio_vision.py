@@ -13,7 +13,7 @@ import sys
 import tempfile
 import time
 
-import fitz  # PyMuPDF
+import pymupdf
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -59,7 +59,7 @@ Rules:
 
 def render_pdf_pages(pdf_path, out_dir, pages=(0, -1), dpi=150):
     """Render selected pages of a PDF to PNG. Returns list of image paths."""
-    doc = fitz.open(pdf_path)
+    doc = pymupdf.open(pdf_path)
     n = len(doc)
     out_paths = []
     selected = []
