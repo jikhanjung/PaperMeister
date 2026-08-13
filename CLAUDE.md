@@ -149,6 +149,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 | `update_promoted_items.py` | 기존 Zotero parent item in-place 수정 |
 | `preview_standalone_biblio.py` | Standalone PDF 추출 결과 미리보기 (read-only) |
 | `extract_references.py` | (P11) references 섹션 파싱 → `Reference` 테이블 (Qwen3, `--execute`) |
+| `seed_refs_attempts.py` | (P11) 이미 실패해온 논문의 `references_attempts`를 임계값으로 채워 전체 실행에서 제외. 대상은 **unchecked인데 Reference 행이 있는 논문**(= 직전 PARTIAL)으로 DB에서 도출하고, "returned nothing" 케이스는 `--titles`/`--paper-ids`로 지목. `--reset`으로 되돌림, `--execute` |
 | `reset_references.py` | (P11) `Reference` 행 삭제 + `references_checked` 해제 → 재추출 대상으로 되돌림. `--paper-ids` 또는 `--scope empty-checked`(checked인데 Reference 0건인 논문 전체 — "no references section" 판정을 재검증할 때), `--execute` |
 | `reprocess_references.bat` | (P11, Windows) reset(化石 합본) → extract_references `--scope all` → normalize_works `--pass 1` 일괄 실행 래퍼 |
 | `migrate_fts_external_content.py` | (P13) `passage_fts` → external-content + `paper_fts` 추가 1회 변환 (자동 백업 VACUUM INTO + rebuild + VACUUM, `--execute`) |
