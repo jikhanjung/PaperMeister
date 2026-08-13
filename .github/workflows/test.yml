@@ -91,9 +91,12 @@ jobs:
           restore-keys: ${{ runner.os }}-pip-
 
       - name: Install dependencies
+        # Always `python -m pip`, never the bare `pip` wrapper: pip-audit pulls
+        # in pip-api, which pins pip itself into requirements-dev.lock, so this
+        # install rewrites pip — and on Windows pip.exe cannot replace the file
+        # it is running from ("ERROR: To modify pip, please run ...").
         run: |
-          python -m pip install --upgrade pip
-          pip install --require-hashes -r requirements-dev.lock
+          python -m pip install --require-hashes -r requirements-dev.lock
 
       # Fast cross-platform guard: import every module. Catches version-only
       # symbols / broken native extensions the unit tests would miss.
