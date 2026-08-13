@@ -64,6 +64,16 @@ class Paper(BaseModel):
     # bibliography instead of re-parsing them every time. Existence of Reference
     # rows distinguishes "has refs" from "checked, none found".
     references_checked = peewee.BooleanField(default=False)
+    # How many times extraction came back PARTIAL or failed for this paper.
+    # A partial result deliberately leaves `references_checked` False so a later
+    # run can replace it, but `_refs_targets` orders by paper id descending, so
+    # the same unparseable papers resurface at the head of every batch and are
+    # retried forever (devlog 076). Counting the attempts lets a full-library
+    # run skip the ones that have already proved hopeless while keeping them
+    # reachable through an explicit retry. Reset to 0 whenever a paper does
+    # come back complete, so a run of server trouble doesn't retire papers that
+    # were only ever failing because the server was down.
+    references_attempts = peewee.IntegerField(default=0)
 
 
 class Author(BaseModel):

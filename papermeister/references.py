@@ -11,6 +11,36 @@ from typing import TypedDict
 
 from .models import Author, CitedWork, Paper, PaperBiblio, Reference, db
 
+#: PARTIAL/failed attempts after which a paper drops out of a full-library run.
+#: A partial parse leaves `references_checked` False on purpose so a later run
+#: can replace it, but target selection orders by paper id descending, so the
+#: same unparseable papers come back at the head of every batch and are retried
+#: forever (devlog 076) — a handful of hopeless documents can occupy the front
+#: of the queue indefinitely. Three is enough to ride out a server outage (which
+#: fails papers that are perfectly fine) without grinding on the hopeless ones.
+MAX_REFS_ATTEMPTS = 3
+
+
+def record_refs_attempt(paper_id: int, complete: bool) -> None:
+    """Update the give-up counter after one extraction attempt.
+
+    Reset on a complete parse rather than merely not incrementing: a paper that
+    failed twice during an outage and then succeeded is not two-thirds retired,
+    and without the reset a long-lived library would slowly retire everything.
+    """
+    if complete:
+        Paper.update(references_attempts=0).where(
+            (Paper.id == paper_id) & (Paper.references_attempts > 0)).execute()
+    else:
+        Paper.update(references_attempts=Paper.references_attempts + 1).where(
+            Paper.id == paper_id).execute()
+
+
+def exhausted_paper_ids() -> set:
+    """Papers that have used up their attempts, for excluding from a full run."""
+    return {p.id for p in Paper.select(Paper.id).where(
+        Paper.references_attempts >= MAX_REFS_ATTEMPTS)}
+
 
 def save_references(paper_id: int, entries: list, source: str, model_version: str) -> int:
     """Replace this paper's Reference rows for `source` with `entries`.

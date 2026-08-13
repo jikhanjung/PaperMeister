@@ -128,6 +128,12 @@ def _migrate(database):
             "UPDATE paper SET references_checked = 1 WHERE id IN "
             "(SELECT DISTINCT citing_paper_id FROM reference)"
         )
+    # Give-up counter for references extraction. Starts at 0 for every existing
+    # paper: the count is of attempts we have observed, and backfilling a guess
+    # would retire papers nobody has actually seen fail.
+    if 'references_attempts' not in columns:
+        database.execute_sql(
+            'ALTER TABLE paper ADD COLUMN references_attempts INTEGER DEFAULT 0')
 
     cursor = database.execute_sql("PRAGMA table_info('paperfile')").fetchall()
     columns = {row[1] for row in cursor}

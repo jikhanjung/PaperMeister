@@ -22,7 +22,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from papermeister.biblio import describe_skips, extract_references_llm
 from papermeister.database import init_db
 from papermeister.models import Folder, Paper, PaperFile, Source
-from papermeister.references import save_references
+from papermeister.references import (
+    MAX_REFS_ATTEMPTS,
+    exhausted_paper_ids,
+    record_refs_attempt,
+    save_references,
+)
 
 
 def _short(title, n=28):
@@ -68,6 +73,20 @@ def fetch_targets(args):
         }
         targets = [t for t in targets if t[0] not in checked]
 
+    # A partial parse stays unchecked so a later run can replace it, and the
+    # ordering above puts the newest ids first — so the same unparseable papers
+    # lead every batch and are retried forever (devlog 076). Drop the ones that
+    # have spent their attempts unless this run is explicitly for them.
+    exhausted = exhausted_paper_ids()
+    if args.only_failed:
+        targets = [t for t in targets if t[0] in exhausted]
+    elif not args.paper_ids:
+        skipped = sum(1 for t in targets if t[0] in exhausted)
+        targets = [t for t in targets if t[0] not in exhausted]
+        if skipped:
+            print(f'  skipping {skipped} paper(s) that failed '
+                  f'{MAX_REFS_ATTEMPTS}+ times (--only-failed to retry them)')
+
     return targets
 
 
@@ -82,6 +101,10 @@ def main():
                         help='Re-parse papers that already have references')
     parser.add_argument('--execute', action='store_true',
                         help='Write to the DB (default: dry-run preview)')
+    parser.add_argument('--only-failed', action='store_true',
+                        help=f'Retry only the papers that came back partial or '
+                        f'failed {MAX_REFS_ATTEMPTS}+ times (a normal run skips '
+                        f'them so they cannot occupy the head of every batch)')
     parser.add_argument('--no-resolve', action='store_true',
                         help='Skip the post-extraction auto-resolve pass')
     parser.add_argument('--workers', type=int, default=1,
@@ -133,9 +156,11 @@ def main():
             short = _short(title)
             if e:
                 err += 1
+                record_refs_attempt(pid, complete=False)   # a hard failure counts too
                 print(f'[{i}/{len(targets)}] {pid} {short} ERR: {e[:80]}', flush=True)
                 continue
             n = save_references(pid, entries, source, mv)   # main thread (DB)
+            record_refs_attempt(pid, complete)
             if complete:
                 # Mark checked even when n == 0 (no references section) so re-runs
                 # skip it. Partial results (complete=False) are saved but left

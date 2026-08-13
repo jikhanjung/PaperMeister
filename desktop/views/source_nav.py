@@ -316,6 +316,10 @@ class SourceNav(QWidget):
                             lambda: self.folder_action.emit('process_source', value))
             menu.addAction('Extract References (all)',
                             lambda: self.folder_action.emit('extract_references_source', value))
+            # Papers that used up their attempts are skipped by the run above,
+            # so they need a way back in that is deliberate rather than automatic.
+            menu.addAction('Retry Failed References…',
+                            lambda: self.folder_action.emit('retry_failed_references', value))
         else:
             menu.addAction('Process Folder (OCR → Biblio)',
                             lambda: self.folder_action.emit('process_folder', value))

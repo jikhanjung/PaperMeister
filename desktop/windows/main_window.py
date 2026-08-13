@@ -438,6 +438,9 @@ class MainWindow(QMainWindow):
             self._run_references_scope(self._collect_folder_ids(folder_id), 'this folder')
         elif action == 'extract_references_source':
             self._run_references_scope(None, 'My Library (all)')
+        elif action == 'retry_failed_references':
+            self._run_references_scope(
+                None, 'previously failed papers', only_exhausted=True)
         elif action == 'upload_ocr_json':
             self._upload_ocr_json(folder_id)
 
@@ -1137,15 +1140,22 @@ class MainWindow(QMainWindow):
             n = 4
         return max(1, min(n, 8))
 
-    def _refs_targets(self, folder_ids):
+    def _refs_targets(self, folder_ids, only_exhausted: bool = False):
         """Processed PDFs (in scope) whose paper hasn't had references checked.
 
         `Paper.references_checked` is set once extraction has run (even if no
         references section was found), so papers without a bibliography aren't
         re-parsed on every batch. Returns [(paper_id, file_id), ...].
         folder_ids None → whole library.
+
+        Papers that have failed `MAX_REFS_ATTEMPTS` times are left out, because
+        a partial parse stays unchecked and the ordering below brings it back to
+        the head of the next batch — so without this a few unparseable documents
+        are re-attempted ahead of everything else, run after run. Pass
+        `only_exhausted` to get exactly those back for a deliberate retry.
         """
         from papermeister.models import Paper, PaperFile, PaperFolder
+        from papermeister.references import exhausted_paper_ids
 
         if folder_ids is None:
             pdfs = (
@@ -1172,10 +1182,13 @@ class MainWindow(QMainWindow):
             )
 
         queued = {pid for pid, _ in self._refs_queue}
+        exhausted = exhausted_paper_ids()
         targets, seen = [], set()
         for pf in pdfs:
             pid = pf.paper_id
             if pid in seen or pid in queued:
+                continue
+            if (pid in exhausted) != only_exhausted:
                 continue
             seen.add(pid)
             targets.append((pid, pf.id))
@@ -1210,19 +1223,28 @@ class MainWindow(QMainWindow):
         self.status_bar.set_task(f'Queued references extraction for paper {paper_id}…')
         self._drain_refs_queue()
 
-    def _run_references_scope(self, folder_ids, scope_label: str):
+    def _run_references_scope(self, folder_ids, scope_label: str,
+                              only_exhausted: bool = False):
         """Folder / whole-library references extraction (right-click on a
         folder or 'My Library')."""
-        targets = self._refs_targets(folder_ids)
+        from papermeister.references import MAX_REFS_ATTEMPTS
+
+        targets = self._refs_targets(folder_ids, only_exhausted=only_exhausted)
         if not targets:
             self.status_bar.set_task(
+                f'Nothing to retry — no paper has failed {MAX_REFS_ATTEMPTS} times'
+                if only_exhausted else
                 f'Nothing to do — references already extracted ({scope_label})')
             return
 
+        detail = (f'These {len(targets)} paper(s) came back partial or failed at '
+                  f'least {MAX_REFS_ATTEMPTS} times and are skipped by a normal '
+                  f'run. Try them again?'
+                  if only_exhausted else
+                  f'Parse references for {len(targets)} OCR-completed paper(s) in '
+                  f'{scope_label}?')
         resp = QMessageBox.question(
-            self, 'Extract References',
-            f'Parse references for {len(targets)} OCR-completed paper(s) in '
-            f'{scope_label}?',
+            self, 'Extract References', detail,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
         )
@@ -1393,6 +1415,7 @@ class MainWindow(QMainWindow):
             # replaces it — mirrors extract_references.py. Otherwise a server
             # outage would silently mark papers done with missing references.
             from papermeister.models import Paper
+            refs_mod.record_refs_attempt(paper_id, complete)
             if complete:
                 self._refs_guard.record_ok()
                 Paper.update(references_checked=True).where(
@@ -1429,6 +1452,8 @@ class MainWindow(QMainWindow):
             self._after_refs(paper_id)
 
     def _on_refs_failed(self, paper_id: int, msg: str):
+        from papermeister.references import record_refs_attempt
+        record_refs_attempt(paper_id, complete=False)
         self.status_bar.set_task(f'References failed for paper {paper_id}: {msg}')
         win = self._refs_window if (self._refs_window and self._refs_window.isVisible()) else None
         if win:
