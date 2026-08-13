@@ -8,11 +8,14 @@
 
 ## 현재 단계
 
-**Phase: 코어 기능 완성 — Phase 1~3 + Phase D 완료 / P11 references 추출 진행 중(본체 잔여 작업) / P12 CitedWork 정규화 + P13 FTS external-content 라이브 반영 완료 / P14 인용 네트워크(통계·export·ego 그래프) 완료 / P15 코드품질·CI 완료 → **v0.1.5 릴리스**(3플랫폼 + Windows 설치본, 자산 5종, 프로즌 빌드 스모크 통과) + **사용자 매뉴얼 en/ko 배포** + **PaleoBytes 데이터·설치 경로 정렬**(2026-07-28)**
+**Phase: 코어 기능 완성 — Phase 1~3 + Phase D 완료 / P11 references 추출 진행 중(본체 잔여 작업) / P12 CitedWork 정규화 + P13 FTS external-content 라이브 반영 완료 / P14 인용 네트워크(통계·export·ego 그래프) 완료 / P15 코드품질·CI 완료 → **v0.1.7 릴리스**(3플랫폼, 자산 5종, `build283`) + **사용자 매뉴얼 en/ko 배포** + **PaleoBytes 데이터·설치 경로 정렬** + **라이선스 명시(GPL-3.0)**(2026-08-13)**
 
 > **라이브 DB 실측 (2026-08-13, WSL read-only)**: Paper 9,891 / PaperFile processed 19,894·pending 3·skipped 110 — **OCR은 사실상 완료**.
 > references 추출 — `references_checked` **7,928편(80.2%)**, `Reference` **418,132행**(held 매칭 62,535), `CitedWork` **225,018노드**.
-> P11/P12/P13/P14 모두 라이브 반영됨. **남은 건 1,916편**(+ give-up으로 은퇴시킨 47편은 별도 재시도 대상).
+> P11/P12/P13/P14 모두 라이브 반영됨. **남은 건 1,862편**(+ give-up으로 은퇴시킨 47편은 별도 재시도 대상).
+>
+> 🔴 **배치가 멈춰 있다** — 0.1.7 검증을 위해 앱을 종료했다. **재시작이 다음 세션의 첫 일**이다
+> (`refs_workers=4` 기준 실측 45 refs/min·43편/시간이므로 남은 1,862편은 약 1.7일).
 
 ### 안정적으로 돌아가는 것
 
@@ -80,8 +83,10 @@
 
 ### 🔴 사용자 액션 대기
 
-- [ ] **v0.1.5 Windows 설치본 수동 확인** — CI 스모크는 "기동한다"까지만 보증한다. 설치 자체와 실기능은 미검증.
-  AppId가 v0.1.4부터 고정됐으므로 **이번엔 제자리 업그레이드로 깔려야 한다** — 그게 곧 이 항목의 검증이다
+- [ ] **v0.1.7 Windows 설치본 수동 확인** — CI 스모크는 "기동한다"까지만 보증한다. 설치 자체와 실기능은 미검증.
+  AppId가 v0.1.4부터 고정됐으므로 **제자리 업그레이드로 깔려야 한다** — 그게 곧 이 항목의 검증이다.
+  0.1.7은 PDF 엔진이 바뀌었으므로 **프로즌 빌드에서 PDF 탭이 실제로 그려지는지**를 특히 볼 것
+  (소스에서는 확인했으나 PyInstaller 번들에 `pdfium.dll`이 제대로 실리는지는 별개 문제다)
 - [ ] **백업 스크립트 Windows 실행** — 7/28 이후 첫 성공 백업이 되는지
 - [x] ~~앱 재시작 후 `%LOCALAPPDATA%\PaleoBytes\PaperMeister\preferences.json` 생성 확인~~
   ✅ (2026-08-13 확인) 7/29에 생성됐고 8/5에 갱신됨 — `migrate_legacy_config()`가 라이브에서 실제로 돌았다
@@ -99,6 +104,10 @@
   **오래 쉰 뒤 첫 push는 CI 결과를 반드시 확인한다** ([090](./devlog/20260813_090_Dependency_Sweep_And_CI_Red_Fortnight.md))
 - **lock을 설치할 땐 `python -m pip`** — `pip-audit`→`pip-api`가 pip 자신을 `requirements-dev.lock`에
   핀하므로 이 설치는 pip를 덮어쓴다. Windows에서 `pip.exe`는 자기가 실행 중인 파일을 못 바꾼다
+- **새 런타임 의존성을 넣으면 `papermeister/about.py`의 표에도 넣어야 한다** — 안 넣으면 테스트가 막는다.
+  라이선스를 분류하라는 뜻이고, copyleft 하나가 배포본 라이선스를 통째로 바꾸기 때문이다
+- **PDF는 `papermeister/pdfdoc.py`를 통해서만 만진다** — pypdfium2를 직접 import하지 말 것.
+  메타데이터 인코딩 보정이 거기 한 곳에만 있고, 라이선스 교체가 가능했던 이유도 진입점이 하나였기 때문이다
 - **설치본 `AppId` GUID는 절대 바꾸지 않는다** — 바꾸면 업그레이드가 별개 프로그램으로 설치된다.
   런타임 데이터는 설치/제거가 건드리지 않는다(`[UninstallDelete]` 추가 금지)
 - **설정은 데이터와 분리돼 있다** — OS 설정 위치의 `PaleoBytes/PaperMeister/preferences.json`.
@@ -153,7 +162,9 @@
 | OCR 병렬 | ThreadPoolExecutor | health check → idle worker 수만큼 동시 처리 |
 | OCR 응답 | `markdown` 필드 사용 | `chunks`도 raw JSON에 보존 |
 | Raw OCR 보존 | `~/PaleoBytes/PaperMeister/ocr_json/{hash}.json` | 캐시 재활용 가능 |
-| 메타데이터 | PyMuPDF (fitz) | PDF 내장 메타데이터만 (Zotero는 API 데이터 우선) |
+| 메타데이터 | pypdfium2 | PDF 내장 메타데이터만 (Zotero는 API 데이터 우선). 0.1.7에서 PyMuPDF(AGPL) 대체 |
+| 라이선스 | **GPL-3.0-or-later** | 배포본이 PyQt6(GPL-3.0)를 번들하므로. 소스 클론+pip는 무관. [R03](./devlog/20260813_R03_License_Audit.md) |
+| PDF 접근 | `papermeister/pdfdoc.py` 단일 진입점 | 페이지 수·암호화·메타데이터·렌더 4가지가 전부. 인코딩 보정이 여기 한 곳 |
 | 검색 | FTS5 BM25 | title×10, authors×5, text×1 |
 | Import 흐름 | Scan → Process 분리 | ScanWorker(빠름) → ProcessWindow(OCR) |
 | 처리 UI | 독립 윈도우 (ProcessWindow) | 비모달, 로그 누적, 프로그레스 바 |
@@ -217,6 +228,25 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 ---
 
 ## 최근 세션 요약
+
+**2026-08-13 (세션 55, 이어서)** — 라이선스 감사 → **v0.1.6 · v0.1.7 릴리스** — [R03](./devlog/20260813_R03_License_Audit.md)
+- **About 탭에 버전·라이선스를 넣으려다 LICENSE 파일이 아예 없다는 걸 발견.** 의존성이 스스로 선언한 값을 읽어보니
+  copyleft는 **PyQt6(GPL-3.0)** 와 **PyMuPDF(AGPL-3.0)** 둘뿐이고, 배포 설치본이 둘 다 번들하므로 결합저작물은 **AGPL-3.0**이었다
+  - **경계**: 저장소 clone + `pip install`은 copyleft 라이브러리를 배포하지 않으므로 무관. **PyInstaller 번들만** 해당
+  - Modan2 대조: PyQt5만 있고 PyMuPDF가 없어 **GPL-3.0**. MIT LICENSE는 *소스 기준으론 정확*하고, 빠진 건 "배포 바이너리는 GPL-3.0" 한 줄 (별건으로 남김)
+- ✅ **v0.1.6** — 라이선스 명시(AGPL-3.0) + About 탭(버전·라이선스·서드파티 7종) + 앞선 references 작업 일체
+  - `LICENSE`는 gnu.org 정본. ⚠️ **옆에 있는 걸 복사하면 안 된다** — PyMuPDF의 `COPYING`은 빈 파일이고 PyQt6가 실은 674줄은 **GPL**이다.
+    GPL과 AGPL은 §13에서만 갈려 눈으로는 구분이 안 되므로, 테스트가 양방향으로 검사한다
+  - `papermeister/about.py` + `tests/test_about.py` — 표의 라이선스가 **설치된 배포판의 자기 선언과 맞는지** 검사하고,
+    `requirements.txt`의 모든 런타임 의존성이 표에 있어야 통과한다 → **새 copyleft가 조용히 들어와 배포 라이선스를 바꾸는 일을 차단**
+- ✅ **v0.1.7 — PyMuPDF → pypdfium2 교체로 AGPL 탈출** (배포본 **GPL-3.0**, Modan2와 같은 등급)
+  - **교체 전에 실측**: 페이지 수·암호화 판정 전건 일치 / 두 엔진 렌더를 같은 OCR 모델에 넣어 **문자 유사도 0.9991** /
+    대조군(같은 이미지 2회 OCR)이 **바이트 동일**이므로 잔차는 렌더러 기인
+  - ⚠️ **raw 비교는 1/8 일치로 보였는데 대부분이 Chandra 출력의 bbox 좌표였다** — 래스터가 1픽셀 다르면 좌표가 달라진다. 본문만 보면 4/8 완전일치
+  - 손이 더 간 곳 둘: **메타데이터 인코딩**(pypdfium2가 UTF-8을 바이트 단위로 디코드 → latin-1↔UTF-8 왕복으로 복원, 300편 중 1편) /
+    **PDF 탭 QImage**(PDFium 기본이 BGRA → 명시적 RGB 요청 + 버퍼 소멸 전 copy). Science 로고가 빨갛게 나오는 것으로 확인
+  - `papermeister/pdfdoc.py`가 **PDF 접근의 유일한 진입점**(4가지). 이렇게 모여 있어서 교체가 가능했다
+  - **덤**: 번들이 20~32% 작아졌다 (설치본 51→40MB, AppImage 107→86MB)
 
 **2026-08-13 (세션 55)** — 의존성·CI 복구 + references 큐 위생 + desktop 병렬화 — [089](./devlog/20260813_089_Desktop_Parallel_References.md) · [090](./devlog/20260813_090_Dependency_Sweep_And_CI_Red_Fortnight.md) · [091](./devlog/20260813_091_References_Queue_Hygiene.md)
 - **Dependabot 5건 정리** (열린 PR 0건). 081 관례대로 각 버전을 설치해 우리 API 면을 훑는 probe로 검증 — 전부 baseline과 동일

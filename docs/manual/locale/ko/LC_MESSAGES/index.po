@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PaperMeister 0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-28 19:12+0900\n"
+"POT-Creation-Date: 2026-08-13 20:16+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: ko <LL@li.org>\n"
@@ -141,14 +141,37 @@ msgid "OCR, sync and extraction logs"
 msgstr "OCR·동기화·추출 로그"
 
 #: ../../index.rst:61
+msgid "License"
+msgstr "라이선스"
+
+#: ../../index.rst:63
+msgid ""
+"PaperMeister is free software, distributed under the **GPL-3.0-or-later**. "
+"You may use, study, modify and redistribute it under those terms, and the "
+"complete source is at https://github.com/jikhanjung/PaperMeister."
+msgstr ""
+"PaperMeister는 **GPL-3.0-or-later**\\ 로 배포되는 자유 소프트웨어입니다. 해당 조건에 따라 자유롭게 "
+"사용·연구·수정·재배포할 수 있으며, 전체 소스는 https://github.com/jikhanjung/PaperMeister 에 "
+"있습니다."
+
+#: ../../index.rst:67
+msgid ""
+"The released builds bundle PyQt6, which is GPL-3.0, and its terms cover the "
+"application as a whole. **Preferences → About** lists every third-party "
+"component with the licence it ships under."
+msgstr ""
+"배포되는 빌드는 GPL-3.0인 PyQt6를 번들하며, 그 조건이 애플리케이션 전체에 적용됩니다. **Preferences → "
+"About**\\ 에서 각 서드파티 구성요소와 그 라이선스를 확인할 수 있습니다."
+
+#: ../../index.rst:72
 msgid "Indices and tables"
 msgstr "색인 및 표"
 
-#: ../../index.rst:63
+#: ../../index.rst:74
 msgid ":ref:`genindex`"
 msgstr ""
 
-#: ../../index.rst:64
+#: ../../index.rst:75
 msgid ":ref:`search`"
 msgstr ""
 

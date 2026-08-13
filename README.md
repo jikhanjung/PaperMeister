@@ -82,7 +82,7 @@ python cli.py --help     # CLI 도움말
 1. 좌측 Zotero 탭에서 Library 필터 또는 컬렉션 클릭 → 중앙 목록 로드
 2. 목록에서 논문 클릭 → 우측 상세 패널에 **Metadata / PDF / Text / References** 탭 표시
 3. **Metadata** — 메타데이터 + 파일 정보 + Paper(Zotero) vs PaperBiblio(추출) 대조 비교. 필드별 라디오 선택·편집 후 Apply
-4. **PDF** — PyMuPDF 렌더 (보이는 페이지만 lazy 디코드) / **Text** — OCR 본문 markdown
+4. **PDF** — pypdfium2 렌더 (보이는 페이지만 lazy 디코드) / **Text** — OCR 본문 markdown
 5. **References** — 이 논문이 인용한 문헌 + 이 논문을 인용한 라이브러리 논문(양방향). 보유 문헌은 클릭 시 이동. 우클릭 → *Show in citation network* 로 ego 그래프
 
 ### 검색
@@ -146,7 +146,7 @@ make lock-check         # lock 파일이 requirements와 맞는지 확인
 - **GUI**: PyQt6
 - **DB**: SQLite + FTS5
 - **ORM**: Peewee 4
-- **PDF**: PyMuPDF
+- **PDF**: pypdfium2 (`papermeister/pdfdoc.py` 단일 진입점)
 - **OCR**: RunPod serverless (Chandra2-vllm)
 - **Zotero**: pyzotero
 - **LLM**: `claude -p` (Haiku + Sonnet, Max 플랜) 또는 자체 서버의 Qwen3

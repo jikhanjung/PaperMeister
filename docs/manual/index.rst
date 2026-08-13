@@ -57,6 +57,17 @@ Where things live
    * - ``~/PaleoBytes/PaperMeister/logs/``
      - OCR, sync and extraction logs
 
+License
+-------
+
+PaperMeister is free software, distributed under the **GPL-3.0-or-later**. You
+may use, study, modify and redistribute it under those terms, and the complete
+source is at https://github.com/jikhanjung/PaperMeister.
+
+The released builds bundle PyQt6, which is GPL-3.0, and its terms cover the
+application as a whole. **Preferences → About** lists every third-party
+component with the licence it ships under.
+
 Indices and tables
 ==================
 
