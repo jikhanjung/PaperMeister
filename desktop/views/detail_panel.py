@@ -3,7 +3,7 @@
 Tabs
 ----
 - Metadata   — Paper metadata + File card + Biblio comparison (if extracted)
-- PDF        — Rendered PDF pages via PyMuPDF
+- PDF        — Rendered PDF pages via pypdfium2
 - Text       — Rendered markdown from ~/PaleoBytes/PaperMeister/ocr_json/{hash}.json
                via QTextBrowser.setMarkdown (empty state if not processed)
 - References  — Citation relationships (P11): "Cited by" (library papers that
@@ -102,9 +102,7 @@ class _LazyPdfView(QScrollArea):
         self.setWidgetResizable(True)
         self.setFrameShape(QScrollArea.Shape.NoFrame)
 
-        import pymupdf
         self._doc = doc
-        self._matrix = pymupdf.Matrix(self._ZOOM, self._ZOOM)
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -115,9 +113,9 @@ class _LazyPdfView(QScrollArea):
         self._rendered: list[bool] = []
 
         for i in range(len(doc)):
-            page = doc[i]
-            w = int(page.rect.width * self._ZOOM)
-            h = int(page.rect.height * self._ZOOM)
+            pw, ph = doc[i].get_size()          # points, before zoom
+            w = int(pw * self._ZOOM)
+            h = int(ph * self._ZOOM)
             lbl = QLabel()
             lbl.setFixedSize(w, h)
             lbl.setStyleSheet('background: #1a1a1a;')
@@ -156,11 +154,15 @@ class _LazyPdfView(QScrollArea):
         if self._rendered[idx] or self._doc is None:
             return
         from PyQt6.QtGui import QImage, QPixmap
-        page = self._doc[idx]
-        pix = page.get_pixmap(matrix=self._matrix)
-        fmt = QImage.Format.Format_RGB888 if pix.n == 3 else QImage.Format.Format_RGBA8888
-        qimg = QImage(pix.samples, pix.width, pix.height, pix.stride, fmt)
-        self._page_labels[idx].setPixmap(QPixmap.fromImage(qimg))
+        # PDFium renders BGRA by default; ask for plain RGB so the buffer maps
+        # straight onto Format_RGB888 without a channel swap per page.
+        bitmap = self._doc[idx].render(scale=self._ZOOM, rev_byteorder=True,
+                                       prefer_bgrx=False)
+        buf = bitmap.buffer          # keep a reference: QImage does not copy
+        qimg = QImage(buf, bitmap.width, bitmap.height, bitmap.stride,
+                      QImage.Format.Format_RGB888)
+        # copy() before the buffer goes out of scope with the bitmap.
+        self._page_labels[idx].setPixmap(QPixmap.fromImage(qimg.copy()))
         self._rendered[idx] = True
 
 
@@ -428,7 +430,7 @@ class DetailPanel(QWidget):
     # ── PDF view tab ─────────────────────────────────────────
 
     def _build_pdf_tab(self, d) -> QWidget:
-        """Render PDF pages as images using PyMuPDF."""
+        """Render PDF pages as images using pypdfium2."""
         if not d.file_path and not d.file_hash:
             return self._ocr_empty_panel('No PDF file associated with this paper.')
         if d.file_status not in ('processed', 'pending', 'failed'):
@@ -458,9 +460,9 @@ class DetailPanel(QWidget):
 
     def _render_pdf(self, pdf_path: str) -> QWidget:
         """Open the PDF and hand it to the lazy-render scroll view."""
-        import pymupdf
+        from papermeister import pdfdoc
         try:
-            doc = pymupdf.open(pdf_path)
+            doc = pdfdoc.open_document(pdf_path)
         except Exception as exc:
             return self._ocr_empty_panel(f'Failed to open PDF: {exc}')
         return _LazyPdfView(doc)

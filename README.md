@@ -231,13 +231,14 @@ devlog/                 # 개발 기록 (구현 + 계획)
 
 ## 라이선스
 
-PaperMeister는 **AGPL-3.0-or-later**로 배포됩니다 (전문: [`LICENSE`](./LICENSE)).
+PaperMeister는 **GPL-3.0-or-later**로 배포됩니다 (전문: [`LICENSE`](./LICENSE)).
 
-배포되는 빌드는 **PyQt6(GPL-3.0)** 와 **PyMuPDF(AGPL-3.0)** 를 번들하므로, 결합저작물
-전체가 그중 가장 강한 조건을 따릅니다. 자유롭게 사용·연구·수정·재배포할 수 있으며,
-전체 소스는 이 저장소에 있습니다.
+배포되는 빌드가 **PyQt6(GPL-3.0)** 를 번들하므로 결합저작물 전체가 그 조건을 따릅니다.
+자유롭게 사용·연구·수정·재배포할 수 있으며, 전체 소스는 이 저장소에 있습니다.
+
+0.1.6까지는 **PyMuPDF(AGPL-3.0)** 때문에 AGPL이었으나, 0.1.7에서 렌더링을
+**pypdfium2**(BSD-3-Clause / Apache-2.0)로 교체하면서 GPL-3.0이 되었습니다.
 
 서드파티 구성요소와 각각의 라이선스는 앱의 **Preferences → About** 탭에서 확인할 수
-있습니다. 판단 근거와 대안(예: PyMuPDF를 Apache-2.0인 pypdfium2로 교체하면 AGPL을
-벗을 수 있음)은 [R03 라이선스 감사](./devlog/20260813_R03_License_Audit.md)에 정리돼
-있습니다.
+있습니다. 판단 근거와 남은 선택지(PyQt6 → PySide6로 가면 permissive 가능)는
+[R03 라이선스 감사](./devlog/20260813_R03_License_Audit.md)에 정리돼 있습니다.

@@ -16,10 +16,9 @@ import os
 import time
 from datetime import datetime
 
-import pymupdf
 import requests
-from PIL import Image
 
+from . import pdfdoc
 from .paths import LOG_DIR as _LOG_DIR
 
 os.makedirs(_LOG_DIR, exist_ok=True)
@@ -103,11 +102,7 @@ def _ensure_config():
 
 def render_page(pdf_path: str, page_idx: int, dpi: int = 150, quality: int = 85) -> str:
     """Render a single PDF page to base64 JPEG."""
-    doc = pymupdf.open(pdf_path)
-    mat = pymupdf.Matrix(dpi / 72, dpi / 72)
-    pix = doc[page_idx].get_pixmap(matrix=mat)
-    img = Image.frombytes('RGB', [pix.width, pix.height], pix.samples)
-    doc.close()
+    img = pdfdoc.render_page(pdf_path, page_idx, dpi)
 
     buf = io.BytesIO()
     img.save(buf, format='JPEG', quality=quality)
@@ -373,7 +368,7 @@ def _wrapper_health_check() -> bool:
 def wrapper_submit(pdf_path: str, *, force: bool = False) -> tuple[str, int, bool]:
     """Submit PDF to wrapper. Returns (job_id, total_pages, in_progress).
 
-    Reads page count locally via PyMuPDF before submission so the caller
+    Reads page count locally via pypdfium2 before submission so the caller
     can compute queue depth accurately even when the server hasn't finished
     parsing the PDF by the time we poll. Without this, large multi-page
     PDFs reported `total_pages=0` and the pipeline kept submitting more
@@ -394,12 +389,7 @@ def wrapper_submit(pdf_path: str, *, force: bool = False) -> tuple[str, int, boo
 
     local_pages = 0
     try:
-        import pymupdf
-        doc = pymupdf.open(pdf_path)
-        try:
-            local_pages = doc.page_count
-        finally:
-            doc.close()
+        local_pages = pdfdoc.page_count(pdf_path)
     except Exception as exc:
         logger.warning('Local page-count failed for %s: %s',
                        os.path.basename(pdf_path), exc)
@@ -592,9 +582,7 @@ def ocr_pdf(
         }
         return results, raw_result
 
-    doc = pymupdf.open(pdf_path)
-    total_pages = doc.page_count
-    doc.close()
+    total_pages = pdfdoc.page_count(pdf_path)
 
     all_page_indices = list(range(total_pages))
     raw_pages = {}  # page_idx -> raw page_data

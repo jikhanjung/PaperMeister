@@ -2,8 +2,7 @@ import json
 import os
 import tempfile
 
-import pymupdf
-
+from . import pdfdoc
 from .models import Author, PaperFile, Passage, db
 from .paths import OCR_JSON_DIR, PDF_CACHE_DIR  # noqa: F401  (re-exported)
 
@@ -28,41 +27,14 @@ def ocr_json_filename(paper_file):
 
 def extract_metadata_from_pdf(filepath):
     """Extract title, author, year from PDF metadata."""
-    doc = pymupdf.open(filepath)
-    meta = doc.metadata or {}
-    doc.close()
-
-    title = meta.get('title', '').strip()
-    author = meta.get('author', '').strip()
-
-    year = None
-    for key in ('creationDate', 'modDate'):
-        date_str = meta.get(key, '')
-        if date_str and len(date_str) >= 6:
-            try:
-                year_str = date_str.replace('D:', '')[:4]
-                y = int(year_str)
-                if 1900 <= y <= 2100:
-                    year = y
-                    break
-            except (ValueError, IndexError):
-                pass
-
-    return {'title': title, 'author': author, 'year': year}
+    return pdfdoc.read_metadata(filepath)
 
 
 def _pdf_is_encrypted(filepath):
     """True if the PDF is password-protected. A file that can't even be opened
     (corrupt) returns False so the normal OCR path surfaces — and records — its
     actual error rather than mislabelling it 'encrypted'."""
-    try:
-        doc = pymupdf.open(filepath)
-    except Exception:
-        return False
-    try:
-        return bool(doc.needs_pass)
-    finally:
-        doc.close()
+    return pdfdoc.is_encrypted(filepath)
 
 
 def split_into_passages(text, min_length=50):

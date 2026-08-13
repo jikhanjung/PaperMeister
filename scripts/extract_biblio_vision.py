@@ -13,8 +13,6 @@ import sys
 import tempfile
 import time
 
-import pymupdf
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from papermeister.database import init_db
@@ -59,7 +57,8 @@ Rules:
 
 def render_pdf_pages(pdf_path, out_dir, pages=(0, -1), dpi=150):
     """Render selected pages of a PDF to PNG. Returns list of image paths."""
-    doc = pymupdf.open(pdf_path)
+    from papermeister import pdfdoc
+    doc = pdfdoc.open_document(pdf_path)
     n = len(doc)
     out_paths = []
     selected = []
@@ -68,10 +67,9 @@ def render_pdf_pages(pdf_path, out_dir, pages=(0, -1), dpi=150):
         if 0 <= idx < n and idx not in selected:
             selected.append(idx)
     for idx in selected:
-        page = doc[idx]
-        pix = page.get_pixmap(dpi=dpi)
+        img = doc[idx].render(scale=dpi / 72).to_pil()
         out = os.path.join(out_dir, f'page_{idx + 1}.png')
-        pix.save(out)
+        img.save(out)
         out_paths.append(out)
     doc.close()
     return out_paths

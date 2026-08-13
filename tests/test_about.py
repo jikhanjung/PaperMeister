@@ -25,19 +25,24 @@ def test_version_matches_the_single_source():
 
 
 @pytest.mark.unit
-def test_license_file_is_the_agpl_and_not_the_gpl():
-    """They share most of their text; §13 is what separates them, and the
-    nearest copy to hand (PyQt6's) is the GPL, so this is an easy thing to get
-    wrong by copying the wrong file."""
+def test_license_file_is_the_gpl_and_not_the_agpl():
+    """The GPL and the AGPL share nearly all their text and differ at §13, so
+    shipping the wrong one is not something you would catch by eye. Assert in
+    both directions: the right title, and the absence of the clause that only
+    the AGPL has.
+    """
     text = (ROOT / 'LICENSE').read_text(encoding='utf-8')
-    assert 'GNU AFFERO GENERAL PUBLIC LICENSE' in text
-    assert '13. Remote Network Interaction' in text
+    head = text[:200]
+    assert 'GNU GENERAL PUBLIC LICENSE' in head
+    assert 'AFFERO' not in head, 'this is the AGPL, not the GPL'
+    assert '13. Remote Network Interaction' not in text, 'AGPL §13 present'
+    assert '13. Use with the GNU Affero General Public License' in text
     assert len(text) > 30_000, 'looks truncated, not the full licence text'
 
 
 @pytest.mark.unit
 def test_declared_license_matches_the_license_file():
-    assert about.APP_LICENSE.startswith('AGPL-3.0')
+    assert about.APP_LICENSE.startswith('GPL-3.0')
 
 
 def _declared_by(name: str) -> str:

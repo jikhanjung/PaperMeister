@@ -70,7 +70,8 @@ peewee가 생성하는 `id`/`<fk>_id`는 `models.py`에 `TYPE_CHECKING`으로 �
   - 신규 `desktop/` — 4-layer (views/services/components/workers), 다크 테마 design tokens, `python -m desktop` 엔트리
 - **DB:** SQLite with FTS5 — `~/PaleoBytes/PaperMeister/papermeister.db`
 - **ORM:** Peewee 4.x (`peewee.DatabaseProxy` + `peewee.SqliteDatabase`)
-- **PDF:** PyMuPDF (`import pymupdf`) — 메타데이터 추출 + 페이지 렌더링
+- **PDF:** pypdfium2 — 메타데이터 추출 + 페이지 렌더링. `papermeister/pdfdoc.py`가 **유일한 진입점**
+  (페이지 수·암호화 여부·메타데이터·페이지 렌더 4가지). PyMuPDF는 AGPL이라 0.1.7에서 걷어냈다 ([R03](./devlog/20260813_R03_License_Audit.md))
 - **OCR:** RunPod serverless (Chandra2-vllm) — Preferences에서 API 키 설정
 - **Zotero:** pyzotero — Preferences에서 user_id + api_key 설정
 - **Settings:** OS 설정 위치의 `PaleoBytes/PaperMeister/preferences.json` (RunPod, Zotero 자격증명) — Windows `%LOCALAPPDATA%`, macOS `~/Library/Application Support`, Linux `~/.config`. **데이터 디렉터리와 분리**(머신 로컬 상태 + 평문 키, 그리고 데이터 위치를 설정 가능하게 만들 때의 부트스트랩 순환 방지). 규약·근거는 [R02](./devlog/20260728_R02_Config_File_Location_Convention.md)

@@ -6,7 +6,7 @@ Build (on Windows, from the repo root, in the env that has the runtime deps):
     pip install pyinstaller
     pyinstaller PaperMeister.spec --noconfirm
 
-Output: dist/PaperMeister/PaperMeister.exe (+ _internal/ with Qt, pymupdf, etc.).
+Output: dist/PaperMeister/PaperMeister.exe (+ _internal/ with Qt, pypdfium2, etc.).
 Distribute the whole dist/PaperMeister/ folder (zip it).
 
 Notes
@@ -70,8 +70,9 @@ a = Analysis(
 # bundle ROOT, where it shadows PyQt6's copy at load time and makes Qt 6.11
 # fail with "DLL load failed importing QtWidgets: the specified procedure
 # could not be found". For any root-level binary that PyQt6 also ships under
-# Qt6\bin, re-point the root copy at PyQt6's (newer) source so both PyMuPDF
-# (root search path) and Qt resolve the same, current runtime.
+# Qt6\bin, re-point the root copy at PyQt6's (newer) source so both the
+# native extensions that search the root path (pypdfium2, formerly PyMuPDF)
+# and Qt resolve the same, current runtime.
 import os
 
 _pyqt_bin = {}

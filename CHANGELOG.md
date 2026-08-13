@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.7] - 2026-08-13
+
+Off the AGPL, by replacing the PDF engine.
+
+### Changed
+- **PaperMeister is now distributed under the GPL-3.0**, down from the AGPL-3.0
+  it carried in 0.1.6. Nothing you may do with it has narrowed — this is the
+  weaker of the two licences, and the change comes from replacing a component
+  rather than from any change of policy.
+- **PDF rendering and metadata now go through pypdfium2** (BSD-3-Clause /
+  Apache-2.0) instead of PyMuPDF (AGPL-3.0), which is what made the licence
+  change possible. PyMuPDF was the only AGPL component; PyQt6 (GPL-3.0) is what
+  now sets the terms.
+
+  The two were compared on the live library before the swap: page counts and
+  encryption detection matched on every file tested, and pages rendered by each
+  engine and passed through the same OCR model agreed to 0.9991 character
+  similarity — with the same image OCR'd twice being byte-identical, so that
+  residue is the renderer rather than model noise. Where they differed, neither
+  was systematically better. Text already extracted is untouched: OCR results
+  are cached per file, and the OCR server renders PDFs itself.
+- **Non-ASCII titles in PDF metadata are repaired.** pypdfium2 hands back some
+  metadata decoded byte-per-character, turning `Systême silurien` into
+  `SystÃªme silurien`; this is detected and undone. Affects only PDFs imported
+  from a local folder — items from Zotero take their metadata from the API.
+
+---
+
 ## [0.1.6] - 2026-08-13
 
 References extraction gets faster, and stops re-trying the papers it cannot read.

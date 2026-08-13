@@ -2,10 +2,10 @@
 name = "papermeister"
 description = "Turn an academic paper (PDF) collection into a searchable knowledge base."
 requires-python = ">=3.12"
-# The released builds bundle PyQt6 (GPL-3.0) and PyMuPDF (AGPL-3.0), so the
-# combined work is distributed under the stronger of those terms.
-# devlog/20260813_R03_License_Audit.md records how this was determined.
-license = "AGPL-3.0-or-later"
+# The released builds bundle PyQt6 (GPL-3.0), so the combined work is
+# distributed under those terms. devlog/20260813_R03_License_Audit.md records
+# how this was determined and what moving further would take.
+license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 
 [tool.ruff]
@@ -42,7 +42,7 @@ ignore = [
 
 [tool.mypy]
 python_version = "3.12"
-# PyMuPDF / pyzotero / PyQt6 still ship no stubs. peewee 4 does — and CI now
+# pypdfium2 / pyzotero / PyQt6 still ship no stubs. peewee 4 does — and CI now
 # installs the dependencies so mypy actually sees them, which is what makes the
 # gated modules meaningfully checked rather than dissolved into Any.
 ignore_missing_imports = true

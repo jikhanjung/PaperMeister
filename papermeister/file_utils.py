@@ -10,7 +10,7 @@ Status assigned at PaperFile creation:
 - anything else (.txt/.zip/.doc/...) → 'skipped'    (not an OCR target)
 """
 
-# OCR currently runs only on PDFs (ocr_pdf renders PDF pages via PyMuPDF).
+# OCR currently runs only on PDFs (ocr_pdf renders PDF pages via pypdfium2).
 # Images/other formats would need a separate code path, so they're 'skipped'.
 
 

@@ -14,9 +14,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-import pymupdf
 import requests
-from PIL import Image
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL = "glm-ocr:latest"
@@ -26,11 +24,8 @@ OUTPUT_DIR = "docs/ocr_results"
 
 def render_page(pdf_path: str, page_idx: int, dpi: int = 150, quality: int = 85) -> str:
     """PDF 페이지를 base64 JPEG로 렌더링."""
-    doc = pymupdf.open(pdf_path)
-    mat = pymupdf.Matrix(dpi / 72, dpi / 72)
-    pix = doc[page_idx].get_pixmap(matrix=mat)
-    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-    doc.close()
+    from papermeister import pdfdoc
+    img = pdfdoc.render_page(pdf_path, page_idx, dpi)
 
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=quality)
@@ -60,9 +55,8 @@ def main():
     parser.add_argument("--dpi", type=int, default=150, help="Render DPI")
     args = parser.parse_args()
 
-    doc = pymupdf.open(args.pdf)
-    total_pages = doc.page_count
-    doc.close()
+    from papermeister import pdfdoc
+    total_pages = pdfdoc.page_count(args.pdf)
     n_pages = min(args.pages, total_pages)
 
     print(f"PDF: {args.pdf} ({total_pages} pages)")
