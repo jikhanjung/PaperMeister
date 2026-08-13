@@ -44,7 +44,7 @@ class MainWindow(QMainWindow):
         self._auto_biblio_queue = []  # [(paper_id, file_id), ...] queued after OCR
         self._biblio_window = None   # batch biblio progress window (lazy)
         self._biblio_guard = self._make_biblio_guard()  # server-down pause/resume
-        self._refs_task = None        # single references extraction background task
+        self._refs_tasks = {}         # paper_id -> in-flight extraction task (see _refs_workers)
         self._refs_queue = []         # [(paper_id, file_id), ...] for references parsing
         self._refs_window = None      # batch references progress window (lazy)
         self._refs_index = None       # held-paper resolution index (per-batch cache)
@@ -1114,6 +1114,29 @@ class MainWindow(QMainWindow):
         from papermeister.preferences import get_pref
         return 'qwen' if get_pref('ocr_pod_url', '') else 'claude'
 
+    def _refs_workers(self) -> int:
+        """How many papers to parse at once (`refs_workers` pref, default 4).
+
+        A single LLM request decodes its tokens one at a time, so a bigger batch
+        of references per call costs proportionally more time — measured on this
+        server, packing 12 references into one call instead of 12 calls saves
+        only 1.2x, and the decode rate is 21 tok/s either way. Concurrent calls
+        are the axis that actually pays: vLLM batches them into one forward pass
+        over the weights, so 4 papers in flight finished the same work 4.0x
+        faster with per-request latency unchanged (18.7s -> 19.5s at six).
+
+        Only for the qwen backend. claude has no server doing that batching, and
+        parallel calls would just spend the Max plan quota faster.
+        """
+        from papermeister.preferences import get_pref
+        if self._refs_backend() != 'qwen':
+            return 1
+        try:
+            n = int(get_pref('refs_workers', 4))
+        except (TypeError, ValueError):
+            n = 4
+        return max(1, min(n, 8))
+
     def _refs_targets(self, folder_ids):
         """Processed PDFs (in scope) whose paper hasn't had references checked.
 
@@ -1232,10 +1255,10 @@ class MainWindow(QMainWindow):
         self._refs_guard.cancel()       # in case we were paused waiting on the server
         if self._refs_window:
             self._refs_window.mark_cancelling(dropped)
-        running = bool(self._refs_task and self._refs_task.isRunning())
+        running = self._refs_running()
         self.status_bar.set_task(
             f'References cancelled — dropped {dropped} queued'
-            + (', finishing current paper…' if running else '.'))
+            + (f', finishing {running} in flight…' if running else '.'))
         if not running:
             # Nothing in flight → finalize immediately.
             self._refs_index = None
@@ -1243,16 +1266,24 @@ class MainWindow(QMainWindow):
             if self._refs_window and self._refs_window.isVisible():
                 self._refs_window.finish()
 
+    def _refs_running(self) -> int:
+        """In-flight extraction tasks, dropping any that have already finished."""
+        for pid, task in list(self._refs_tasks.items()):
+            if not task.isRunning():
+                del self._refs_tasks[pid]
+        return len(self._refs_tasks)
+
     def _drain_refs_queue(self):
-        """Start references extraction for the next queued item, if idle."""
+        """Fill the in-flight slots from the queue, up to `_refs_workers()`.
+
+        Called after every completion and by the ServerGuard on resume, so it
+        has to be idempotent and safe to re-enter.
+        """
         if self._refs_guard.paused():   # waiting for the LLM server to recover
             return
-        if self._refs_task and self._refs_task.isRunning():
-            return
-        if not self._refs_queue:
-            return
-        paper_id, file_id = self._refs_queue.pop(0)
-        self._run_references_extraction_silent(paper_id, file_id)
+        while self._refs_queue and self._refs_running() < self._refs_workers():
+            paper_id, file_id = self._refs_queue.pop(0)
+            self._run_references_extraction_silent(paper_id, file_id)
 
     def _run_references_extraction_silent(self, paper_id: int, file_id: int):
         """Parse references in the background and save Reference rows."""
@@ -1261,51 +1292,56 @@ class MainWindow(QMainWindow):
 
         pf = PaperFile.get_or_none(PaperFile.id == file_id) if file_id else None
         if not pf or not pf.hash:
-            self._drain_refs_queue()
+            # Skip it; the drain loop that popped this one keeps filling slots.
+            # (Re-entering the drain from here would recurse once per unusable
+            # entry, which a long run of them could nest deeply.)
             return
 
         backend = self._refs_backend()
         file_hash = pf.hash
         self.status_bar.set_task(f'Parsing references for paper {paper_id}…')
-        if self._refs_window and self._refs_window.isVisible():
-            self._refs_window.set_current(f'Parsing: {self._biblio_title(paper_id)}')
 
         def _do_extract():
-            from papermeister import references as refs_mod
+            # LLM only — no DB. Saving, resolving and the two shared indexes all
+            # happen on the main thread in `_on_refs_extracted`, which is what
+            # lets several of these run at once: peewee connections are
+            # thread-local, SQLite takes one writer at a time, and the indexes
+            # were built lazily here back when refs were serialized.
+            # scripts/extract_references.py splits the work the same way.
             from papermeister.biblio import extract_references_llm
-            entries, source, model_version, complete, skipped = extract_references_llm(
+            return extract_references_llm(
                 file_hash, backend=backend,
                 on_progress=task.progress.emit,
                 on_notice=task.notice.emit)
-            n = refs_mod.save_references(paper_id, entries, source, model_version)
-            # Auto-resolve the freshly-saved references against held papers so
-            # the 'in library' badge is populated without a separate step, and
-            # canonicalize externals into CitedWork nodes (Phase 2 pass-1 exact
-            # dedup) so the Cited Works browser / co-citation badges populate.
-            # Both indexes are built once per batch and reused (refs run
-            # serialized, so no race), invalidated when the queue drains.
-            resolved = 0
-            if n:
-                if self._refs_index is None:
-                    self._refs_index = refs_mod.build_resolution_index()
-                if self._refs_work_index is None:
-                    self._refs_work_index = refs_mod.build_work_index()
-                counts = refs_mod.resolve_paper_references(
-                    paper_id, index=self._refs_index,
-                    work_index=self._refs_work_index)
-                resolved = counts.get('doi', 0) + counts.get('title', 0)
-            return n, resolved, complete, skipped
 
         task = BackgroundTask(_do_extract)
         task.progress.connect(self._on_refs_item_progress)
         task.notice.connect(self._on_refs_notice)
         task.done.connect(lambda result: self._on_refs_extracted(paper_id, result))
         task.failed.connect(lambda msg: self._on_refs_failed(paper_id, msg))
-        self._refs_task = task
+        self._refs_tasks[paper_id] = task   # also keeps the QThread referenced
         task.start()
+        self._refs_set_current()
+
+    def _refs_set_current(self):
+        """Label the progress window with what is in flight right now."""
+        win = self._refs_window
+        if not (win and win.isVisible()):
+            return
+        pids = list(self._refs_tasks)
+        if len(pids) > 1:
+            win.set_current(f'Parsing {len(pids)} papers…')
+        elif pids:
+            win.set_current(f'Parsing: {self._biblio_title(pids[0])}')
 
     def _on_refs_item_progress(self, done: int, total: int):
-        """Parsing progress within the current paper (queued from the worker)."""
+        """Parsing progress within the current paper (queued from the worker).
+
+        Only meaningful while a single paper is in flight — with several running
+        the bar would jump between unrelated papers' batch counts.
+        """
+        if len(self._refs_tasks) > 1:
+            return
         if self._refs_window and self._refs_window.isVisible():
             self._refs_window.set_item_progress(done, total)
 
@@ -1326,7 +1362,28 @@ class MainWindow(QMainWindow):
     def _on_refs_extracted(self, paper_id: int, result):
         win = self._refs_window if (self._refs_window and self._refs_window.isVisible()) else None
         try:
-            n, resolved, complete, skipped = result
+            from papermeister import references as refs_mod
+            entries, source, model_version, complete, skipped = result
+
+            # DB work for every in-flight paper lands here, on the main thread,
+            # one paper at a time — so the two indexes below still get built
+            # once per batch and SQLite never sees concurrent writers.
+            n = refs_mod.save_references(paper_id, entries, source, model_version)
+            # Auto-resolve the freshly-saved references against held papers so
+            # the 'in library' badge is populated without a separate step, and
+            # canonicalize externals into CitedWork nodes (Phase 2 pass-1 exact
+            # dedup) so the Cited Works browser / co-citation badges populate.
+            resolved = 0
+            if n:
+                if self._refs_index is None:
+                    self._refs_index = refs_mod.build_resolution_index()
+                if self._refs_work_index is None:
+                    self._refs_work_index = refs_mod.build_work_index()
+                counts = refs_mod.resolve_paper_references(
+                    paper_id, index=self._refs_index,
+                    work_index=self._refs_work_index)
+                resolved = counts.get('doi', 0) + counts.get('title', 0)
+
             # Only stamp checked when parsing completed. A partial result
             # (complete=False: the LLM server timed out / died and batches were
             # skipped) is saved but left UNCHECKED so a later run re-parses and
@@ -1406,13 +1463,16 @@ class MainWindow(QMainWindow):
         finish window + drop the resolution index when the batch is idle."""
         if self.detail_panel._current_paper_id == paper_id:
             self.detail_panel.show_paper(paper_id)  # repopulate References tab
+        self._refs_tasks.pop(paper_id, None)   # done — free its slot before refilling
         self._drain_refs_queue()
-        if not self._refs_queue and not (self._refs_task and self._refs_task.isRunning()):
+        if not self._refs_queue and not self._refs_running():
             self._refs_index = None  # rebuild fresh next batch (paper set may change)
             self._refs_work_index = None
             win = self._refs_window
             if win and win.isVisible():
                 win.finish()
+        else:
+            self._refs_set_current()
 
     def _open_preferences(self):
         """Open the frozen PreferencesDialog for RunPod / Zotero credentials."""
