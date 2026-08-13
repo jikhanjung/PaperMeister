@@ -9,7 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.1.6] - 2026-08-13
+
+References extraction gets faster, and stops re-trying the papers it cannot read.
+
 ### Added
+- **References extraction now parses several papers at once**, four by default.
+  A single request to the model generates its answer one token at a time, so
+  putting more references into one request does not make it finish sooner —
+  running several requests at once does, because the server works on them
+  together. Measured against the previous behaviour on a real library run, this
+  is 2.8x the references per minute. Set `refs_workers` in `preferences.json` to
+  change it; 1 restores the old behaviour. Only applies to the local Qwen
+  server, since the Claude backend has nothing doing that batching.
+- **A progress bar for each paper being parsed**, with its title and how many
+  references of the total are done. With several papers running, a single shared
+  bar would jump between unrelated counts, and a batch that only said "Parsing 4
+  papers…" told you less than the old one-at-a-time view did.
+- **Papers that repeatedly fail to parse are set aside** instead of being
+  attempted first every single run. A partial parse is deliberately left
+  unfinished so a later run can replace it — but the queue is ordered so that
+  those same papers come back to the front next time, which meant a handful of
+  unreadable documents were retried ahead of everything else, indefinitely. A
+  paper that has come back partial three times now drops out of a normal run.
+  Right-click "My Library" → **Retry Failed References…** to try them again;
+  a paper that does parse successfully has its count cleared.
 - **`PAPERMEISTER_CONFIG_DIR` names where settings go**, alongside the existing
   `PAPERMEISTER_DATA_DIR` for the library. The two are independent, so settings
   and data can sit on different volumes.
@@ -19,6 +45,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   did that silently and looked frozen. The outage, and the recovery, are logged
   in the window and the status bar. Progress within the current paper (refs
   parsed of total) is shown too.
+
+- **PaperMeister now states its licence.** Preferences → About shows the version,
+  the licence, and every third-party component with the licence it ships under.
+
+### Changed
+- **Updated peewee (4.3.0), PyMuPDF (1.28.2), pyzotero (1.13.5) and
+  platformdirs.** Each was exercised against the parts of it PaperMeister
+  actually uses — full-text search, the citation tables, PDF rendering and
+  metadata, and every Zotero call — before being taken.
+- **The project is distributed under the AGPL-3.0**, and now carries a `LICENSE`
+  file saying so. It always effectively was: the released builds bundle PyQt6
+  (GPL-3.0) and PyMuPDF (AGPL-3.0), and those terms cover the application as a
+  whole. Nothing about how you may use PaperMeister has changed — this is the
+  same software, now labelled accurately. The complete source is, as before, in
+  this repository.
 
 ---
 

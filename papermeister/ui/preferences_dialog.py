@@ -1,3 +1,4 @@
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -183,11 +184,38 @@ class PreferencesDialog(QDialog):
         page = QWidget()
         layout = QVBoxLayout(page)
 
+        from .. import about
         from ..preferences import get_client_id
 
-        intro = QLabel('PaperMeister desktop')
+        intro = QLabel(f'{about.APP_NAME} {about.APP_VERSION}')
         intro.setStyleSheet('font-weight: bold; font-size: 14px;')
         layout.addWidget(intro)
+
+        blurb = QLabel(
+            f'{about.APP_DESCRIPTION}<br>'
+            # Explicit link colour: Qt's default anchor blue is close to
+            # unreadable against the dark theme's background.
+            f'<a href="{about.APP_URL}" style="color:#6cb6ff;">{about.APP_URL}</a><br>'
+            f'{about.APP_COPYRIGHT}'
+        )
+        blurb.setTextFormat(Qt.TextFormat.RichText)
+        blurb.setOpenExternalLinks(True)   # the anchor is the only way out to a browser
+        blurb.setWordWrap(True)
+        layout.addWidget(blurb)
+
+        lic = QLabel(about.license_summary())
+        lic.setWordWrap(True)
+        lic.setStyleSheet('color: #888;')
+        layout.addWidget(lic)
+
+        third_party = QLabel(
+            'Third-party components:<br>' + '<br>'.join(
+                f'&nbsp;&nbsp;{name} — {licence}'
+                for name, licence, _evidence in about.THIRD_PARTY)
+        )
+        third_party.setTextFormat(Qt.TextFormat.RichText)
+        third_party.setStyleSheet('color: #888; font-size: 11px;')
+        layout.addWidget(third_party)
 
         form = QFormLayout()
         cid_value = QLineEdit(get_client_id())
