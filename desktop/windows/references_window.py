@@ -48,6 +48,7 @@ class ReferencesWindow(QWidget):
         self._current_text = 'Idle'      # restored after a mid-paper server wait
         self._active = False   # a batch is in progress (drives begin() extend)
         self._counts = {'ok': 0, 'empty': 0, 'error': 0}
+        self._item_rows = {}   # paper_id -> (row widget, bar, count label)
         self._setup_ui()
 
     def _setup_ui(self):
@@ -64,20 +65,18 @@ class ReferencesWindow(QWidget):
         prog_layout.addWidget(self.progress_count)
         layout.addLayout(prog_layout)
 
-        # Second bar for the paper being parsed. Entry counts differ by orders
-        # of magnitude — a nomenclator runs to 2,000 entries where an article
-        # has 30 — so the batch bar alone cannot distinguish a long paper from
-        # a stalled one. Hidden until there is something to show.
-        item_layout = QHBoxLayout()
-        self.item_bar = QProgressBar()
-        self.item_bar.setMaximumHeight(10)
-        self.item_bar.setTextVisible(False)
-        self.item_count = QLabel('')
-        self.item_count.setStyleSheet('font-size: 11px; color: #888;')
-        item_layout.addWidget(self.item_bar)
-        item_layout.addWidget(self.item_count)
-        layout.addLayout(item_layout)
-        self._show_item_progress(False)
+        # One bar per paper in flight. Entry counts differ by orders of
+        # magnitude — a nomenclator runs to 2,000 entries where an article has
+        # 30 — so the batch bar alone cannot distinguish a long paper from a
+        # stalled one. With several papers parsing at once a single shared bar
+        # is worse than none: it would jump between unrelated papers' counts,
+        # so each gets its own row and they come and go as papers do.
+        self.items_box = QWidget()
+        self.items_layout = QVBoxLayout(self.items_box)
+        self.items_layout.setContentsMargins(0, 0, 0, 0)
+        self.items_layout.setSpacing(2)
+        layout.addWidget(self.items_box)
+        self.items_box.setVisible(False)
 
         self.log = QTextEdit()
         self.log.setReadOnly(True)
@@ -97,19 +96,73 @@ class ReferencesWindow(QWidget):
         bottom.addWidget(self.close_btn)
         layout.addLayout(bottom)
 
-    def _show_item_progress(self, visible: bool):
-        self.item_bar.setVisible(visible)
-        self.item_count.setVisible(visible)
+    # ── Per-paper progress rows ──────────────────────────────────
 
-    def set_item_progress(self, done: int, total: int):
-        """Progress within the paper currently being parsed."""
-        if total <= 0:
-            self._show_item_progress(False)
+    def start_item(self, paper_id: int, title: str):
+        """Add a row for a paper that just started parsing.
+
+        Created up front rather than on the first progress callback, so a paper
+        still finding its references section (which can take a while on a long
+        PDF) is visibly present rather than missing.
+        """
+        if paper_id in self._item_rows:
             return
-        self.item_bar.setRange(0, total)
-        self.item_bar.setValue(done)
-        self.item_count.setText(f'{done} / {total} refs  ({done * 100 // total}%)')
-        self._show_item_progress(True)
+        row = QWidget()
+        hbox = QHBoxLayout(row)
+        hbox.setContentsMargins(0, 0, 0, 0)
+
+        name = QLabel()
+        name.setStyleSheet('font-size: 11px; color: #aaa;')
+        name.setFixedWidth(260)
+        # Elide rather than let Qt clip: a title cut mid-word looks like a
+        # different paper, and these rows are how you tell them apart.
+        name.setText(name.fontMetrics().elidedText(
+            title, Qt.TextElideMode.ElideRight, name.width()))
+        name.setToolTip(title)
+        bar = QProgressBar()
+        bar.setMaximumHeight(10)
+        bar.setTextVisible(False)
+        bar.setRange(0, 0)          # busy until the entry count is known
+        count = QLabel('starting…')
+        count.setStyleSheet('font-size: 11px; color: #888;')
+        count.setMinimumWidth(150)
+
+        hbox.addWidget(name)
+        hbox.addWidget(bar)
+        hbox.addWidget(count)
+        self.items_layout.addWidget(row)
+        self._item_rows[paper_id] = (row, bar, count)
+        self.items_box.setVisible(True)
+
+    def set_item_progress(self, paper_id: int, done: int, total: int):
+        """Progress within one paper being parsed."""
+        entry = self._item_rows.get(paper_id)
+        if not entry:
+            return
+        _row, bar, count = entry
+        if total <= 0:
+            bar.setRange(0, 0)
+            count.setText('scanning…')
+            return
+        bar.setRange(0, total)
+        bar.setValue(done)
+        count.setText(f'{done} / {total} refs  ({done * 100 // total}%)')
+
+    def end_item(self, paper_id: int):
+        """Drop a finished paper's row."""
+        entry = self._item_rows.pop(paper_id, None)
+        if not entry:
+            return
+        row = entry[0]
+        self.items_layout.removeWidget(row)
+        row.setParent(None)
+        row.deleteLater()
+        if not self._item_rows:
+            self.items_box.setVisible(False)
+
+    def _clear_items(self):
+        for paper_id in list(self._item_rows):
+            self.end_item(paper_id)
 
     def _on_cancel_clicked(self):
         # Disable immediately so it can't be double-fired; the main window will
@@ -189,15 +242,13 @@ class ReferencesWindow(QWidget):
         self.progress_count.setText(f'{self._done} / {self._total}')
 
     def set_current(self, text: str):
+        # Rows are owned by start_item/end_item now — this only relabels the
+        # headline, so a mid-paper server notice can't wipe the live bars.
         self._current_text = text
         self.current_label.setText(text)
-        # Clear the per-paper bar: a stale count from the previous paper is
-        # worse than none, since it looks like progress that isn't happening.
-        self._show_item_progress(False)
 
     def record(self, summary: str, kind: str = 'info', refs: int = 0):
         """Log one finished paper and advance the progress bar."""
-        self._show_item_progress(False)
         if kind in self._counts:
             self._counts[kind] += 1
         self._refs += refs
@@ -209,6 +260,7 @@ class ReferencesWindow(QWidget):
 
     def finish(self):
         self._active = False
+        self._clear_items()   # nothing is in flight any more
         self.current_label.setText(self._stop_label if self._cancelled else 'Done')
         self.cancel_btn.setEnabled(False)
         c = self._counts

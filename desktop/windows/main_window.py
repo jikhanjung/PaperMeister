@@ -1315,16 +1315,25 @@ class MainWindow(QMainWindow):
                 on_notice=task.notice.emit)
 
         task = BackgroundTask(_do_extract)
-        task.progress.connect(self._on_refs_item_progress)
+        # Bind the paper to its own progress row: with several in flight the
+        # (done, total) pair alone says nothing about which paper moved.
+        task.progress.connect(
+            lambda done, total, pid=paper_id: self._on_refs_item_progress(pid, done, total))
         task.notice.connect(self._on_refs_notice)
         task.done.connect(lambda result: self._on_refs_extracted(paper_id, result))
         task.failed.connect(lambda msg: self._on_refs_failed(paper_id, msg))
         self._refs_tasks[paper_id] = task   # also keeps the QThread referenced
+        if self._refs_window and self._refs_window.isVisible():
+            self._refs_window.start_item(paper_id, self._biblio_title(paper_id))
         task.start()
         self._refs_set_current()
 
     def _refs_set_current(self):
-        """Label the progress window with what is in flight right now."""
+        """Label the progress window with what is in flight right now.
+
+        The headline only counts; which papers they are, and how far each has
+        got, is on the per-paper rows.
+        """
         win = self._refs_window
         if not (win and win.isVisible()):
             return
@@ -1334,16 +1343,10 @@ class MainWindow(QMainWindow):
         elif pids:
             win.set_current(f'Parsing: {self._biblio_title(pids[0])}')
 
-    def _on_refs_item_progress(self, done: int, total: int):
-        """Parsing progress within the current paper (queued from the worker).
-
-        Only meaningful while a single paper is in flight — with several running
-        the bar would jump between unrelated papers' batch counts.
-        """
-        if len(self._refs_tasks) > 1:
-            return
+    def _on_refs_item_progress(self, paper_id: int, done: int, total: int):
+        """Parsing progress within one paper (queued from its worker)."""
         if self._refs_window and self._refs_window.isVisible():
-            self._refs_window.set_item_progress(done, total)
+            self._refs_window.set_item_progress(paper_id, done, total)
 
     def _on_refs_notice(self, kind: str, msg: str):
         """Something happened inside the paper being parsed that the user should
@@ -1464,6 +1467,8 @@ class MainWindow(QMainWindow):
         if self.detail_panel._current_paper_id == paper_id:
             self.detail_panel.show_paper(paper_id)  # repopulate References tab
         self._refs_tasks.pop(paper_id, None)   # done — free its slot before refilling
+        if self._refs_window and self._refs_window.isVisible():
+            self._refs_window.end_item(paper_id)
         self._drain_refs_queue()
         if not self._refs_queue and not self._refs_running():
             self._refs_index = None  # rebuild fresh next batch (paper set may change)
