@@ -10,9 +10,9 @@
 
 **Phase: 코어 기능 완성 — Phase 1~3 + Phase D 완료 / P11 references 추출 진행 중(본체 잔여 작업) / P12 CitedWork 정규화 + P13 FTS external-content 라이브 반영 완료 / P14 인용 네트워크(통계·export·ego 그래프) 완료 / P15 코드품질·CI 완료 → **v0.1.5 릴리스**(3플랫폼 + Windows 설치본, 자산 5종, 프로즌 빌드 스모크 통과) + **사용자 매뉴얼 en/ko 배포** + **PaleoBytes 데이터·설치 경로 정렬**(2026-07-28)**
 
-> **라이브 DB 실측 (2026-07-29, WSL read-only)**: Paper 9,891 / PaperFile processed 19,894·pending 3·skipped 110 — **OCR은 사실상 완료**.
-> references 추출 진행 중 — `references_checked` **4,248편(43%)**, `Reference` **199,719행**(held 매칭 36,218), `CitedWork` **108,075노드**.
-> P11/P12/P13/P14 모두 라이브 반영됨. **남은 건 references 나머지 5,643편뿐.**
+> **라이브 DB 실측 (2026-08-13, WSL read-only)**: Paper 9,891 / PaperFile processed 19,894·pending 3·skipped 110 — **OCR은 사실상 완료**.
+> references 추출 — `references_checked` **7,928편(80.2%)**, `Reference` **418,132행**(held 매칭 62,535), `CitedWork` **225,018노드**.
+> P11/P12/P13/P14 모두 라이브 반영됨. **남은 건 1,916편**(+ give-up으로 은퇴시킨 47편은 별도 재시도 대상).
 
 ### 안정적으로 돌아가는 것
 
@@ -30,8 +30,9 @@
 - **desktop 앱** (`python -m desktop`, Windows + Anaconda):
   - Rail(Library/Search 모드 + Sync·Import·Process·Settings·Works 액션) / SourceNav(소스마다 탭 + 컬렉션 트리 + 하단 STATUS 패널) / PaperList(헤더 정렬·인용 스타일 저자·Ctrl+click reveal) / DetailPanel 4탭(**Metadata / PDF / Text / References**, lazy 빌드)
   - status pill: `wait`(pending) → `OCR`(processed) → `done`(applied·auto_committed) / `rev`(needs_review) / `err`(failed) / `skip`(비-PDF 첨부) / `—`(no PDF)
-  - 우클릭 — **Paper**: Process OCR·Retry·Extract Biblio·Extract References·Open PDF·Review Biblio·Show in citation network / **폴더·My Library**: Process All(OCR→Biblio)·Extract References·Upload OCR JSON (하위폴더 재귀)
-  - 진행창 3종(Process / Biblio / References) — Cancel + 서버 다운 시 `ServerGuard`가 큐를 유지한 채 pause → 복구되면 자동 resume
+  - 우클릭 — **Paper**: Process OCR·Retry·Extract Biblio·Extract References·Open PDF·Review Biblio·Show in citation network / **폴더·My Library**: Process All(OCR→Biblio)·Extract References·**Retry Failed References…**·Upload OCR JSON (하위폴더 재귀)
+  - 진행창 3종(Process / Biblio / References) — Cancel + 서버 다운 시 `ServerGuard`가 큐를 유지한 채 pause → 복구되면 자동 resume.
+    References 창은 **동시에 파싱 중인 논문마다 진행바 한 줄**(제목·엔트리 수·%; 엔트리 수를 모르는 동안은 busy)
   - **로컬 폴더 가져오기**(Rail import): 재귀 스캔 + SHA256 dedup. 이미 있는 hash면 새 Paper를 만들지 않고 그 논문을 폴더에 링크한다. 탭 우클릭으로 directory 소스 제거(디스크 파일·OCR 캐시는 보존)
   - **PyInstaller 패키징**: `build_desktop_clean.bat`만 사용한다 — conda 셸 직접 빌드(`build_desktop.bat`)는 Qt DLL 오염으로 실패한다([devlog 061](./devlog/20260615_061_PyInstaller_Conda_DLL_Troubleshooting.md))
 - **데이터·로그**: `~/PaleoBytes/PaperMeister/` 아래 `papermeister.db` · `ocr_json/` · `pdf_cache/{zotero_key}/{filename}` · `logs/{ocr,zotero_sync,biblio_YYYYMMDD}.log`
@@ -42,8 +43,12 @@
   - 파이프라인 자체는 완성됐다: 추출(ocrserver Qwen3) → `Reference` 저장 → **추출 직후 자동 resolve**(보유 논문 매칭) → `CitedWork` 정규화(P12 패스1 auto-canonicalize). desktop 우클릭(Paper / 폴더 / My Library)과 `scripts/extract_references.py` 양쪽에서 돈다. 계획 [P11](./devlog/20260625_P11_References_Extraction_Citation_Network.md) · [P12](./devlog/20260625_P12_External_Work_Normalization.md)
   - **held vs cited-only는 `Reference.resolved_paper`의 null 여부**로 판정한다(별도 플래그 없음). 외부 문헌은 `resolved_work`(`CitedWork`)로 dedup되어 공동인용·"자주 인용하지만 미보유" 발굴이 가능해진다
   - `Paper.references_checked`가 재파싱을 막는다. **"참고문헌 없음"은 실패가 아니라 checked-empty**
-  - **범위 결정(2026-07-27, 사용자)**: 일반적인 학술지 논문만 잘 처리하면 된다 — 가이드북·도판·목차·부고 등의 헤딩 탐지 정확도는 개선하지 않는다. 단 **조용한 유실·무한 루프를 봉쇄하는 가드(077~079)는 유지**한다(이상 문서 하나가 매 배치 선두를 점유하면 본류 처리량을 갉아먹으므로)
-  - **미해결**: 일반적인 재시도 give-up 카운터는 아직 없다. 확인된 두 원인(무참고문헌 / 응답 절단)이 제거됐으니 잔류분 규모를 새 로그로 본 뒤 필요성을 판단한다
+  - **범위 결정(2026-07-27, 사용자)**: 일반적인 학술지 논문만 잘 처리하면 된다 — 가이드북·도판·목차·부고 등의 헤딩 탐지 정확도는 개선하지 않는다. 단 **조용한 유실·무한 루프를 봉쇄하는 가드(077~079)는 유지**한다
+  - ✅ **give-up 카운터 도입 (2026-08-13, [091](./devlog/20260813_091_References_Queue_Hygiene.md))** — 오래 미해결이던 항목.
+    `Paper.references_attempts`가 PARTIAL/실패마다 +1, **완전 파싱 성공 시 0으로 리셋**(리셋이 없으면 장애로 실패한 논문이 영영 은퇴 상태로 남는다). 3회면 일반 실행에서 빠지고
+    우클릭 **"Retry Failed References…"** / CLI `--only-failed`로만 돌아온다. 기존 DB는 0으로 마이그레이션(추측 backfill 금지 — 관측한 실패만 센다)
+  - **desktop도 논문 단위 병렬** (`refs_workers` pref, 기본 4, qwen에서만) — [089](./devlog/20260813_089_Desktop_Parallel_References.md).
+    워커는 **LLM 호출만**, 저장·resolve·인덱스 빌드는 메인 스레드(CLI `--workers`와 같은 분할). 진행창은 **동시 논문마다 진행바 한 줄**
 
 ### 대기 중
 - **needs_review 일괄 검토** — 실측 **5,229편**. Library "Needs Review" 필터 → Metadata 탭의 Biblio 대조 UI로 처리
@@ -53,22 +58,31 @@
 
 ## 다음 할 일
 
-> **현재 우선순위 (2026-07-29)**: 인프라·문서·릴리스는 한 바퀴 정리됐다(v0.1.5 + 매뉴얼 en/ko 배포).
-> **본체로 남은 건 references 추출 완주 하나**이고, 그 외는 전부 후속·선택 사항이다.
+> **현재 우선순위 (2026-08-13)**: 본체로 남은 건 여전히 **references 추출 완주 하나**.
+> 오늘 큐에서 병목(문제 문서 47편)을 걷어내고 desktop을 병렬화했으므로, **다음 세션의 첫 일은
+> 새 처리율 실측**이다 — 그 전까지의 모든 속도 수치는 오염된 표본에서 나온 것이라 쓰면 안 된다.
 
 ### 진행 중 (본체)
 
-- [~] **references 추출 완주** — 2026-07-29 실측 **4,248/9,891편(43%)**. 실측 처리율 **~16편/시간**(≈400편/일)이라
-  남은 5,643편은 연속 가동 기준 **약 2주**. 실패 경로 복원력은 devlog 075~079·083으로 정리 완료
-  (5xx 컨테이너 재기동 · 응답 절단 · 무참고문헌 · `[]` 남용 · 오탐 루프 전부 봉쇄).
+- [~] **references 추출 완주** — 2026-08-13 실측 **7,928/9,891편(80.2%)**, 남은 정상 대상 **1,916편**.
+  실패 경로 복원력은 075~079·083으로, 큐 위생은 091로 정리 완료.
   완주 후 재-resolve + `normalize_works` 재실행(둘 다 멱등)
+- [ ] 🔬 **`refs_workers=4`의 실제 처리율 측정 (최우선)** — 오늘 잰 13.8 refs/min은 **은퇴시킨 47편에
+  오염된 값이라 무효**다. 큐가 정상 논문만 남은 지금이 첫 유효 측정 기회.
+  같이 볼 것: **timeout이 직렬 2,873편 0건 → 동시 첫 10편 2건**으로 나타났다. 계속 보이면
+  `refs_workers`를 2~3으로 낮추거나 read timeout을 올린다.
+  ⚠️ **089의 마이크로벤치마크(동시성 6까지 지연 평평, 4배)는 입력 684토큰짜리 장난감이었다** —
+  실제 입력은 16k~36k자라 프리필·KV 압력이 전혀 다르다. **그 숫자를 근거로 쓰지 말 것**
+- [ ] **은퇴시킨 47편 처리 방침 결정** — Treatise 합본·化石 합본·단행본이다(079 §e가 보류한 부류).
+  본류가 끝난 뒤 "Retry Failed References…"로 한 번 볼지, 영구 제외할지
 
 ### 🔴 사용자 액션 대기
 
 - [ ] **v0.1.5 Windows 설치본 수동 확인** — CI 스모크는 "기동한다"까지만 보증한다. 설치 자체와 실기능은 미검증.
   AppId가 v0.1.4부터 고정됐으므로 **이번엔 제자리 업그레이드로 깔려야 한다** — 그게 곧 이 항목의 검증이다
-- [ ] **앱 재시작 후 `%LOCALAPPDATA%\PaleoBytes\PaperMeister\preferences.json` 생성 확인** — 설정 분리 코드가 라이브에서 아직 안 돌았다
 - [ ] **백업 스크립트 Windows 실행** — 7/28 이후 첫 성공 백업이 되는지
+- [x] ~~앱 재시작 후 `%LOCALAPPDATA%\PaleoBytes\PaperMeister\preferences.json` 생성 확인~~
+  ✅ (2026-08-13 확인) 7/29에 생성됐고 8/5에 갱신됨 — `migrate_legacy_config()`가 라이브에서 실제로 돌았다
 
 ### 환경·운영 상수 (매 세션 전제)
 
@@ -76,6 +90,13 @@
   앱이 쓰는 중이면 WAL/NTFS 충돌로 `disk I/O error`가 난다 → `?mode=ro&immutable=1`로 열거나
   (마지막 체크포인트 시점 값) Windows에서 `scripts/refs_progress.py`를 쓴다
 - **데이터를 바꾸는 스크립트는 Windows(Anaconda)에서 실행한다.** WSL은 read-only 조회 전용
+- **CI는 push/PR에서만 돈다 — 커밋을 안 하는 동안은 아무도 안 본다.** 7/29~8/12에 Tests가
+  Windows 레그에서 red였는데 2주 동안 몰랐다: Linux 레그는 green이라 반만 건강해 보였고,
+  main에 push가 없어 마지막 green(7/29)이 계속 표시됐으며, 스케줄로 도는 Security·CodeQL은
+  green이었다. 086의 "릴리스를 안 컷하는 동안 아무도 안 본다"가 조건만 바꿔 재발한 것.
+  **오래 쉰 뒤 첫 push는 CI 결과를 반드시 확인한다** ([090](./devlog/20260813_090_Dependency_Sweep_And_CI_Red_Fortnight.md))
+- **lock을 설치할 땐 `python -m pip`** — `pip-audit`→`pip-api`가 pip 자신을 `requirements-dev.lock`에
+  핀하므로 이 설치는 pip를 덮어쓴다. Windows에서 `pip.exe`는 자기가 실행 중인 파일을 못 바꾼다
 - **설치본 `AppId` GUID는 절대 바꾸지 않는다** — 바꾸면 업그레이드가 별개 프로그램으로 설치된다.
   런타임 데이터는 설치/제거가 건드리지 않는다(`[UninstallDelete]` 추가 금지)
 - **설정은 데이터와 분리돼 있다** — OS 설정 위치의 `PaleoBytes/PaperMeister/preferences.json`.
@@ -194,6 +215,27 @@ P08 §3.5 원칙. `biblio_reflect.apply()`가 자동으로 분기하지만, 혹�
 ---
 
 ## 최근 세션 요약
+
+**2026-08-13 (세션 55)** — 의존성·CI 복구 + references 큐 위생 + desktop 병렬화 — [089](./devlog/20260813_089_Desktop_Parallel_References.md) · [090](./devlog/20260813_090_Dependency_Sweep_And_CI_Red_Fortnight.md) · [091](./devlog/20260813_091_References_Queue_Hygiene.md)
+- **Dependabot 5건 정리** (열린 PR 0건). 081 관례대로 각 버전을 설치해 우리 API 면을 훑는 probe로 검증 — 전부 baseline과 동일
+  - 🔴 **peewee 4.3.0은 단독 머지가 불가능했다** — 자기참조 FK(`'self'`) 오버로드가 고쳐져 `models.py`의 `type: ignore`가 unused가 되고 mypy가 깨진다.
+    Dependabot은 requirements만 건드리므로 그 PR을 머지했으면 main이 red. 4건을 코드 수정과 함께 직접 커밋 → Dependabot 자동 close
+  - pyzotero는 PR의 1.13.4가 아니라 **lock이 잡은 1.13.5**로 검증·반영 / codeql-action 패치 핀은 **거절**(리포의 액션 12개가 전부 floating major) + `dependabot.yml`에 ignore
+  - PyMuPDF 1.28.2가 `import fitz`에 deprecation 경고 → `import pymupdf`로 rename(9곳)
+- 🔴 **CI가 7/29 이후 2주 동안 red였다** — `pip-audit`→`pip-api`가 pip를 lock에 핀해서 Windows `pip.exe`가 자기 자신을 못 바꾸는 문제.
+  **Linux green + push 없음 + 스케줄 잡 green** 3중으로 가려졌다. `python -m pip`로 수정, 이제 전부 green
+- **desktop references를 논문 단위 병렬로** (`refs_workers`, 기본 4) — CLI `--workers`는 2026-06-25(`05c79d6`)부터 있었고
+  커밋에 "Desktop stays serial for now"라고 적혀 있었다. **느렸던 진짜 이유는 추출을 desktop에서 돌렸기 때문**
+  - 핵심은 **DB를 워커 스레드 밖으로** 뺀 것(저장·resolve·인덱스 → 메인 스레드). 직렬일 땐 무해했지만 동시엔 peewee thread-local·SQLite 단일 writer·인덱스 race가 전부 걸린다
+  - `_refs_batcher` 전역 싱글턴은 **안 건드렸다** — `05c79d6`이 4스레드로 이미 검증("benign int races")
+- 🔴 **처리량이 직렬보다 나쁘게 나왔는데, 사용자 지적("문제 있는 문서들이라 그런 건 아닐까?")이 맞았다** — 표본 오염이었다.
+  PARTIAL율이 **재시작 전 1.0%(2,873편) vs 후 40%(10편)**. `_refs_targets`가 `paper.desc()`로 훑고 PARTIAL은 checked를 안 찍으므로
+  **7월부터 실패해온 논문이 매 배치 선두에 재등장**한다(076이 진단만 하고 남긴 구조). 동시성 판단은 철회 — **다음 세션에서 다시 측정**
+  - 편향을 이기고 살아남은 신호: **timeout 직렬 0건 → 동시 2건.** 089 벤치마크가 장난감 프롬프트(684토큰)라 이걸 놓쳤다
+- ✅ **give-up 카운터** (HANDOFF 장기 미해결 항목) — `references_attempts`, 3회면 일반 실행에서 제외, **성공 시 0으로 리셋**(없으면 라이브러리가 서서히 전부 은퇴)
+  - `scripts/seed_refs_attempts.py`로 기존 문제 논문 소급 처리. 대상은 **unchecked인데 Reference 행이 있는 논문**으로 DB에서 도출(로그 파싱·추측 없음)
+  - 라이브 실행 **47편 은퇴** → 정체는 **Treatise 합본·化石 합본·단행본**(079 §e가 보류한 부류). 남은 정상 대상 1,916편
+- **진행바를 논문마다 한 줄로** — 병렬화 직후엔 `Parsing 4 papers…`만 나와 직렬 때보다 정보가 줄었다. 답은 바를 없애는 게 아니라 논문마다 두는 것
 
 **2026-07-29 (세션 54)** — references 서버 장애를 화면에 노출 — [devlog 088](./devlog/20260729_088_Refs_Server_Outage_Visible_In_UI.md)
 - **502가 나면 났다고 보여준다**(사용자 요청). 083의 "재시도 말고 복구를 기다린다"는 옳았지만 **그 대기가 화면에

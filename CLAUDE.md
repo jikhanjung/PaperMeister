@@ -98,6 +98,13 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 - UI는 QThread로 비동기 처리, DB는 peewee thread-local 연결
 - OCR health 체크: `ensure_workers_ready()`로 세션당 한 번만 수행
 - OCR 병렬 처리: `get_worker_status()`로 idle worker 수 확인 → `ThreadPoolExecutor`로 병렬 제출
+- References 병렬 처리: 논문 단위. desktop은 `refs_workers` pref(기본 4, qwen 백엔드에서만), CLI는 `--workers`.
+  **워커 스레드는 LLM 호출만** 하고 `save_references`·resolve·인덱스 빌드는 메인 스레드에 남긴다 —
+  peewee 연결이 thread-local이고 SQLite writer는 하나이며, 공유 인덱스가 배치당 한 번만 만들어져야 하기 때문.
+  전역 `_refs_batcher`는 공유해도 안전(int race가 무해함을 `05c79d6`이 4스레드로 검증)
+- **PARTIAL은 `references_checked`를 안 찍는다** — 나중 실행이 교체하도록. 그래서 `Paper.references_attempts`
+  give-up 카운터가 필요하다(3회면 일반 실행에서 제외, 성공하면 0으로 리셋). 없으면 파싱 불가 문서가
+  매 배치 선두를 영원히 점유한다(devlog 076·091)
 - `database.py`의 `_migrate()`가 기존 DB에 새 컬럼/인덱스 변경 자동 적용
 - Zotero: 시작 시 컬렉션 자동 동기화, 컬렉션 클릭 시 아이템 fetch, PDF는 OCR 시점에만 임시 다운로드
 - 설정: OS 설정 위치의 `PaleoBytes/PaperMeister/preferences.json` (RunPod, Zotero). `.env` 사용하지 않음.
