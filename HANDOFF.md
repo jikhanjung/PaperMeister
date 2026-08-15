@@ -135,7 +135,10 @@
 - [ ] 에러 핸들링 보강 (암호화된 PDF, 파손된 파일 등)
 - [ ] DB 삭제 후 복구 경로 실증 테스트 (Phase 1 잔여)
 - [ ] 커버리지 끌어올리기 — 현재 floor 18%(측정 19.6%). 실패 경로가 특히 얇다
-- [ ] **한국어 매뉴얼에서 코드 스팬이 `<cite>`(이탤릭)로 렌더된다** — 번역문은 MyST가 아니라 **RST 인라인 규칙으로 재파싱**되므로 단일 백틱이 코드가 아니라 title-reference가 된다(ko changelog 기준 cite 10 : code 1). 고치려면 `.po`의 msgstr만 이중 백틱으로 바꿔야 하는데, **리터럴 안에서는 백슬래시가 이스케이프가 아니라서** `%LOCALAPPDATA%\\PaleoBytes`류를 같이 `\\`→`\`로 줄여야 한다. 기계적이지만 함정이 있어 릴리스와 분리
+- [x] ✅ **한국어 매뉴얼 백틱 렌더링 (2026-08-15, [092](./devlog/20260815_092_Korean_Manual_Backtick_Rendering.md))** — 번역문이 MyST가 아니라 **RST 인라인 규칙으로 재파싱**되는 게 원인이라는 진단은 맞았다. 다만 이탤릭은 세 증상 중 가장 가벼운 것이었다: **백슬래시가 먹혀 `%LOCALAPPDATA%\PaleoBytes\PaperMeister`가 `%LOCALAPPDATA%PaleoBytesPaperMeister`로**(경로가 틀리게 표시), `--execute`는 `–execute`로, `**굵게**` 안에 중첩된 건 **백틱이 그대로 노출**됐다(RST는 인라인 중첩 불가). ko changelog 실측 code 6 : cite 11 : 노출 백틱 8 → 지금은 en과 같은 **code 22 : cite 0 : 노출 0**
+  - ⚠️ **여기 적혀 있던 "`\\`→`\`로 줄여야 한다"는 틀린 조언이었다** — PO의 이스케이프 계층과 RST 계층을 섞어 본 것이다. PO의 `\\`는 이미 백슬래시 하나이므로 이중 백틱으로 바꾸면 그대로 맞다. 백슬래시는 **하나도 건드리지 않았다**
+  - `.mo`도 같이 커밋해야 한다 — `docs.yml`은 `sphinx-build`만 돌리고 `sphinx-intl build`를 하지 않는다
+  - `tests/test_manual_translations.py`가 재발을 막는다(단일 백틱 스팬 금지 + 인라인 리터럴 종료 검사). **단, ko `.po`만 본다** — `.rst` 원본에 단일 백틱을 새로 쓰면 못 잡는다
 
 ### Zotero sync 양방향성 보강
 - [ ] **PaperFolder remove (컬렉션 멤버십 양방향 sync)** — 현재 `sync_zotero_items`는 `PaperFolder.get_or_create`만 호출 → add-only. 사용자가 Zotero에서 컬렉션 멤버십을 빼거나 다른 컬렉션으로 옮겨도 옛 링크가 잔존. 정책 결정 필요: "Zotero source of truth로 mirror" vs "add-only 보존". 전자라면 item의 `collections` 배열 기준으로 set-difference로 제거
