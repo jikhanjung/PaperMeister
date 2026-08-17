@@ -743,9 +743,9 @@ pytest-cov==7.1.0 \
     --hash=sha256:30674f2b5f6351aa09702a9c8c364f6a01c27aae0c1366ae8016160d1efc56b2 \
     --hash=sha256:a0461110b7865f9a271aa1b51e516c9a95de9d696734a2f71e3e78f46e1d4678
     # via -r requirements-dev.txt
-pyzotero==1.13.5 \
-    --hash=sha256:2a81d7bfe8b1ea4473bcb50f38f05e01e00968eff76c1c478b53f051ae6b0dc8 \
-    --hash=sha256:6a497a1d659790ebc6eb97fd8ef83942e24ce8e7446a8a98d416721f7d43b211
+pyzotero==1.13.7 \
+    --hash=sha256:870dd1ff28d670b4388e9db834b4680cfbe3cb8d081b22416ecaf06fe20f3d3d \
+    --hash=sha256:91a67ffbaa36446c362def389859785d2f7a370114da157b9b82ea9d7ff5ddab
     # via -r requirements.txt
 requests==2.34.2 \
     --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0 \
