@@ -3,5 +3,5 @@ peewee~=4.3.0
 pypdfium2~=5.12
 Pillow>=12.3.0
 requests>=2.34.2
-pyzotero~=1.13.4
+pyzotero~=1.13.7
 platformdirs>=4.11.1
