@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Each OCR backend's settings now sit under the backend they belong to.**
+  The Endpoint ID and API Key are RunPod's alone — a self-hosted server (Direct
+  vLLM, Wrapper API) is reached by its URL and nothing else — but the tab listed
+  every field below all three options, so the credentials read as settings for
+  whichever backend was selected. Each field is now indented under the option
+  that uses it.
+
+---
+
 ## [0.1.8] - 2026-08-28
 
 Certificates, on a network that inspects them.

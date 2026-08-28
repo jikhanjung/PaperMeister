@@ -16,6 +16,9 @@ from PyQt6.QtWidgets import (
 
 
 class PreferencesDialog(QDialog):
+    #: Left margin that puts a backend's fields visually inside its radio.
+    _INDENT = 24
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle('Preferences')
@@ -60,11 +63,15 @@ class PreferencesDialog(QDialog):
         self._ocr_group.addButton(self._ocr_runpod_radio)
         self._ocr_group.addButton(self._ocr_pod_radio)
         self._ocr_group.addButton(self._ocr_wrapper_radio)
+        # Each backend's fields sit under the backend that uses them. With all
+        # three radios stacked first and the fields floating below, the RunPod
+        # credentials read as settings for whichever backend is selected — they
+        # are not: `ocr.py::_ensure_config` reads them only in the serverless
+        # branch, and a self-hosted server needs nothing but the URL.
         layout.addWidget(self._ocr_runpod_radio)
-        layout.addWidget(self._ocr_pod_radio)
-        layout.addWidget(self._ocr_wrapper_radio)
 
         runpod_form = QFormLayout()
+        runpod_form.setContentsMargins(self._INDENT, 0, 0, 0)
         self.runpod_endpoint_edit = QLineEdit()
         self.runpod_endpoint_edit.setPlaceholderText('Serverless endpoint ID')
         runpod_form.addRow('Endpoint ID:', self.runpod_endpoint_edit)
@@ -74,7 +81,14 @@ class PreferencesDialog(QDialog):
         runpod_form.addRow('API Key:', self.runpod_api_key_edit)
         layout.addLayout(runpod_form)
 
+        # One URL for the two self-hosted backends: they share the `ocr_pod_url`
+        # pref, so this is one field under both radios rather than two fields
+        # that would have to be kept in step.
+        layout.addWidget(self._ocr_pod_radio)
+        layout.addWidget(self._ocr_wrapper_radio)
+
         pod_form = QFormLayout()
+        pod_form.setContentsMargins(self._INDENT, 0, 0, 0)
         self.ocr_pod_url_edit = QLineEdit()
         self.ocr_pod_url_edit.setPlaceholderText('http://172.16.112.150:8080')
         pod_form.addRow('URL:', self.ocr_pod_url_edit)
