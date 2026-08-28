@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-08-28
+
+Certificates, on a network that inspects them.
+
 ### Fixed
 - **Zotero sync no longer fails with a certificate error on networks that
   inspect TLS.** Such a network re-signs every connection with its own root
@@ -24,6 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Zotero sync in 0.1.6, when pyzotero changed the HTTP library underneath it.
   Connections are verified again, including on ordinary networks where that
   workaround was quietly weakening them.
+- **Code spans in the Korean manual are code again.** Sphinx re-parses each
+  translated string as reStructuredText, where a single-backtick span is a
+  title reference rather than a literal — so they rendered in italics, and,
+  not being literal, they lost their own backslashes:
+  `%LOCALAPPDATA%\PaleoBytes\PaperMeister` appeared with the separators
+  stripped out and `--execute` came through as an en dash. Anyone copying a
+  path or a flag out of the Korean manual was copying something that would not
+  work. The English manual was never affected.
 
 ---
 
