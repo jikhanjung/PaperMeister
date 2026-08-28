@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   model still render as before; re-processing one gives it the new layout.
 
 ### Fixed
+- **OCR keeps the server busier.** The OCR server divides its capacity between
+  the machines using it, and PaperMeister was leaving part of its own share
+  idle: it read that share once when a batch began — so it never noticed
+  another machine finishing and freeing up capacity — and it stopped feeding
+  the server while it saved each finished paper, which is work the server does
+  not wait for. It now re-reads its share as it goes and tops the queue back up
+  first. Setting a queue depth yourself in Preferences still overrides all of
+  this.
 - **Re-processing a paper no longer forgets that its bibliography was
   applied.** The OCR cache carries a marker saying the biblio for that paper is
   settled, and it is what stops the extraction from being run a second time.

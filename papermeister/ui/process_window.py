@@ -14,6 +14,11 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+#: How often the pipeline re-asks the wrapper for our share of it. Long enough
+#: to be free, short enough that a machine joining or leaving is noticed while
+#: the batch is still running.
+_SHARE_REFRESH_SECONDS = 60
+
 
 class ProcessWorker(QThread):
     """OCR-processes PaperFiles, parallelised by what the configured backend reports."""
@@ -202,7 +207,8 @@ class ProcessWorker(QThread):
                     self.progress.emit(
                         f'Queue depth target: {min_queued} pages (stats unavailable, default)'
                     )
-            processed, failed = self._run_wrapper_pipeline(min_queued_pages=min_queued)
+            processed, failed = self._run_wrapper_pipeline(
+                min_queued_pages=min_queued, follow_share=configured is None)
         else:
             processed, failed = self._run_parallel(max_concurrent)
 
@@ -258,13 +264,23 @@ class ProcessWorker(QThread):
                         self._note_fail()
         return processed, failed
 
-    def _run_wrapper_pipeline(self, min_queued_pages: int = 6):
+    def _run_wrapper_pipeline(self, min_queued_pages: int = 6, follow_share: bool = True):
         """Pipelined wrapper mode: keep ≥ min_queued_pages on the server.
 
         Submits PDFs ahead of time so the server always has enough pages
         to fill its concurrency slots (default 6).
+
+        `follow_share` re-reads that target as the run goes: the wrapper splits
+        its capacity between the machines using it, so ours doubles when
+        another finishes and halves when one arrives. Off when the user has
+        pinned a depth in preferences — an explicit setting is not ours to
+        move.
         """
         import time
+
+        from ..ocr import wrapper_client_concurrency
+
+        last_share_check = time.time()
 
         from ..file_utils import has_non_pdf_extension
         from ..ingestion import hash_file
@@ -485,8 +501,12 @@ class ProcessWorker(QThread):
 
             time.sleep(5)
 
-            # Poll all in-flight jobs
+            # Poll all in-flight jobs. Completions are only *noted* here —
+            # collecting and saving them is local work the server does not
+            # wait for, and doing it before topping the queue back up leaves
+            # the server short for as long as it takes.
             still_flying = []
+            finished = []
             for job_info in in_flight:
                 if self._cancelled:
                     break
@@ -503,30 +523,7 @@ class ProcessWorker(QThread):
                 job_info['done_pages'] = dp
 
                 if status in ('done', 'done_with_errors'):
-                    pf = job_info['pf']
-                    prefix = job_info['prefix']
-                    try:
-                        raw_pages, total_pages = wrapper_collect(job)
-                        from datetime import datetime
-                        raw_result = {
-                            'pdf': job_info['name'],
-                            'processed_at': datetime.now().isoformat(),
-                            'total_pages': total_pages,
-                            'done_pages': len(raw_pages),
-                            'pages': sorted(raw_pages.values(), key=lambda p: p['page']),
-                        }
-                        _finalize(pf, raw_result)
-                        self.progress.emit(f'{prefix} {job_info["name"]} done ({tp} pages)')
-                        self.file_done.emit(job_info['pf_id'], 'processed')
-                        processed += 1
-                        self._note_ok()
-                    except Exception as e:
-                        self.progress.emit(f'{prefix} {job_info["name"]} FAILED: {e}')
-                        pf.status = 'failed'
-                        pf.save()
-                        self.file_done.emit(job_info['pf_id'], 'failed')
-                        failed += 1
-                        self._note_fail()
+                    finished.append((job_info, job, tp))
                 elif status == 'failed':
                     pf = job_info['pf']
                     pf.status = 'failed'
@@ -542,15 +539,59 @@ class ProcessWorker(QThread):
 
             in_flight = still_flying
 
-            # Refill: submit more to keep queue ≥ min_queued_pages, unless
-            # the user cancelled — otherwise the next file is submitted
-            # *after* the cancel signal and the cancel feels ignored.
+            # Our share moves as other machines start and finish their own
+            # work. Read once per batch it would be stale within the hour on a
+            # run this long — too high piles pages into the server's waiting
+            # list, too low leaves our own share idle.
+            if follow_share and time.time() - last_share_check > _SHARE_REFRESH_SECONDS:
+                last_share_check = time.time()
+                try:
+                    share = wrapper_client_concurrency()
+                except Exception:
+                    share = 0
+                if share and share != min_queued_pages:
+                    self.progress.emit(
+                        f'Queue depth target: {share} pages '
+                        f'(was {min_queued_pages}; our share changed)')
+                    min_queued_pages = share
+
+            # Refill first, finalise after: submit more to keep queue ≥
+            # min_queued_pages, unless the user cancelled — otherwise the next
+            # file is submitted *after* the cancel signal and the cancel feels
+            # ignored.
             while (
                 submit_idx < len(self.paper_file_ids)
                 and _queued_pages() < min_queued_pages
                 and not self._cancelled
             ):
                 _submit_next()
+
+            # Now the local half: collect each finished job and save it.
+            for job_info, job, tp in finished:
+                pf = job_info['pf']
+                prefix = job_info['prefix']
+                try:
+                    raw_pages, total_pages = wrapper_collect(job)
+                    from datetime import datetime
+                    raw_result = {
+                        'pdf': job_info['name'],
+                        'processed_at': datetime.now().isoformat(),
+                        'total_pages': total_pages,
+                        'done_pages': len(raw_pages),
+                        'pages': sorted(raw_pages.values(), key=lambda p: p['page']),
+                    }
+                    _finalize(pf, raw_result)
+                    self.progress.emit(f'{prefix} {job_info["name"]} done ({tp} pages)')
+                    self.file_done.emit(job_info['pf_id'], 'processed')
+                    processed += 1
+                    self._note_ok()
+                except Exception as e:
+                    self.progress.emit(f'{prefix} {job_info["name"]} FAILED: {e}')
+                    pf.status = 'failed'
+                    pf.save()
+                    self.file_done.emit(job_info['pf_id'], 'failed')
+                    failed += 1
+                    self._note_fail()
 
         return processed, failed
 
