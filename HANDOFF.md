@@ -117,6 +117,9 @@
   테스트가 재유입을 막는다 ([093](./devlog/20260828_093_TLS_Interception_OS_Trust_Store.md))
 - **PDF는 `papermeister/pdfdoc.py`를 통해서만 만진다** — pypdfium2를 직접 import하지 말 것.
   메타데이터 인코딩 보정이 거기 한 곳에만 있고, 라이선스 교체가 가능했던 이유도 진입점이 하나였기 때문이다
+- **Chandra2 OCR 출력은 마크다운이 아니라 레이아웃 HTML이다** — 블록마다 `data-label`·`data-bbox`.
+  bbox는 **각 축 독립 0..1000 정규화**(라이브에서 crop해 확인). `pages[].page`는 **0-based**.
+  Text 탭이 이걸로 헤딩·캡션·표를 살리고 그림을 PDF에서 잘라 온다 ([094](./devlog/20260828_094_Text_Tab_Reads_The_OCR_Layout.md))
 - **설치본 `AppId` GUID는 절대 바꾸지 않는다** — 바꾸면 업그레이드가 별개 프로그램으로 설치된다.
   런타임 데이터는 설치/제거가 건드리지 않는다(`[UninstallDelete]` 추가 금지)
 - **설정은 데이터와 분리돼 있다** — OS 설정 위치의 `PaleoBytes/PaperMeister/preferences.json`.

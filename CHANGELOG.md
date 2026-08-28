@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **The Text tab shows the paper's structure, and its figures.** OCR does not
+  return flat text — it returns each block of the page along with what that
+  block is and where it sat — and the tab was throwing all of that away and
+  rendering one undifferentiated column. Section headers are now headings,
+  captions read as captions, tables keep their rows, and each figure appears
+  where it belongs, cropped from the PDF at the position the OCR recorded.
+
+  Figures are fetched only once you scroll to them, and the space for one is
+  reserved before it arrives, so nothing shifts under you while reading and
+  opening a long plate volume does not stall. Papers OCR'd before the current
+  model still render as before; re-processing one gives it the new layout.
+
 ### Fixed
 - **Messages no longer say "RunPod" when OCR is going somewhere else.** Two of
   the three OCR backends are servers you host, but the prompts and progress

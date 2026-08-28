@@ -71,7 +71,7 @@ peewee가 생성하는 `id`/`<fk>_id`는 `models.py`에 `TYPE_CHECKING`으로 �
 - **DB:** SQLite with FTS5 — `~/PaleoBytes/PaperMeister/papermeister.db`
 - **ORM:** Peewee 4.x (`peewee.DatabaseProxy` + `peewee.SqliteDatabase`)
 - **PDF:** pypdfium2 — 메타데이터 추출 + 페이지 렌더링. `papermeister/pdfdoc.py`가 **유일한 진입점**
-  (페이지 수·암호화 여부·메타데이터·페이지 렌더 4가지). PyMuPDF는 AGPL이라 0.1.7에서 걷어냈다 ([R03](./devlog/20260813_R03_License_Audit.md))
+  (페이지 수·암호화 여부·메타데이터·페이지 렌더·페이지 크기 5가지). PyMuPDF는 AGPL이라 0.1.7에서 걷어냈다 ([R03](./devlog/20260813_R03_License_Audit.md))
 - **OCR:** RunPod serverless (Chandra2-vllm) — Preferences에서 API 키 설정
 - **Zotero:** pyzotero — Preferences에서 user_id + api_key 설정
 - **Settings:** OS 설정 위치의 `PaleoBytes/PaperMeister/preferences.json` (RunPod, Zotero 자격증명) — Windows `%LOCALAPPDATA%`, macOS `~/Library/Application Support`, Linux `~/.config`. **데이터 디렉터리와 분리**(머신 로컬 상태 + 평문 키, 그리고 데이터 위치를 설정 가능하게 만들 때의 부트스트랩 순환 방지). 규약·근거는 [R02](./devlog/20260728_R02_Config_File_Location_Convention.md)
@@ -137,7 +137,16 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 - **SourceNav**: `QTabWidget` — 각 Source마다 탭 하나 (현재 Zotero 하나). 각 탭 내부는 단일 트리에 상단=Library 필터, 하단=hierarchical 컬렉션
 - **DetailPanel**: `QWidget` (not QScrollArea) + 내부 `QTabWidget#DetailTabs`. 탭 4개 — **Metadata / PDF / Text / References** (Biblio 대조는 Metadata 탭에 통합, PDF·Text·References는 첫 활성화 때 lazy 빌드). 각 탭 독립 스크롤, 논문 전환 시 직전 탭 복원. Stub 배너는 탭바 위에 고정
 - **Biblio 탭 대조 비교 UI**: Paper(Zotero) vs PaperBiblio(추출) 필드별 비교 테이블. diff가 있는 행에 라디오 버튼(Paper/Biblio 선택) + 편집 가능한 입력 필드(QPlainTextEdit: Title/Authors/Journal, QLineEdit: Year/DOI) + × 클리어 버튼. Apply 시 `apply_merged()`로 선택/편집된 값 반영. 저자는 한 줄 한 명, "Lastname, Firstname" 형식
-- **OCR 탭**: `papermeister.biblio.load_ocr_pages()`로 `~/PaleoBytes/PaperMeister/ocr_json/{hash}.json` 페치 → `_sanitize_ocr_markdown()` 적용 → `QTextBrowser.setMarkdown()` 렌더
+- **Text 탭**: `papermeister.biblio.load_ocr_pages()`로 `~/PaleoBytes/PaperMeister/ocr_json/{hash}.json` 페치.
+  **Chandra2 출력은 마크다운이 아니라 레이아웃 HTML**이다 — 블록마다 `data-label`(무엇인지)과
+  `data-bbox`(어디였는지)가 붙는다. `ocr_layout.is_structured()`로 두 갈래:
+  - **structured(라이브 캐시 ~72%)** → `papermeister/ocr_layout.py`가 표시 HTML을 만들고
+    `desktop/components/ocr_view.py::OcrView`가 렌더. 헤딩·캡션·표 스타일 + **그림은 PDF에서 crop**
+    (`<img>`에는 이미지 데이터가 없고 alt와 bbox뿐이다). **bbox는 각 축 독립 0..1000 정규화**
+    — 라이브에서 실제로 잘라 눈으로 확인했다. 페이지 렌더가 ~100ms라 **워커 스레드**에서 하고
+    자리는 `<img width height>`로 미리 잡는다 — 그래야 본문이 안 밀리고, Qt가 **그릴 때** 로드하므로
+    477쪽 합본도 화면에 든 페이지만 렌더된다 ([094](./devlog/20260828_094_Text_Tab_Reads_The_OCR_Layout.md))
+  - **legacy 마크다운(~28%)** → `_sanitize_ocr_markdown()` + `setMarkdown()` (아래 sanitizer 주의)
   - **Sanitizer 필수**: Chandra2 원본을 그대로 `setMarkdown()`에 넘기면 `-qt-list-indent` 누적으로 "텍스트가 계속 오른쪽으로 밀리는" 버그. 원인은 (a) 4+ leading space → indented code block, (b) 줄 시작 `숫자.` → ordered list, (c) 레퍼런스의 바 볼륨 번호(`88.`, `158.`) → 빈 OL이 인접하면 Qt가 nested로 해석해서 indent가 누적. Sanitizer가 모든 줄 `lstrip()` + `^(\d+)\.` regex를 backslash escape로 차단
 - **SVG 아이콘**: `desktop/theme/icons/*.svg`는 `stroke="currentColor"`로 작성하고 `icons.rail_icon()` 헬퍼가 런타임에 색을 치환해서 3-state QIcon(idle/checked/hover) 생성. 다크/라이트 테마 스왑도 같은 메커니즘으로 확장 가능
 - **QSS**: `desktop/theme/qss.py::build_stylesheet(colors)`가 `desktop/theme/tokens.py::COLORS_DARK`를 받아 풀 스타일시트 생성. QTree branch chevron SVG 경로는 `_icon_url()`이 `Path.as_posix()`로 Windows forward-slash 경로 주입

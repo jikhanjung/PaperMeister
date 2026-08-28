@@ -436,27 +436,34 @@ class DetailPanel(QWidget):
         if d.file_status not in ('processed', 'pending', 'failed'):
             return self._ocr_empty_panel('No PDF file associated with this paper.')
 
+        pdf_path = self._local_pdf_path(d)
+        if pdf_path is None:
+            if d.file_zotero_key:
+                return self._build_pdf_download_panel(d)
+            return self._ocr_empty_panel(
+                'PDF file not found locally.\n'
+                f'Path: {d.file_path or "(none)"}'
+            )
+
+        return self._render_pdf(pdf_path)
+
+    @staticmethod
+    def _local_pdf_path(d) -> str | None:
+        """The paper's PDF on this machine, or None if it is not here.
+
+        Shared by the PDF tab and the Text tab — the latter crops its figures
+        out of the same file, so "where is the PDF" must have one answer.
+        """
         import os
 
         pdf_path = d.file_path
-        if not pdf_path or not os.path.isfile(pdf_path):
-            # Check pdf_cache
-            if d.file_zotero_key and d.file_path:
-                cached = os.path.join(
-                    PDF_CACHE_DIR,
-                    d.file_zotero_key, d.file_path,
-                )
-                if os.path.isfile(cached):
-                    pdf_path = cached
-            if not pdf_path or not os.path.isfile(pdf_path):
-                if d.file_zotero_key:
-                    return self._build_pdf_download_panel(d)
-                return self._ocr_empty_panel(
-                    'PDF file not found locally.\n'
-                    f'Path: {d.file_path or "(none)"}'
-                )
-
-        return self._render_pdf(pdf_path)
+        if pdf_path and os.path.isfile(pdf_path):
+            return pdf_path
+        if d.file_zotero_key and d.file_path:
+            cached = os.path.join(PDF_CACHE_DIR, d.file_zotero_key, d.file_path)
+            if os.path.isfile(cached):
+                return cached
+        return None
 
     def _render_pdf(self, pdf_path: str) -> QWidget:
         """Open the PDF and hand it to the lazy-render scroll view."""
@@ -1074,10 +1081,21 @@ class DetailPanel(QWidget):
                 f'Expected: ~/PaleoBytes/PaperMeister/ocr_json/{d.file_hash[:16]}….json'
             )
 
-        browser = QTextBrowser()
-        browser.setObjectName('OcrBrowser')
-        browser.setOpenExternalLinks(True)
-        browser.setReadOnly(True)
+        from papermeister import ocr_layout
+
+        # Newer OCR carries Chandra's layout labels, so the page can be rebuilt
+        # with its headings, captions and figures. Older cached results are
+        # plain markdown and still go through the sanitiser — see
+        # `_sanitize_ocr_markdown` for why that path cannot simply be dropped.
+        structured = any(ocr_layout.is_structured(page) for page in pages)
+        if structured:
+            from desktop.components.ocr_view import OcrView
+            browser = OcrView()
+        else:
+            browser = QTextBrowser()
+            browser.setObjectName('OcrBrowser')
+            browser.setOpenExternalLinks(True)
+            browser.setReadOnly(True)
         # Make text selectable + comfortable to read.
         browser.setStyleSheet(
             f"QTextBrowser#OcrBrowser {{"
@@ -1087,8 +1105,10 @@ class DetailPanel(QWidget):
             f"  font-size: {FONT['size.md']}px;"
             f"}}"
         )
-        markdown_text = self._join_pages_as_markdown(pages)
-        browser.setMarkdown(markdown_text)
+        if structured:
+            browser.set_pages(pages, self._local_pdf_path(d))
+        else:
+            browser.setMarkdown(self._join_pages_as_markdown(pages))
         self._ocr_browser = browser
         self._apply_search_highlight(browser)
 

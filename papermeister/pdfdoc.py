@@ -1,7 +1,8 @@
-"""The four things PaperMeister asks of a PDF, over pypdfium2.
+"""The five things PaperMeister asks of a PDF, over pypdfium2.
 
-Page count, whether it is password-protected, its embedded metadata, and a
-page rendered to an image. That is the whole surface — collecting it here is
+Page count, whether it is password-protected, its embedded metadata, a page
+rendered to an image, and page dimensions. That is the whole surface —
+collecting it here is
 what made it possible to move off PyMuPDF (AGPL-3.0) to pypdfium2
 (BSD-3-Clause / Apache-2.0) and out of the AGPL; see
 devlog/20260813_R03_License_Audit.md.
@@ -97,6 +98,26 @@ def read_metadata(path: str) -> dict:
                 out['year'] = year
                 break
     return out
+
+
+def page_sizes(path: str, indices=None) -> list[tuple[float, float]]:
+    """Page (width, height) in points, without rasterizing anything.
+
+    The Text tab needs these to reserve space for a figure before its pixels
+    exist: OCR gives figure bounds as fractions of the page, and turning those
+    into a width and height on screen takes the page's own proportions.
+
+    Pass `indices` to measure only the pages you care about, in that order —
+    loading a page costs a few milliseconds, which is nothing for one paper and
+    seconds for a 477-page plate volume where a handful of pages hold figures.
+    Omit it for every page, in document order.
+    """
+    doc = pdfium.PdfDocument(path)
+    try:
+        wanted = range(len(doc)) if indices is None else indices
+        return [tuple(doc[i].get_size()) for i in wanted]
+    finally:
+        doc.close()
 
 
 def render_page(path: str, page_idx: int, dpi: int = 150) -> Image.Image:
