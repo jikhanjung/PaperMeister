@@ -60,6 +60,9 @@ def _print_utf8():
             pass
 
 
+_print_utf8()      # before anything can print a title with an accent in it
+
+
 def cache_path(paper_file):
     """Where this PDF's OCR JSON lives, or None if the file has no hash."""
     try:
@@ -217,32 +220,63 @@ class PageBudget:
             self._free.notify_all()
 
 
+def other_active_clients():
+    """How many *other* clients have work on the server right now.
+
+    Counted from the job list rather than from `active_clients`, because the
+    two differ in the case that matters. `active_clients` may or may not
+    include this machine depending on whether a previous run's jobs are still
+    finishing, and being wrong either way is costly: count itself as another
+    client and the batch takes half the share it should; miss a client and it
+    takes twice. Every job carries the `client_id` that submitted it, so the
+    question can just be answered.
+    """
+    from papermeister.ocr import wrapper_list_jobs
+    from papermeister.preferences import get_client_id
+
+    mine = get_client_id()
+    jobs = wrapper_list_jobs()
+    if not jobs:
+        return None            # empty list also means "could not ask"
+    return len({
+        job.get('client_id') for job in jobs
+        if job.get('status') in ('processing', 'queued')
+        and job.get('client_id') and job.get('client_id') != mine
+    })
+
+
 def recommended_queue_depth():
-    """Pages to keep in flight, as the server tells this client.
+    """Pages to keep in flight: the server's capacity, split with whoever else
+    is on it — this client included, before it has attached.
 
-    `recommended_concurrency` is **this client's share**, not the whole server:
-    the wrapper divides its capacity between the clients attached to it, so two
-    machines see 6 each rather than 12 each. Send it the PDFs and it schedules
-    the rest.
-
-    Which is why nothing is subtracted here. Deducting the jobs other clients
-    have in flight looks careful and is not — the server has already deducted
-    them, and doing it twice walks this batch down to one page at a time while
-    its share sits idle.
+    The wrapper divides capacity between its clients, but it can only divide by
+    the clients it can see, and this one is not one of them until it submits.
+    Reading `recommended_concurrency` straight off an idle-looking server hands
+    over the whole machine — which is exactly what happened, and the other
+    machine's batch paid for it. So the share is computed against
+    `others + 1`: the clients already there, plus the one about to arrive.
     """
     try:
         from papermeister.ocr import is_wrapper_mode, wrapper_get_stats
         if not is_wrapper_mode():
             return 6
         stats = wrapper_get_stats()
-        depth = int(stats.get('recommended_concurrency') or 0) or 6
+        capacity = int(stats.get('concurrency') or 0)
+        recommended = int(stats.get('recommended_concurrency') or 0)
+        others = other_active_clients()
+        if others is None:
+            # No job list: fall back to the server's own count, which does not
+            # know about us yet either.
+            others = int(stats.get('active_clients') or 0)
     except Exception:
         return 6
 
-    clients = stats.get('clients_active')
-    sharing = f', shared with {clients - 1} other client(s)' if clients and clients > 1 else ''
-    print(f'Server gives this client {depth} page(s) in flight{sharing}.')
-    return max(1, depth)
+    if not capacity:
+        capacity = recommended or 6
+    depth = max(1, capacity // (others + 1))
+    sharing = f' with {others} other client(s)' if others else ' (nobody else on it)'
+    print(f'Server does {capacity} pages at a time, shared{sharing} — taking {depth}.')
+    return depth
 
 
 def preview(everything, selected):
@@ -281,7 +315,6 @@ def main():
                         help='OCR pages to keep in flight (default: what the '
                              'server has free)')
     args = parser.parse_args()
-    _print_utf8()
 
     init_db()
     everything = find_targets()

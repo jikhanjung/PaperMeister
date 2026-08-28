@@ -24,6 +24,19 @@ def reocr():
     return module
 
 
+def _stub_server(monkeypatch, capacity, jobs, active_clients=0):
+    from papermeister import ocr, preferences
+
+    monkeypatch.setattr(ocr, 'is_wrapper_mode', lambda: True)
+    monkeypatch.setattr(ocr, 'wrapper_get_stats', lambda: {
+        'concurrency': capacity,
+        'recommended_concurrency': capacity,
+        'active_clients': active_clients,
+    })
+    monkeypatch.setattr(ocr, 'wrapper_list_jobs', lambda: jobs)
+    monkeypatch.setattr(preferences, 'get_client_id', lambda: 'papermeister-mine')
+
+
 @pytest.mark.unit
 def test_pages_in_flight_stay_under_the_budget(reocr):
     budget = reocr.PageBudget(12)
@@ -82,35 +95,50 @@ def test_an_oversized_paper_does_not_let_others_in(reocr):
 
 
 @pytest.mark.unit
-def test_the_recommendation_is_this_clients_share(reocr, monkeypatch, capsys):
-    """The wrapper splits its capacity between attached clients, so the number
-    it reports is already this client's own."""
-    from papermeister import ocr
+def test_the_arriving_client_counts_itself_in(reocr, monkeypatch, capsys):
+    """The server can only divide by the clients it can see, and this one is
+    not one of them until it submits. Reading the recommendation straight off
+    an idle-looking server hands over the whole machine."""
+    _stub_server(monkeypatch, capacity=12, jobs=[
+        {'status': 'processing', 'client_id': 'papermeister-other'},
+        {'status': 'processing', 'client_id': 'papermeister-other'},
+    ])
 
-    monkeypatch.setattr(ocr, 'is_wrapper_mode', lambda: True)
-    monkeypatch.setattr(ocr, 'wrapper_get_stats', lambda: {
-        'recommended_concurrency': 6,
-        'clients_active': 2,
-        'counts': {'processing': 13, 'queued': 4},
-    })
-
-    assert reocr.recommended_queue_depth() == 6
-    assert 'shared with 1 other client' in capsys.readouterr().out
+    assert reocr.recommended_queue_depth() == 6          # 12 // (1 other + me)
+    assert 'with 1 other client' in capsys.readouterr().out
 
 
 @pytest.mark.unit
-def test_other_clients_work_is_not_deducted_twice(reocr, monkeypatch):
-    """Deducting what other clients have in flight looks careful and is not:
-    the server has already deducted it, and doing it again walks this batch
-    down to a crawl while its own share sits idle."""
-    from papermeister import ocr
+def test_an_empty_server_is_still_shared_with_nobody(reocr, monkeypatch):
+    _stub_server(monkeypatch, capacity=12, jobs=[
+        {'status': 'done', 'client_id': 'papermeister-other'},
+    ])
+    assert reocr.recommended_queue_depth() == 12
 
-    monkeypatch.setattr(ocr, 'is_wrapper_mode', lambda: True)
-    monkeypatch.setattr(ocr, 'wrapper_get_stats', lambda: {
-        'recommended_concurrency': 6,
-        'counts': {'processing': 40, 'queued': 20},
-    })
 
+@pytest.mark.unit
+def test_this_clients_own_jobs_are_not_mistaken_for_a_rival(reocr, monkeypatch):
+    """A resumed run has its previous jobs still finishing. Counting them as
+    another client halves the share for no reason."""
+    _stub_server(monkeypatch, capacity=12, jobs=[
+        {'status': 'processing', 'client_id': 'papermeister-mine'},
+        {'status': 'queued', 'client_id': 'papermeister-mine'},
+    ])
+    assert reocr.recommended_queue_depth() == 12
+
+
+@pytest.mark.unit
+def test_three_clients_get_a_third_each(reocr, monkeypatch):
+    _stub_server(monkeypatch, capacity=12, jobs=[
+        {'status': 'processing', 'client_id': 'papermeister-a'},
+        {'status': 'processing', 'client_id': 'papermeister-b'},
+    ])
+    assert reocr.recommended_queue_depth() == 4
+
+
+@pytest.mark.unit
+def test_without_a_job_list_the_servers_own_count_is_used(reocr, monkeypatch):
+    _stub_server(monkeypatch, capacity=12, jobs=[], active_clients=1)
     assert reocr.recommended_queue_depth() == 6
 
 
