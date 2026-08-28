@@ -1,6 +1,12 @@
 import os
 import sys
 
+# Before anything opens a connection: institutional networks with their own
+# root CA break TLS verification against certifi. See papermeister.nettls.
+from papermeister.nettls import install_system_trust
+
+install_system_trust()
+
 from PyQt6.QtWidgets import QApplication
 
 from papermeister.database import init_db

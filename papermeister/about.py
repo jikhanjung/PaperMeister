@@ -37,6 +37,7 @@ THIRD_PARTY = [
     ('peewee',       'MIT',                            r'mit|permission is hereby granted'),
     ('pyzotero',     'Blue Oak Model License 1.0.0',   r'blueoak|blue oak'),
     ('platformdirs', 'MIT',                            r'mit'),
+    ('truststore',   'MIT',                            r'mit'),
 ]
 
 #: Named so the About tab can explain why the app is AGPL rather than just

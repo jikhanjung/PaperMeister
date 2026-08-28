@@ -23,16 +23,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Match the desktop app's SSL monkey-patch (institutional CAs trip pyzotero).
-import requests
-import urllib3
+# Verify TLS against the OS trust store: the lab network re-signs with its own
+# root CA, which certifi does not carry. Must run before any pyzotero call.
+from papermeister.nettls import install_system_trust
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-_original_request = requests.api.request
-def _no_verify_request(method, url, **kwargs):
-    kwargs.setdefault('verify', False)
-    return _original_request(method, url, **kwargs)
-requests.api.request = _no_verify_request
+install_system_trust()
 
 from papermeister.database import init_db
 from papermeister.ingestion import purge_local_by_keys

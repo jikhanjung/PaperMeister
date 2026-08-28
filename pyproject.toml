@@ -37,7 +37,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "scripts/*" = ["T201", "E402"]   # scripts print by design; sys.path.insert precedes imports
-"desktop/app.py" = ["E402"]      # the requests SSL monkeypatch must run before Qt/pyzotero imports
+"desktop/app.py" = ["E402"]      # OS trust store must be installed before Qt/pyzotero imports
+"main.py" = ["E402"]             # same, for the frozen legacy GUI entry point
 "tests/*" = ["S101"]             # asserts are the point of tests
 
 [tool.mypy]

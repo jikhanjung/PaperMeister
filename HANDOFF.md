@@ -106,6 +106,15 @@
   핀하므로 이 설치는 pip를 덮어쓴다. Windows에서 `pip.exe`는 자기가 실행 중인 파일을 못 바꾼다
 - **새 런타임 의존성을 넣으면 `papermeister/about.py`의 표에도 넣어야 한다** — 안 넣으면 테스트가 막는다.
   라이선스를 분류하라는 뜻이고, copyleft 하나가 배포본 라이선스를 통째로 바꾸기 때문이다
+- **새 런타임 의존성은 Windows Anaconda env(`envs/PaperMeister`)에도 설치해야 한다** — 거기가
+  라이브 실행 환경이다. `requirements.txt`만 고치고 넘어가면 다음 실행이 `ModuleNotFoundError`로
+  죽는다(0.1.7의 `pypdfium2`에서 실제로 그랬다)
+- **기관 네트워크가 TLS를 가로챈다** — `api.zotero.org` 인증서의 발급자가 `CN=KOPRI SSL`이다.
+  그 CA는 Windows 루트 저장소에 있으므로 **파이썬이 OS 신뢰 저장소를 보게** 해서 해결했다
+  (`papermeister/nettls.py`, 진입점에서 `install_system_trust()` 1회).
+  **`verify=False`로 되돌리지 말 것** — 모든 호스트의 검증을 끄는 데다, 옛 패치는 requests에
+  매여 있어서 pyzotero가 httpx로 옮겨간 0.1.6 이후 Zotero를 보호하지도 못했다.
+  테스트가 재유입을 막는다 ([093](./devlog/20260828_093_TLS_Interception_OS_Trust_Store.md))
 - **PDF는 `papermeister/pdfdoc.py`를 통해서만 만진다** — pypdfium2를 직접 import하지 말 것.
   메타데이터 인코딩 보정이 거기 한 곳에만 있고, 라이선스 교체가 가능했던 이유도 진입점이 하나였기 때문이다
 - **설치본 `AppId` GUID는 절대 바꾸지 않는다** — 바꾸면 업그레이드가 별개 프로그램으로 설치된다.

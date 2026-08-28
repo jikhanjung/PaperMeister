@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Zotero sync no longer fails with a certificate error on networks that
+  inspect TLS.** Such a network re-signs every connection with its own root
+  certificate authority. That authority is installed in the operating system's
+  trust store, which is why the browser and the Zotero client are untroubled by
+  it — but Python was verifying against a bundle of its own that had never heard
+  of it, so every sync ended in `CERTIFICATE_VERIFY_FAILED: self-signed
+  certificate in certificate chain`. Certificates are now verified against the
+  operating system's trust store, where the authority actually is.
+
+  This replaces an older workaround that switched certificate verification off
+  altogether, for every host — and which had in any case stopped protecting
+  Zotero sync in 0.1.6, when pyzotero changed the HTTP library underneath it.
+  Connections are verified again, including on ordinary networks where that
+  workaround was quietly weakening them.
+
 ---
 
 ## [0.1.7] - 2026-08-13

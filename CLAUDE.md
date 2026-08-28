@@ -77,7 +77,10 @@ peewee가 생성하는 `id`/`<fk>_id`는 `models.py`에 `TYPE_CHECKING`으로 �
 - **Settings:** OS 설정 위치의 `PaleoBytes/PaperMeister/preferences.json` (RunPod, Zotero 자격증명) — Windows `%LOCALAPPDATA%`, macOS `~/Library/Application Support`, Linux `~/.config`. **데이터 디렉터리와 분리**(머신 로컬 상태 + 평문 키, 그리고 데이터 위치를 설정 가능하게 만들 때의 부트스트랩 순환 방지). 규약·근거는 [R02](./devlog/20260728_R02_Config_File_Location_Convention.md)
 - **데이터 경로:** `papermeister/paths.py`가 **단일 소스**. PaleoBytes 규약(`~/PaleoBytes/<AppName>/`)을 Modan2·CTHarvester와 공유. **폴백 없음** — 경로는 조건 없는 상수이고 `PAPERMEISTER_DATA_DIR`로만 override. 옛 `~/.papermeister`는 읽지 않으며, 남아 있으면 시작 시 경고만 하고 `scripts/migrate_data_dir.py`를 안내
 - **LLM 서지 추출:** `claude -p` (Haiku 텍스트, Sonnet vision) — Max 플랜 사용량 차감
-- **Dependencies:** Pillow, requests, pyzotero
+- **Dependencies:** Pillow, requests, pyzotero, truststore
+- **TLS:** 진입점에서 `papermeister/nettls.py::install_system_trust()` 1회 — TLS를 가로채는
+  기관 네트워크(KOPRI)의 루트 CA는 certifi에 없고 OS 신뢰 저장소에 있다. **`verify=False`로
+  되돌리지 말 것** ([093](./devlog/20260828_093_TLS_Interception_OS_Trust_Store.md))
 
 ## Data Model
 

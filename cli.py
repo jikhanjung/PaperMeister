@@ -16,6 +16,7 @@ from papermeister.models import (
     Passage,
     Source,
 )
+from papermeister.nettls import install_system_trust
 from papermeister.paths import (
     DataDirUnavailable,
     check_configured_data_dir,
@@ -26,6 +27,7 @@ from papermeister.paths import (
 
 def _init():
     """Create the data directories and initialize the DB (call before any command)."""
+    install_system_trust()
     try:
         check_configured_data_dir()
     except DataDirUnavailable as exc:

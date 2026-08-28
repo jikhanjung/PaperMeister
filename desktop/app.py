@@ -4,18 +4,11 @@ import sys
 
 logger = logging.getLogger("papermeister")
 
-# Institutional networks with custom CAs cause SSL errors with pyzotero.
-# pyzotero calls requests.get/post directly (no Session), so we patch the
-# default verify parameter at the module level.
-import requests
-import urllib3
+# Before anything opens a connection: institutional networks with their own
+# root CA break TLS verification against certifi. See papermeister.nettls.
+from papermeister.nettls import install_system_trust
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-_original_request = requests.api.request
-def _no_verify_request(method, url, **kwargs):
-    kwargs.setdefault('verify', False)
-    return _original_request(method, url, **kwargs)
-requests.api.request = _no_verify_request
+install_system_trust()
 
 from PyQt6.QtWidgets import QApplication
 
