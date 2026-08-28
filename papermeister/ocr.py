@@ -47,6 +47,35 @@ class PayloadTooLarge(Exception):
     pass
 
 
+#: What to call each backend in text the user reads. Messages used to say
+#: "RunPod" unconditionally, which is wrong for the two self-hosted backends
+#: and confusing in the way that matters: it suggests work is leaving the
+#: building when it is not.
+BACKEND_LABELS = {
+    'serverless': 'RunPod OCR',
+    'pod': 'Direct vLLM OCR',
+    'wrapper': 'Wrapper API OCR',
+}
+
+
+def backend_label() -> str:
+    """Name of the configured backend, for messages.
+
+    Reads the preference directly rather than going through `_ensure_config`:
+    a label is wanted precisely when something is being reported, including
+    when the backend is misconfigured and config would raise.
+    """
+    from .preferences import get_pref
+    backend = get_pref('ocr_backend', 'serverless')
+    return BACKEND_LABELS.get(backend, backend)
+
+
+def is_serverless_mode() -> bool:
+    """True when OCR goes out to RunPod rather than a server we host."""
+    from .preferences import get_pref
+    return get_pref('ocr_backend', 'serverless') == 'serverless'
+
+
 def reset_config():
     """Clear cached config so next call re-reads from preferences."""
     global _BASE_URL, _HEADERS, _BACKEND, _POD_URL, _WRAPPER_URL
@@ -189,7 +218,7 @@ def ensure_workers_ready(timeout: int = 300):
     if _workers_confirmed:
         return
     if not wake_and_wait(timeout=timeout):
-        raise RuntimeError(f'RunPod workers not ready after {timeout}s')
+        raise RuntimeError(f'{backend_label()} not ready after {timeout}s')
     _workers_confirmed = True
 
 
@@ -198,6 +227,11 @@ def wake_and_wait(timeout: int = 300, poll: float = 5.0) -> bool:
     _ensure_config()
     if is_ready():
         return True
+
+    # A self-hosted server has no cold start to trigger, and no _BASE_URL to
+    # send the wake to — only RunPod gets poked. Either way we then poll.
+    if not is_serverless_mode():
+        return _poll_until_ready(timeout, poll)
 
     # Send a minimal request to trigger cold start
     try:
@@ -210,6 +244,11 @@ def wake_and_wait(timeout: int = 300, poll: float = 5.0) -> bool:
     except Exception:
         pass
 
+    return _poll_until_ready(timeout, poll)
+
+
+def _poll_until_ready(timeout: int, poll: float) -> bool:
+    """Wait for the backend to report a usable worker. False on timeout."""
     start = time.time()
     while time.time() - start < timeout:
         try:

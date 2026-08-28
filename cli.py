@@ -95,8 +95,9 @@ def _run_process(pending):
 
     print(f'{len(pending)} pending file(s).')
 
-    # Wake RunPod workers
-    print('Checking RunPod workers...')
+    # Wake the backend (a cold start, for RunPod; a health check otherwise)
+    from papermeister.ocr import backend_label
+    print(f'Checking {backend_label()}...')
     try:
         ensure_workers_ready()
     except RuntimeError as e:
@@ -144,7 +145,7 @@ def _run_process(pending):
 
 
 def cmd_process(args):
-    """Process pending papers (OCR via RunPod)."""
+    """Process pending papers (OCR via the configured backend)."""
     pending = _get_pending_files(
         folder_id=getattr(args, 'folder', None),
         collection=getattr(args, 'collection', None),
@@ -368,11 +369,17 @@ def cmd_status(args):
     if args.ocr:
         print()
         try:
-            from papermeister.ocr import get_worker_status
+            from papermeister.ocr import backend_label, get_worker_status, is_serverless_mode
             ws = get_worker_status()
-            print(f'  RunPod:     idle={ws["idle"]}, running={ws["running"]}, throttled={ws["throttled"]}')
+            # Worker counts are RunPod's; the self-hosted backends have no pool
+            # to report, so say whether the server answered instead.
+            if is_serverless_mode():
+                print(f'  OCR:        idle={ws["idle"]}, running={ws["running"]}, throttled={ws["throttled"]}')
+            else:
+                state = 'reachable' if ws['ready'] else 'not responding'
+                print(f'  OCR:        {backend_label()} — {state}')
         except Exception as e:
-            print(f'  RunPod:     Error — {e}')
+            print(f'  OCR:        Error — {e}')
 
     return 0
 
@@ -858,7 +865,7 @@ def build_parser():
     p.add_argument('path', help='Directory path to import')
 
     # process
-    p = sub.add_parser('process', help='OCR pending papers via RunPod')
+    p = sub.add_parser('process', help='OCR pending papers via the configured backend')
     p.add_argument('-f', '--folder', type=int, help='Filter by folder ID')
     p.add_argument('-c', '--collection', help='Filter by collection name or key')
 
@@ -888,7 +895,7 @@ def build_parser():
 
     # status
     p = sub.add_parser('status', help='Show database status')
-    p.add_argument('--ocr', action='store_true', help='Also check RunPod worker status')
+    p.add_argument('--ocr', action='store_true', help='Also check OCR backend status')
 
     # zotero
     p = sub.add_parser('zotero', help='Zotero operations')

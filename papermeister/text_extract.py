@@ -339,7 +339,7 @@ def _resolve_filepath(paper_file):
 
 def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=None,
                        force=False):
-    """OCR a PDF via RunPod (or use cached JSON), store text in DB and FTS index.
+    """OCR a PDF via the configured backend (or use cached JSON), store text in DB and FTS index.
 
     status_callback(msg): called with human-readable status at each stage.
     force: ignore any existing local/Zotero OCR JSON and re-OCR from scratch

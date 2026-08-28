@@ -251,10 +251,12 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, 'Import', msg)
             return
 
+        from papermeister import ocr
+
         resp = QMessageBox.question(
             self, 'Import',
             f'Imported "{source_name}" — {len(pending_ids)} PDF(s) pending.\n'
-            f'Process them now via RunPod OCR?',
+            f'Process them now via {ocr.backend_label()}?',
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
         )
@@ -344,10 +346,12 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, 'Process', 'No pending files to process.')
             return
 
+        from papermeister import ocr
+
         resp = QMessageBox.question(
             self,
             'Process',
-            f'Process {len(pending_ids)} pending file(s) via RunPod OCR?',
+            f'Process {len(pending_ids)} pending file(s) via {ocr.backend_label()}?',
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
         )
@@ -1505,7 +1509,7 @@ class MainWindow(QMainWindow):
             self._refs_set_current()
 
     def _open_preferences(self):
-        """Open the frozen PreferencesDialog for RunPod / Zotero credentials."""
+        """Open the frozen PreferencesDialog for OCR / Zotero credentials."""
         from papermeister.ui.preferences_dialog import PreferencesDialog
 
         dlg = PreferencesDialog(self)

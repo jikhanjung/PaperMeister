@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 
 
 class ProcessWorker(QThread):
-    """OCR-processes PaperFiles with parallel execution based on RunPod worker availability."""
+    """OCR-processes PaperFiles, parallelised by what the configured backend reports."""
     progress = pyqtSignal(str)
     file_done = pyqtSignal(int, str)  # paper_file.id, status ('processed'/'failed')
     finished = pyqtSignal(int, int)  # processed, failed
@@ -135,7 +135,13 @@ class ProcessWorker(QThread):
     def run(self):
         import threading
 
-        from ..ocr import ensure_workers_ready, get_worker_status, is_wrapper_mode
+        from ..ocr import (
+            backend_label,
+            ensure_workers_ready,
+            get_worker_status,
+            is_serverless_mode,
+            is_wrapper_mode,
+        )
 
         self._counter = 0
         self._counter_lock = threading.Lock()
@@ -144,7 +150,7 @@ class ProcessWorker(QThread):
         try:
             ensure_workers_ready()
         except Exception as e:
-            self.progress.emit(f'RunPod not ready: {e}')
+            self.progress.emit(f'{backend_label()} not ready: {e}')
             self.finished.emit(0, len(self.paper_file_ids))
             return
 
@@ -154,10 +160,16 @@ class ProcessWorker(QThread):
         running = status['running']
         max_concurrent = max(1, min(idle, 10))
 
-        self.progress.emit(
-            f'RunPod workers: {idle} idle, {running} running '
-            f'→ parallel: {max_concurrent}'
-        )
+        # Only RunPod reports a real worker pool; check_health() fabricates
+        # "1 idle" for the self-hosted backends, so reporting those numbers
+        # would be inventing a fleet that does not exist.
+        if is_serverless_mode():
+            self.progress.emit(
+                f'RunPod workers: {idle} idle, {running} running '
+                f'→ parallel: {max_concurrent}'
+            )
+        else:
+            self.progress.emit(f'{backend_label()} ready → parallel: {max_concurrent}')
 
         if is_wrapper_mode():
             from ..ocr import wrapper_get_stats
@@ -720,7 +732,7 @@ class ProcessWindow(QWidget):
         self.processing_updated.emit()
 
     def _poll_server_status(self):
-        """Poll RunPod worker status in a background thread."""
+        """Poll the configured OCR backend's status in a background thread."""
         class _StatusPoller(QThread):
             result = pyqtSignal(str)
             def run(self_inner):  # noqa: N805 — distinct from the outer method's self

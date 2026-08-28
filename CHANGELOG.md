@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Messages no longer say "RunPod" when OCR is going somewhere else.** Two of
+  the three OCR backends are servers you host, but the prompts and progress
+  lines named RunPod regardless — "Process 12 pending file(s) via RunPod OCR?"
+  while pointed at a wrapper server on the local network. That is not a wording
+  nit: it says the papers are leaving the building when they are not. Every
+  such message now names the backend actually in use, and the worker counts
+  ("2 idle, 1 running") are shown only for RunPod, which is the only backend
+  that has a worker pool to report — for the others they were a fabricated
+  constant.
+
+---
+
 ## [0.1.8] - 2026-08-28
 
 Certificates, on a network that inspects them.
