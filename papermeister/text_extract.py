@@ -68,9 +68,18 @@ def _save_ocr_json(paper_file, raw_result):
     """Save raw OCR JSON to the OCR cache dir (atomic write).
 
     Filename comes from `ocr_json_filename(paper_file)`.
+
+    An existing `papermeister_meta` is carried across. It records that this
+    paper's bibliography has already been applied, which is a fact about the
+    paper and not about the OCR run — dropping it on a re-OCR would send a
+    settled paper back through LLM extraction and out into needs_review.
     """
     os.makedirs(OCR_JSON_DIR, exist_ok=True)
     out_path = os.path.join(OCR_JSON_DIR, ocr_json_filename(paper_file))
+    if 'papermeister_meta' not in raw_result:
+        carried = _existing_biblio_meta(out_path)
+        if carried:
+            raw_result = {**raw_result, 'papermeister_meta': carried}
     tmp = tempfile.NamedTemporaryFile(
         mode='w', dir=OCR_JSON_DIR, suffix='.tmp', delete=False, encoding='utf-8',
     )
@@ -84,6 +93,15 @@ def _save_ocr_json(paper_file, raw_result):
             os.unlink(tmp.name)
         raise
     return out_path
+
+
+def _existing_biblio_meta(json_path):
+    """`papermeister_meta` from the JSON about to be replaced, if it has one."""
+    try:
+        with open(json_path, encoding='utf-8') as f:
+            return json.load(f).get('papermeister_meta')
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return None
 
 
 def _load_ocr_json(paper_file):

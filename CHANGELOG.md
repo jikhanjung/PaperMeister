@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   model still render as before; re-processing one gives it the new layout.
 
 ### Fixed
+- **Re-processing a paper no longer forgets that its bibliography was
+  applied.** The OCR cache carries a marker saying the biblio for that paper is
+  settled, and it is what stops the extraction from being run a second time.
+  Writing a fresh OCR result over the cache dropped it, so a re-processed paper
+  became a candidate for LLM extraction again and could reappear for review.
+  The marker now survives the rewrite.
 - **Messages no longer say "RunPod" when OCR is going somewhere else.** Two of
   the three OCR backends are servers you host, but the prompts and progress
   lines named RunPod regardless — "Process 12 pending file(s) via RunPod OCR?"
