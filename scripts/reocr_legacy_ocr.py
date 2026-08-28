@@ -402,9 +402,13 @@ def main():
                                daemon=True)
     watcher.start()
 
-    # Sized for the largest share the server could hand back mid-run, not the
-    # one it started with; the budget, not the pool, is what limits the load.
-    with ThreadPoolExecutor(max_workers=max(4, depth)) as pool:
+    # The queue bounds the load; the pool only has to be wide enough never to
+    # be the thing that stops it. Sized at one thread per page of share is not:
+    # with one-page papers every thread is busy holding a page, so there is
+    # nobody left to submit the paper that should be waiting behind them, and
+    # the buffer silently never forms. Room is left for the share growing
+    # mid-run too — it doubles when the other machine finishes.
+    with ThreadPoolExecutor(max_workers=max(8, depth * 2 + 4)) as pool:
         futures = [
             pool.submit(convert, paper_file, count, index)
             for index, (paper_file, count) in enumerate(targets, start=1)
