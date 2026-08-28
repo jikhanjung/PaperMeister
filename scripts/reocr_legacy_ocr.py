@@ -189,41 +189,52 @@ def refresh_zotero_sibling(paper_file, log):
         log(f'    Zotero sibling not replaced: {outcome}')
 
 
-class PageBudget:
-    """Keeps at most `limit` OCR pages in flight at once.
+class PageQueue:
+    """Keeps roughly `target` OCR pages outstanding on the server.
 
-    A wrapper job is a whole PDF, so counting *papers* in flight measures
-    nothing: twelve papers at this library's median of 13 pages is 156 pages
-    queued against a server that asks for twelve. That is what the first run
-    here did, and the cost landed on the other machine sharing the server.
+    A wrapper job is a whole PDF, so counting *papers* measures nothing:
+    twelve papers at this library's median of 13 pages is 156 pages against a
+    server that runs twelve. Pages are the unit.
 
-    The app's Process window has always worked in pages (`min_queued_pages`);
-    this is the same idea with a plain semaphore. A paper bigger than the whole
-    budget still runs — alone — rather than deadlocking against a limit it can
-    never fit under.
+    But the target is a **floor to submit up to, not a ceiling to stay under**
+    — the same rule the app's Process window uses. The server admits only this
+    client's share however much it is given, so anything past the share waits
+    in our own queue and is admitted the instant a page finishes. Keeping that
+    small buffer is what stops the share going idle between papers; holding
+    strictly at or below it leaves slots empty every time a paper ends, which
+    is visible as in-flight dipping 6 → 5 → 3 while the server has work to
+    hand us.
+
+    Submitting ahead does not take anything from the other machine. Admission
+    is capped per client, so a longer queue here only ever lengthens our own.
     """
 
-    def __init__(self, limit: int):
-        self.limit = max(1, limit)
-        self._in_flight = 0
-        self._free = threading.Condition()
+    def __init__(self, target: int):
+        self.limit = max(1, target)
+        self._outstanding = 0
+        self._room = threading.Condition()
 
-    def set_limit(self, limit: int):
-        """Change the budget mid-run; waiters re-check against the new one."""
-        with self._free:
-            self.limit = max(1, limit)
-            self._free.notify_all()
+    def set_limit(self, target: int):
+        """Change the target mid-run; waiters re-check against the new one."""
+        with self._room:
+            self.limit = max(1, target)
+            self._room.notify_all()
 
     def acquire(self, pages: int):
-        with self._free:
-            while self._in_flight and self._in_flight + pages > self.limit:
-                self._free.wait()
-            self._in_flight += pages
+        with self._room:
+            # `>` not `>=`: stopping at exactly the share leaves nothing queued
+            # behind it, so the first page to finish empties a slot with no
+            # replacement waiting. One more paper goes in, and then we hold —
+            # outstanding stays strictly above the share, which is the whole
+            # point of a buffer.
+            while self._outstanding > self.limit:
+                self._room.wait()
+            self._outstanding += pages
 
     def release(self, pages: int):
-        with self._free:
-            self._in_flight -= pages
-            self._free.notify_all()
+        with self._room:
+            self._outstanding -= pages
+            self._room.notify_all()
 
 
 def recommended_queue_depth():
@@ -346,7 +357,7 @@ def main():
         return 1
 
     depth = args.queue_pages or recommended_queue_depth()
-    budget = PageBudget(depth)
+    budget = PageQueue(depth)
     total_pages = sum(count for _, count in targets)
     print(f'Re-OCR of {len(targets)} paper(s), {total_pages:,} pages, '
           f'{depth} page(s) in flight at a time.')
