@@ -52,7 +52,7 @@ def test_the_queue_stays_near_the_target(reocr):
     for t in threads:
         t.join()
 
-    assert peak[0] <= 12 + 5        # the target, plus at most one more paper
+    assert peak[0] <= 12 + 6 + 5    # target, its slack, and one more paper
 
 
 @pytest.mark.unit
@@ -76,18 +76,29 @@ def test_a_full_share_still_has_something_queued_behind_it(reocr):
 
 
 @pytest.mark.unit
-def test_the_buffer_is_one_paper_and_no_more(reocr):
+def test_the_buffer_is_bounded(reocr):
+    """Enough to keep the server fed through a paper's local phases, and no
+    more — this is our own queue, not a place to park the backlog."""
     queue = reocr.PageQueue(6)
-    queue.acquire(6)
-    queue.acquire(2)                # the buffer
+    queue.acquire(6)                # the share
+    queue.acquire(4)                # its slack (6 + max(2, 3) = 9)
 
-    third = threading.Event()
-    more = threading.Thread(target=lambda: (queue.acquire(1), third.set()))
+    more_still = threading.Event()
+    more = threading.Thread(target=lambda: (queue.acquire(1), more_still.set()))
     more.daemon = True
     more.start()
     more.join(timeout=0.3)
 
-    assert not third.is_set()       # 8 outstanding against a share of 6 is enough
+    assert not more_still.is_set()  # 10 outstanding against a share of 6 is plenty
+
+
+@pytest.mark.unit
+def test_the_slack_covers_the_phases_the_server_cannot_see(reocr):
+    """A paper is held from pick-up to finish, but only the middle of that is
+    OCR — the Zotero fetch before and the upload after are ours."""
+    assert reocr.PageQueue(12).ceiling() == 18
+    assert reocr.PageQueue(6).ceiling() == 9
+    assert reocr.PageQueue(1).ceiling() == 3
 
 
 @pytest.mark.unit
@@ -150,15 +161,14 @@ def test_an_unreachable_server_does_not_stop_the_run(reocr, monkeypatch):
 def test_the_target_can_change_mid_run(reocr):
     """The share moves as clients come and go, and this run lasts days."""
     queue = reocr.PageQueue(6)
-    queue.acquire(6)
-    queue.acquire(4)                    # the buffer — outstanding is now 10
+    queue.acquire(10)                   # past the share and its slack
     let_in = threading.Event()
 
     waiter = threading.Thread(target=lambda: (queue.acquire(4), let_in.set()))
     waiter.daemon = True
     waiter.start()
     waiter.join(timeout=0.2)
-    assert not let_in.is_set()          # 10 outstanding is past a share of 6
+    assert not let_in.is_set()          # 10 outstanding is past 6 + slack
 
     queue.set_limit(12)                 # the other machine finished
     waiter.join(timeout=2)

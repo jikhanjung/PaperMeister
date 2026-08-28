@@ -220,14 +220,25 @@ class PageQueue:
             self.limit = max(1, target)
             self._room.notify_all()
 
+    def ceiling(self) -> int:
+        """How much to hold open, which is more than the share itself.
+
+        A paper counts against this from the moment it is picked up, but only
+        part of that time is spent on the OCR server: before it there is the
+        PDF to fetch from Zotero, and after it the JSON to write and upload.
+        Pages held during those phases are idle as far as the server is
+        concerned, so aiming at exactly the share leaves it short — measured
+        live as server-side outstanding sagging to 11 against a share of 12.
+
+        The extra costs nothing. Admission is capped per client, so anything
+        past the share waits in our own queue and goes in the instant a page
+        finishes.
+        """
+        return self.limit + max(2, self.limit // 2)
+
     def acquire(self, pages: int):
         with self._room:
-            # `>` not `>=`: stopping at exactly the share leaves nothing queued
-            # behind it, so the first page to finish empties a slot with no
-            # replacement waiting. One more paper goes in, and then we hold —
-            # outstanding stays strictly above the share, which is the whole
-            # point of a buffer.
-            while self._outstanding > self.limit:
+            while self._outstanding > self.ceiling():
                 self._room.wait()
             self._outstanding += pages
 
