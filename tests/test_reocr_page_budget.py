@@ -24,13 +24,15 @@ def reocr():
     return module
 
 
-def _stub_server(monkeypatch, capacity, jobs, active_clients=0):
+def _stub_server(monkeypatch, capacity, jobs, active_clients=0, share=None):
+    """`share` is what the server answers when asked about *this* client;
+    None models an older wrapper that answers with the whole machine."""
     from papermeister import ocr, preferences
 
     monkeypatch.setattr(ocr, 'is_wrapper_mode', lambda: True)
-    monkeypatch.setattr(ocr, 'wrapper_get_stats', lambda: {
+    monkeypatch.setattr(ocr, 'wrapper_get_stats', lambda *a, **k: {
         'concurrency': capacity,
-        'recommended_concurrency': capacity,
+        'recommended_concurrency': capacity if share is None else share,
         'active_clients': active_clients,
     })
     monkeypatch.setattr(ocr, 'wrapper_list_jobs', lambda: jobs)
@@ -152,4 +154,22 @@ def test_an_unreachable_server_does_not_stop_the_run(reocr, monkeypatch):
     monkeypatch.setattr(ocr, 'is_wrapper_mode', lambda: True)
     monkeypatch.setattr(ocr, 'wrapper_get_stats', explode)
 
+    assert reocr.recommended_queue_depth() == 6
+
+
+@pytest.mark.unit
+def test_the_servers_own_answer_for_this_client_is_used(reocr, monkeypatch):
+    """Wrapper 0.2.4 answers ?client_id= with that client's share. It knows
+    better than any count we can do from outside."""
+    _stub_server(monkeypatch, capacity=12, share=6, jobs=[])
+    assert reocr.recommended_queue_depth() == 6
+
+
+@pytest.mark.unit
+def test_an_older_wrapper_does_not_get_to_hand_over_the_machine(reocr, monkeypatch):
+    """A wrapper that ignores the client_id parameter answers with the whole
+    server. A batch of 58,000 pages must not quietly accept that."""
+    _stub_server(monkeypatch, capacity=12, share=None, jobs=[
+        {'status': 'processing', 'client_id': 'papermeister-other'},
+    ])
     assert reocr.recommended_queue_depth() == 6

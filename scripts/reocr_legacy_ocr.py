@@ -246,36 +246,35 @@ def other_active_clients():
 
 
 def recommended_queue_depth():
-    """Pages to keep in flight: the server's capacity, split with whoever else
-    is on it — this client included, before it has attached.
+    """Pages to keep in flight: this client's share of the server.
 
-    The wrapper divides capacity between its clients, but it can only divide by
-    the clients it can see, and this one is not one of them until it submits.
-    Reading `recommended_concurrency` straight off an idle-looking server hands
-    over the whole machine — which is exactly what happened, and the other
-    machine's batch paid for it. So the share is computed against
-    `others + 1`: the clients already there, plus the one about to arrive.
+    `wrapper_get_stats()` identifies us, so wrapper 0.2.4 answers with our own
+    share rather than the whole machine — 6 of 12 while another PC is working.
+    That is the number to use, and it is the server's to decide.
+
+    It is still cross-checked against the job list. Not out of distrust: an
+    older wrapper does not know the `client_id` parameter and quietly answers
+    with the whole server, and a batch this long is exactly the thing that
+    should not silently take it. The lower of the two is safe under both.
     """
     try:
         from papermeister.ocr import is_wrapper_mode, wrapper_get_stats
         if not is_wrapper_mode():
             return 6
         stats = wrapper_get_stats()
-        capacity = int(stats.get('concurrency') or 0)
-        recommended = int(stats.get('recommended_concurrency') or 0)
+        share = int(stats.get('recommended_concurrency') or 0)
+        capacity = int(stats.get('concurrency') or 0) or share or 6
         others = other_active_clients()
         if others is None:
-            # No job list: fall back to the server's own count, which does not
-            # know about us yet either.
             others = int(stats.get('active_clients') or 0)
     except Exception:
         return 6
 
-    if not capacity:
-        capacity = recommended or 6
-    depth = max(1, capacity // (others + 1))
+    even_split = capacity // (others + 1)
+    depth = max(1, min(share or even_split, even_split))
     sharing = f' with {others} other client(s)' if others else ' (nobody else on it)'
-    print(f'Server does {capacity} pages at a time, shared{sharing} — taking {depth}.')
+    print(f'Server does {capacity} pages at a time, shared{sharing} — '
+          f'this client takes {depth}.')
     return depth
 
 

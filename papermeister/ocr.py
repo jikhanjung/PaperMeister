@@ -495,7 +495,7 @@ def wrapper_list_jobs() -> list:
         return []
 
 
-def wrapper_get_stats() -> dict:
+def wrapper_get_stats(for_this_client: bool = True) -> dict:
     """Fetch /api/stats — counts + OCR backend capacity / mode.
 
     Returns {} on failure. Key fields used by the client:
@@ -503,11 +503,24 @@ def wrapper_get_stats() -> dict:
       - mode: '2ocr' | 'llm+ocr' | '1ocr' | 'llm' | 'down'
       - ocr_backends_alive, ocr_backends_total
 
+    `recommended_concurrency` is a *share*, not the machine: wrapper 0.2.4
+    divides capacity between the clients using it. But the server can only
+    divide by the clients it can see, and "using it" means having pages in
+    flight — a client that is about to start has none, so an unqualified ask
+    returns the whole server and taking it starves whoever is already there.
+    Passing our `client_id` makes the server count us in and answer with our
+    own share (12 → 6 when one other machine is working). Pass
+    `for_this_client=False` for the server-wide view.
+
     Server caches probes for 5s so this is cheap to call.
     """
     _ensure_config()
+    params = {}
+    if for_this_client:
+        from .preferences import get_client_id
+        params['client_id'] = get_client_id()
     try:
-        resp = requests.get(f'{_WRAPPER_URL}/api/stats', timeout=5)
+        resp = requests.get(f'{_WRAPPER_URL}/api/stats', params=params, timeout=5)
         resp.raise_for_status()
         data = resp.json()
         return data if isinstance(data, dict) else {}

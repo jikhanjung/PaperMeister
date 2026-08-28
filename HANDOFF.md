@@ -100,14 +100,17 @@
   (마지막 체크포인트 시점 값) Windows에서 `scripts/refs_progress.py`를 쓴다
 - **데이터를 바꾸는 스크립트는 Windows(Anaconda)에서 실행한다.** WSL은 read-only 조회 전용
 - **ocrserver는 이 PC 혼자 쓰는 게 아니다** — 다른 PC도 같은 서버에 OCR을 돌린다.
-  **서버가 클라이언트별로 용량을 나눠준다**(2026-08-28 서버 개편). 하지만 서버는
-  **자기가 보고 있는 클라이언트로만** 나눌 수 있고, **이쪽은 제출하기 전까지 그 목록에 없다.**
-  그래서 붙기 직전에 `recommended_concurrency`를 그대로 읽으면 서버를 통째로 가져간다
-  (실제로 그랬고 다른 PC가 굶었다). 배치 도구는 **`concurrency // (others + 1)`** —
-  이미 붙어 있는 클라이언트 + 곧 붙을 나 — 로 계산한다.
-  `others`는 `GET /ocr`의 job마다 붙은 `client_id`에서 **내 것을 빼고** 센다.
-  `active_clients`를 그냥 쓰면 안 되는 이유: 직전 실행의 job이 아직 돌고 있으면
-  거기에 내가 포함돼 있어서 몫을 절반으로 깎게 된다
+  **wrapper 0.2.4가 클라이언트별로 용량을 나눠준다**(2026-08-28). 핵심은 **`?client_id=`를
+  붙여서 물어야 한다**는 것 — 서버는 "페이지가 처리 중이거나 대기 중인 client_id"만 활성으로
+  세므로, **제출 전 클라이언트는 목록에 없다.** 그냥 물으면 12(서버 전체), 내 id를 주면
+  6(내 몫)이 온다. 라이브 확인: `no id → 12 / with id → 6`.
+  그래서 `wrapper_get_stats()`가 **기본으로 자기 client_id를 붙인다**(앱 Process 창도 같이 고쳐짐).
+  서버 전체 값이 필요하면 `wrapper_get_stats(for_this_client=False)`
+  - 배치 도구는 서버 답을 쓰되 `concurrency // (others+1)`과 비교해 **작은 쪽**을 택한다 —
+    `client_id` 파라미터를 모르는 옛 wrapper는 조용히 서버 전체를 답하기 때문. `others`는
+    `GET /ocr`의 job별 `client_id`에서 **내 것을 빼고** 센다(직전 실행 job이 남아 있으면
+    `active_clients`에 내가 포함돼 몫이 절반으로 깎인다)
+  - 누가 붙어 있는지 자세히는 `/api/services`의 `scheduler.per_client`
 - **wrapper의 작업 단위는 PDF 한 편이지만, concurrency의 단위는 페이지다.**
   그래서 "동시 논문 수"로 조절하면 안 된다 — 중앙값 13페이지 × 12편 = **150페이지**를
   12페이지짜리 서버에 밀어넣게 된다(실제로 그래서 다른 PC를 굶겼다). 앱의 Process 창은
