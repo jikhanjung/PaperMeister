@@ -183,8 +183,11 @@ class ProcessWorker(QThread):
                     f'Queue depth target: {min_queued} pages (pref override)'
                 )
             else:
+                from ..ocr import wrapper_client_concurrency
                 stats = wrapper_get_stats()
-                rec = int(stats.get('recommended_concurrency') or 0)
+                # This client's share, not the whole server — the wrapper
+                # splits capacity between the machines using it.
+                rec = wrapper_client_concurrency()
                 if rec > 0:
                     min_queued = rec
                     mode = stats.get('mode', '?')

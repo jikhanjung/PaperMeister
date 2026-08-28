@@ -24,21 +24,6 @@ def reocr():
     return module
 
 
-def _stub_server(monkeypatch, capacity, jobs, active_clients=0, share=None):
-    """`share` is what the server answers when asked about *this* client;
-    None models an older wrapper that answers with the whole machine."""
-    from papermeister import ocr, preferences
-
-    monkeypatch.setattr(ocr, 'is_wrapper_mode', lambda: True)
-    monkeypatch.setattr(ocr, 'wrapper_get_stats', lambda *a, **k: {
-        'concurrency': capacity,
-        'recommended_concurrency': capacity if share is None else share,
-        'active_clients': active_clients,
-    })
-    monkeypatch.setattr(ocr, 'wrapper_list_jobs', lambda: jobs)
-    monkeypatch.setattr(preferences, 'get_client_id', lambda: 'papermeister-mine')
-
-
 @pytest.mark.unit
 def test_pages_in_flight_stay_under_the_budget(reocr):
     budget = reocr.PageBudget(12)
@@ -97,50 +82,14 @@ def test_an_oversized_paper_does_not_let_others_in(reocr):
 
 
 @pytest.mark.unit
-def test_the_arriving_client_counts_itself_in(reocr, monkeypatch, capsys):
-    """The server can only divide by the clients it can see, and this one is
-    not one of them until it submits. Reading the recommendation straight off
-    an idle-looking server hands over the whole machine."""
-    _stub_server(monkeypatch, capacity=12, jobs=[
-        {'status': 'processing', 'client_id': 'papermeister-other'},
-        {'status': 'processing', 'client_id': 'papermeister-other'},
-    ])
+def test_the_depth_comes_from_this_clients_share(reocr, monkeypatch):
+    """The script does not compute the split itself — `ocr` asks the server
+    with our id attached and that answer is the budget."""
+    from papermeister import ocr
 
-    assert reocr.recommended_queue_depth() == 6          # 12 // (1 other + me)
-    assert 'with 1 other client' in capsys.readouterr().out
+    monkeypatch.setattr(ocr, 'is_wrapper_mode', lambda: True)
+    monkeypatch.setattr(ocr, 'wrapper_client_concurrency', lambda: 6)
 
-
-@pytest.mark.unit
-def test_an_empty_server_is_still_shared_with_nobody(reocr, monkeypatch):
-    _stub_server(monkeypatch, capacity=12, jobs=[
-        {'status': 'done', 'client_id': 'papermeister-other'},
-    ])
-    assert reocr.recommended_queue_depth() == 12
-
-
-@pytest.mark.unit
-def test_this_clients_own_jobs_are_not_mistaken_for_a_rival(reocr, monkeypatch):
-    """A resumed run has its previous jobs still finishing. Counting them as
-    another client halves the share for no reason."""
-    _stub_server(monkeypatch, capacity=12, jobs=[
-        {'status': 'processing', 'client_id': 'papermeister-mine'},
-        {'status': 'queued', 'client_id': 'papermeister-mine'},
-    ])
-    assert reocr.recommended_queue_depth() == 12
-
-
-@pytest.mark.unit
-def test_three_clients_get_a_third_each(reocr, monkeypatch):
-    _stub_server(monkeypatch, capacity=12, jobs=[
-        {'status': 'processing', 'client_id': 'papermeister-a'},
-        {'status': 'processing', 'client_id': 'papermeister-b'},
-    ])
-    assert reocr.recommended_queue_depth() == 4
-
-
-@pytest.mark.unit
-def test_without_a_job_list_the_servers_own_count_is_used(reocr, monkeypatch):
-    _stub_server(monkeypatch, capacity=12, jobs=[], active_clients=1)
     assert reocr.recommended_queue_depth() == 6
 
 
@@ -152,24 +101,66 @@ def test_an_unreachable_server_does_not_stop_the_run(reocr, monkeypatch):
         raise OSError('server down')
 
     monkeypatch.setattr(ocr, 'is_wrapper_mode', lambda: True)
-    monkeypatch.setattr(ocr, 'wrapper_get_stats', explode)
+    monkeypatch.setattr(ocr, 'wrapper_client_concurrency', explode)
 
     assert reocr.recommended_queue_depth() == 6
 
 
 @pytest.mark.unit
-def test_the_servers_own_answer_for_this_client_is_used(reocr, monkeypatch):
-    """Wrapper 0.2.4 answers ?client_id= with that client's share. It knows
-    better than any count we can do from outside."""
-    _stub_server(monkeypatch, capacity=12, share=6, jobs=[])
-    assert reocr.recommended_queue_depth() == 6
+def test_the_budget_can_change_mid_run(reocr):
+    """The share moves as clients come and go, and this run lasts days."""
+    budget = reocr.PageBudget(6)
+    budget.acquire(6)
+    let_in = threading.Event()
+
+    waiter = threading.Thread(target=lambda: (budget.acquire(4), let_in.set()))
+    waiter.daemon = True
+    waiter.start()
+    waiter.join(timeout=0.2)
+    assert not let_in.is_set()          # 6 + 4 does not fit in 6
+
+    budget.set_limit(12)                # the other machine finished
+    waiter.join(timeout=2)
+    assert let_in.is_set()              # ...and the waiter is let straight in
 
 
 @pytest.mark.unit
-def test_an_older_wrapper_does_not_get_to_hand_over_the_machine(reocr, monkeypatch):
-    """A wrapper that ignores the client_id parameter answers with the whole
-    server. A batch of 58,000 pages must not quietly accept that."""
-    _stub_server(monkeypatch, capacity=12, share=None, jobs=[
-        {'status': 'processing', 'client_id': 'papermeister-other'},
-    ])
-    assert reocr.recommended_queue_depth() == 6
+def test_the_watcher_follows_the_server(reocr, monkeypatch):
+    from papermeister import ocr
+
+    monkeypatch.setattr(reocr, '_SHARE_REFRESH', 0.01)
+    monkeypatch.setattr(ocr, 'wrapper_client_concurrency', lambda: 6)
+
+    budget = reocr.PageBudget(12)
+    stop = threading.Event()
+    watcher = threading.Thread(target=reocr.follow_the_share, args=(budget, stop))
+    watcher.daemon = True
+    watcher.start()
+    deadline = time.time() + 2
+    while time.time() < deadline and budget.limit != 6:
+        time.sleep(0.01)
+    stop.set()
+
+    assert budget.limit == 6
+
+
+@pytest.mark.unit
+def test_a_failed_check_leaves_the_budget_alone(reocr, monkeypatch):
+    from papermeister import ocr
+
+    monkeypatch.setattr(reocr, '_SHARE_REFRESH', 0.01)
+
+    def explode():
+        raise OSError('stats unreachable')
+
+    monkeypatch.setattr(ocr, 'wrapper_client_concurrency', explode)
+
+    budget = reocr.PageBudget(6)
+    stop = threading.Event()
+    watcher = threading.Thread(target=reocr.follow_the_share, args=(budget, stop))
+    watcher.daemon = True
+    watcher.start()
+    time.sleep(0.1)
+    stop.set()
+
+    assert budget.limit == 6

@@ -208,6 +208,12 @@ class PageBudget:
         self._in_flight = 0
         self._free = threading.Condition()
 
+    def set_limit(self, limit: int):
+        """Change the budget mid-run; waiters re-check against the new one."""
+        with self._free:
+            self.limit = max(1, limit)
+            self._free.notify_all()
+
     def acquire(self, pages: int):
         with self._free:
             while self._in_flight and self._in_flight + pages > self.limit:
@@ -220,62 +226,52 @@ class PageBudget:
             self._free.notify_all()
 
 
-def other_active_clients():
-    """How many *other* clients have work on the server right now.
-
-    Counted from the job list rather than from `active_clients`, because the
-    two differ in the case that matters. `active_clients` may or may not
-    include this machine depending on whether a previous run's jobs are still
-    finishing, and being wrong either way is costly: count itself as another
-    client and the batch takes half the share it should; miss a client and it
-    takes twice. Every job carries the `client_id` that submitted it, so the
-    question can just be answered.
-    """
-    from papermeister.ocr import wrapper_list_jobs
-    from papermeister.preferences import get_client_id
-
-    mine = get_client_id()
-    jobs = wrapper_list_jobs()
-    if not jobs:
-        return None            # empty list also means "could not ask"
-    return len({
-        job.get('client_id') for job in jobs
-        if job.get('status') in ('processing', 'queued')
-        and job.get('client_id') and job.get('client_id') != mine
-    })
-
-
 def recommended_queue_depth():
-    """Pages to keep in flight: this client's share of the server.
+    """Pages to keep in flight: this client's share, as the server states it.
 
-    `wrapper_get_stats()` identifies us, so wrapper 0.2.4 answers with our own
-    share rather than the whole machine — 6 of 12 while another PC is working.
-    That is the number to use, and it is the server's to decide.
-
-    It is still cross-checked against the job list. Not out of distrust: an
-    older wrapper does not know the `client_id` parameter and quietly answers
-    with the whole server, and a batch this long is exactly the thing that
-    should not silently take it. The lower of the two is safe under both.
+    `wrapper_client_concurrency()` reads /api/stats with our id attached, so
+    the wrapper counts us among its clients and answers with our share — 6 of
+    12 while another machine is working. Enforcement is the server's; this is
+    what keeps the local queue the right size rather than piling up pages that
+    will only sit in its waiting list.
     """
     try:
-        from papermeister.ocr import is_wrapper_mode, wrapper_get_stats
+        from papermeister.ocr import is_wrapper_mode, wrapper_client_concurrency
         if not is_wrapper_mode():
             return 6
-        stats = wrapper_get_stats()
-        share = int(stats.get('recommended_concurrency') or 0)
-        capacity = int(stats.get('concurrency') or 0) or share or 6
-        others = other_active_clients()
-        if others is None:
-            others = int(stats.get('active_clients') or 0)
+        depth = wrapper_client_concurrency()
     except Exception:
         return 6
+    print(f'This client keeps {depth} page(s) in flight.')
+    return max(1, depth)
 
-    even_split = capacity // (others + 1)
-    depth = max(1, min(share or even_split, even_split))
-    sharing = f' with {others} other client(s)' if others else ' (nobody else on it)'
-    print(f'Server does {capacity} pages at a time, shared{sharing} — '
-          f'this client takes {depth}.')
-    return depth
+
+#: How often to re-ask the server for our share, in seconds. The app fixes its
+#: target once per batch, which is fine for a batch that ends; this one runs
+#: for days, across the other machine starting and finishing its own work.
+_SHARE_REFRESH = 60
+
+
+def follow_the_share(budget, stop):
+    """Keep the page budget matched to what the server currently allots us.
+
+    The share moves when clients come and go — 12 alone, 6 once a second
+    machine attaches. Enforcement is the server's either way, so getting this
+    wrong is never incorrect, only wasteful: too high and pages pile up in the
+    server's waiting list, too low and our share sits idle for hours.
+    """
+    from papermeister.ocr import wrapper_client_concurrency
+
+    while not stop.wait(_SHARE_REFRESH):
+        try:
+            share = wrapper_client_concurrency()
+        except Exception as exc:
+            # A blip while asking is not a reason to change how much we take.
+            print(f'    could not re-check our share ({exc}); keeping {budget.limit}')
+            continue
+        if share and share != budget.limit:
+            print(f'    share is now {share} page(s) (was {budget.limit})')
+            budget.set_limit(share)
 
 
 def preview(everything, selected):
@@ -390,13 +386,21 @@ def main():
 
     # One thread per page of budget is the most that can ever be in flight
     # (a paper is at least one page); the budget, not the pool, is the limit.
-    with ThreadPoolExecutor(max_workers=max(1, depth)) as pool:
+    stop_watching = threading.Event()
+    watcher = threading.Thread(target=follow_the_share, args=(budget, stop_watching),
+                               daemon=True)
+    watcher.start()
+
+    # Sized for the largest share the server could hand back mid-run, not the
+    # one it started with; the budget, not the pool, is what limits the load.
+    with ThreadPoolExecutor(max_workers=max(4, depth)) as pool:
         futures = [
             pool.submit(convert, paper_file, count, index)
             for index, (paper_file, count) in enumerate(targets, start=1)
         ]
         for _ in as_completed(futures):
             pass
+    stop_watching.set()
 
     print()
     print(f'Converted {tally["done"]}, failed {tally["failed"]}, '

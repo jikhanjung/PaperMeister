@@ -179,7 +179,11 @@
 ### 즉시 착수 가능 (Phase 4 hookup)
 - [ ] **`extracted` 잔존분 재시도** — 실측 **10편**(2026-07-29). LLM은 끝났는데 apply를 못 하고 멈춘 것들. 해당 폴더를 다시 Process 한 번 돌리면 정리된다
 - [ ] **모드 라벨 status bar 영구 표시 여부 결정** — 지금은 Process 시작 시 한 번만 출력. 항상 표시 vs 공간 절약 트레이드오프
-- [ ] **`/api/stats` 주기적 재조회 여부** — mid-batch 모드 전환 시나리오가 실제로 생기면 추가
+- [ ] **앱 Process 창의 `/api/stats` 주기적 재조회** — 이제 실제 사유가 생겼다.
+  클라이언트가 붙고 떨어질 때마다 몫이 12↔6으로 움직이는데, `run()`이 **배치 시작 때 한 번만**
+  읽고 `_run_wrapper_pipeline(min_queued_pages=…)`에 고정값으로 넘긴다. 강제는 서버가 하므로
+  틀려도 깨지진 않고 **낭비만 된다** — 높으면 서버 대기열에 쌓이고, 낮으면 내 몫이 논다.
+  `scripts/reocr_legacy_ocr.py::follow_the_share`가 60초마다 따라가는 형태로 먼저 구현돼 있다
 - [ ] **Apply Biblio Zotero write-back 추가 검증** — auto_commit 한 건이라도 Zotero 서버 version 증가 + `papermeister_meta`가 JSON에 박혀 in-place replace 되는지 확인. 다른 머신에서 같은 폴더를 받았을 때 `BiblioAlreadyApplied`로 LLM이 스킵되는 cross-machine 시나리오까지
 - [ ] desktop: source/folder 단위 batch Reflect 트리거 + 결과 다이얼로그
 - [ ] desktop: PaperList 상태 셀에 StatusBadge delegate (현재는 축약 pill — done/wait/err/rev. 필요 시 풀 라벨로 복원 또는 아이콘화 검토)

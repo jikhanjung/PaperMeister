@@ -529,6 +529,49 @@ def wrapper_get_stats(for_this_client: bool = True) -> dict:
         return {}
 
 
+#: Used when the server is too old to answer per-client and we have to guess.
+_FALLBACK_CONCURRENCY = 6
+
+
+def wrapper_client_concurrency() -> int:
+    """Pages this client should keep in flight — its share, not the machine's.
+
+    Wrapper 0.2.4 splits capacity between the clients using it, and 0.2.5 says
+    so in the response. Read it as the server intends:
+
+      * `client_id` comes back as ours → it counted us, and
+        `recommended_concurrency` is our share.
+      * it did not (we could not identify ourselves) →
+        `recommended_concurrency_new_client`, which is what a client about to
+        arrive should take. `recommended_concurrency` alone would be the share
+        of the clients already there, and taking that starves them.
+      * neither field → a wrapper older than this contract. Split the machine
+        by the clients it reports, plus us.
+
+    The distinction is not academic: an unqualified ask on a server with one
+    other client working answers 12 where our share is 6, and a batch of tens
+    of thousands of pages will happily take all of it.
+    """
+    stats = wrapper_get_stats()
+    if not stats:
+        return _FALLBACK_CONCURRENCY
+
+    from .preferences import get_client_id
+    if stats.get('client_id') == get_client_id():
+        share = int(stats.get('recommended_concurrency') or 0)
+        if share:
+            return share
+
+    for_new = int(stats.get('recommended_concurrency_new_client') or 0)
+    if for_new:
+        return for_new
+
+    capacity = int(stats.get('concurrency') or 0)
+    if not capacity:
+        return int(stats.get('recommended_concurrency') or 0) or _FALLBACK_CONCURRENCY
+    return max(1, capacity // (int(stats.get('active_clients') or 0) + 1))
+
+
 def wrapper_poll(job_id: str) -> dict:
     """Poll a wrapper job. Returns the full job dict."""
     _ensure_config()
