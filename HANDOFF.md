@@ -100,10 +100,11 @@
   (마지막 체크포인트 시점 값) Windows에서 `scripts/refs_progress.py`를 쓴다
 - **데이터를 바꾸는 스크립트는 Windows(Anaconda)에서 실행한다.** WSL은 read-only 조회 전용
 - **ocrserver는 이 PC 혼자 쓰는 게 아니다** — 다른 PC도 같은 서버에 OCR을 돌린다.
-  `/api/stats::recommended_concurrency`(현재 12)는 **서버 전체 용량**이지 이쪽 몫이 아니다.
-  배치 도구는 `counts.processing + queued`를 빼고 남은 만큼만 쓴다 — 다 가져가도 이쪽이
-  빨라지지 않고 저쪽만 느려진다. 재OCR은 기다려도 되는 작업이다
-- **wrapper의 작업 단위는 PDF 한 편이지만, 서버가 말하는 concurrency의 단위는 페이지다.**
+  **서버가 클라이언트별로 용량을 나눠준다**(2026-08-28 서버 개편): 클라이언트 2개면
+  `/api/stats::recommended_concurrency`가 12가 아니라 **6**으로 내려온다. 즉 그 값은
+  **이미 내 몫**이다 — **다른 클라이언트의 in-flight를 빼지 말 것.** 서버가 이미 뺐고,
+  두 번 빼면 내 몫이 놀고 있는데도 1페이지씩 기어간다(실제로 그렇게 만들었다가 되돌렸다)
+- **wrapper의 작업 단위는 PDF 한 편이지만, concurrency의 단위는 페이지다.**
   그래서 "동시 논문 수"로 조절하면 안 된다 — 중앙값 13페이지 × 12편 = **150페이지**를
   12페이지짜리 서버에 밀어넣게 된다(실제로 그래서 다른 PC를 굶겼다). 앱의 Process 창은
   원래 `min_queued_pages`로 페이지를 센다. 배치 도구도 **페이지 예산**으로 맞춘다

@@ -218,32 +218,31 @@ class PageBudget:
 
 
 def recommended_queue_depth():
-    """Pages to keep in flight — what is free on the server, not what exists.
+    """Pages to keep in flight, as the server tells this client.
 
-    `recommended_concurrency` is the whole server's figure, and the server is
-    shared: another machine runs its own OCR against it. Subtracting what is
-    already in flight is the difference between this batch waiting a little and
-    the other machine's run being starved. This is the job that can afford to
-    wait.
+    `recommended_concurrency` is **this client's share**, not the whole server:
+    the wrapper divides its capacity between the clients attached to it, so two
+    machines see 6 each rather than 12 each. Send it the PDFs and it schedules
+    the rest.
+
+    Which is why nothing is subtracted here. Deducting the jobs other clients
+    have in flight looks careful and is not — the server has already deducted
+    them, and doing it twice walks this batch down to one page at a time while
+    its share sits idle.
     """
     try:
         from papermeister.ocr import is_wrapper_mode, wrapper_get_stats
         if not is_wrapper_mode():
             return 6
         stats = wrapper_get_stats()
-        recommended = int(stats.get('recommended_concurrency') or 0) or 6
-        counts = stats.get('counts') or {}
-        in_flight = int(counts.get('processing') or 0) + int(counts.get('queued') or 0)
+        depth = int(stats.get('recommended_concurrency') or 0) or 6
     except Exception:
         return 6
 
-    depth = max(1, recommended - in_flight)
-    if in_flight:
-        print(f'Server keeps {recommended} pages going, {in_flight} already in '
-              f'flight elsewhere — taking {depth}.')
-    else:
-        print(f'Server keeps {recommended} pages going, and is idle — taking {depth}.')
-    return depth
+    clients = stats.get('clients_active')
+    sharing = f', shared with {clients - 1} other client(s)' if clients and clients > 1 else ''
+    print(f'Server gives this client {depth} page(s) in flight{sharing}.')
+    return max(1, depth)
 
 
 def preview(everything, selected):
