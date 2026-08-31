@@ -1,5 +1,5 @@
 PyQt6>=6.11.0,<6.12
-peewee~=4.3.0
+peewee~=4.4.0
 pypdfium2~=5.12
 Pillow>=12.3.0
 requests>=2.34.2
