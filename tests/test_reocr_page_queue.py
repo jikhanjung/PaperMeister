@@ -215,3 +215,92 @@ def test_a_failed_check_leaves_the_budget_alone(reocr, monkeypatch):
     stop.set()
 
     assert queue.limit == 6
+
+
+# ── riding out a server outage ──────────────────────────────────────
+
+@pytest.mark.unit
+def test_isolated_failures_are_not_an_outage(reocr):
+    """One awkward paper is not the server going away, and a long run has a
+    few of those."""
+    gate = reocr.ServerGate()
+    assert gate.note_failure() is False
+    gate.note_success()
+    assert gate.note_failure() is False
+    assert gate.wait_if_down() is True
+
+
+@pytest.mark.unit
+def test_a_streak_of_failures_is(reocr):
+    gate = reocr.ServerGate()
+    outcomes = [gate.note_failure() for _ in range(reocr._OUTAGE_STREAK)]
+    assert outcomes[-1] is True
+    assert outcomes[:-1] == [False] * (reocr._OUTAGE_STREAK - 1)
+
+
+@pytest.mark.unit
+def test_only_one_thread_rides_out_the_outage(reocr):
+    """The others block on the gate rather than each running their own wait."""
+    gate = reocr.ServerGate()
+    for _ in range(reocr._OUTAGE_STREAK):
+        gate.note_failure()
+    assert gate.note_failure() is False      # already being handled
+
+
+@pytest.mark.unit
+def test_the_run_resumes_when_the_server_comes_back(reocr, monkeypatch):
+    from papermeister import ocr
+
+    monkeypatch.setattr(reocr, '_OUTAGE_POLL', 0.01)
+    monkeypatch.setattr(ocr, 'check_health', lambda: {'workers': {'idle': 1}})
+    gate = reocr.ServerGate(patience=30)
+    for _ in range(reocr._OUTAGE_STREAK):
+        gate.note_failure()
+
+    gate.ride_out()
+
+    assert gate.gave_up is False
+    assert gate.wait_if_down() is True
+
+
+@pytest.mark.unit
+def test_a_server_that_stays_down_ends_the_run(reocr, monkeypatch):
+    """Stopping costs a re-run — the work is resumable. Spinning all night
+    costs the night, and the batch would report every remaining paper as
+    failed without having tried any of them."""
+    from papermeister import ocr
+
+    def down():
+        raise OSError('connection refused')
+
+    monkeypatch.setattr(ocr, 'check_health', down)
+    gate = reocr.ServerGate(patience=0)
+    for _ in range(reocr._OUTAGE_STREAK):
+        gate.note_failure()
+
+    gate.ride_out()
+
+    assert gate.gave_up is True
+    assert gate.wait_if_down() is False      # waiting workers are released
+
+
+@pytest.mark.unit
+def test_workers_are_held_while_the_outage_is_ridden_out(reocr, monkeypatch):
+    from papermeister import ocr
+
+    monkeypatch.setattr(reocr, '_OUTAGE_POLL', 0.01)
+    monkeypatch.setattr(ocr, 'check_health', lambda: {'workers': {'idle': 1}})
+    gate = reocr.ServerGate(patience=60)
+    for _ in range(reocr._OUTAGE_STREAK):
+        gate.note_failure()
+
+    released = threading.Event()
+    waiter = threading.Thread(target=lambda: (gate.wait_if_down(), released.set()))
+    waiter.daemon = True
+    waiter.start()
+    waiter.join(timeout=0.3)
+    assert not released.is_set()             # held, not burning through papers
+
+    gate.ride_out()
+    waiter.join(timeout=2)
+    assert released.is_set()

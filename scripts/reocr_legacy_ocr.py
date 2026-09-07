@@ -296,6 +296,89 @@ def follow_the_share(budget, stop):
             budget.set_limit(share)
 
 
+#: Consecutive failures that mean the server is gone rather than one paper
+#: being awkward. Real per-paper failures are isolated; a run of them is not.
+_OUTAGE_STREAK = 3
+
+#: How long to wait for it to come back before giving up on this run. The work
+#: is resumable, so stopping costs a re-run — spinning for hours costs a night.
+_OUTAGE_PATIENCE = 900
+
+#: Gap between health probes while waiting one out.
+_OUTAGE_POLL = 15
+
+
+def _server_answers(check_health) -> bool:
+    """True once the server responds at all — the shape of the reply is the
+    caller's problem, being reachable is this one's."""
+    try:
+        check_health()
+    except Exception:
+        return False
+    return True
+
+
+class ServerGate:
+    """Holds the run still while the OCR server is refusing everything.
+
+    Without this a proxy hiccup empties the whole queue in seconds: the batch
+    keeps submitting into a server that rejects instantly, so every remaining
+    paper "fails" without ever being tried. That is what happened on the first
+    full run — 53 papers burned in the time it takes to POST them, none of
+    which had reached the wrapper at all.
+
+    Isolated failures still pass through untouched; only a streak of them is
+    treated as an outage.
+    """
+
+    def __init__(self, patience: int = _OUTAGE_PATIENCE):
+        self.patience = patience
+        self.gave_up = False
+        self._streak = 0
+        self._lock = threading.Lock()
+        self._clear = threading.Event()
+        self._clear.set()
+
+    def wait_if_down(self):
+        """Block while an outage is being ridden out. True to keep going."""
+        self._clear.wait()
+        return not self.gave_up
+
+    def note_success(self):
+        with self._lock:
+            self._streak = 0
+
+    def note_failure(self) -> bool:
+        """Record a failure; True if the caller should ride out an outage."""
+        with self._lock:
+            self._streak += 1
+            if self._streak < _OUTAGE_STREAK or not self._clear.is_set():
+                return False
+            self._clear.clear()          # this thread runs the recovery wait
+            return True
+
+    def ride_out(self):
+        from papermeister.ocr import check_health
+
+        print(f'    {_OUTAGE_STREAK} failures in a row — treating the server as '
+              f'down, waiting up to {self.patience // 60} min')
+        deadline = time.time() + self.patience
+        try:
+            while time.time() < deadline:
+                time.sleep(_OUTAGE_POLL)
+                if not _server_answers(check_health):
+                    continue
+                print('    server is answering again — carrying on')
+                with self._lock:
+                    self._streak = 0
+                return
+            self.gave_up = True
+            print(f'    still down after {self.patience // 60} min — stopping. '
+                  f'Nothing is lost; re-run to pick up where this left off.')
+        finally:
+            self._clear.set()
+
+
 def preview(everything, selected):
     """Report the whole backlog, then what this invocation would actually do."""
     pages = sum(count for _, count in everything)
@@ -380,6 +463,8 @@ def main():
     lock = threading.Lock()
 
     def convert(paper_file, page_count, index):
+        if not gate.wait_if_down():
+            return                      # the server never came back
         prefix = f'[{index}/{len(targets)}]'
         name = os.path.basename(paper_file.path)[:60]
         budget.acquire(page_count)
@@ -393,9 +478,12 @@ def main():
             with lock:
                 tally['failed'] += 1
             print(f'{prefix}   FAILED: {exc}')
+            if gate.note_failure():
+                gate.ride_out()
             return
         finally:
             budget.release(page_count)
+        gate.note_success()
         with lock:
             tally['done'] += 1
             tally['pages'] += page_count
@@ -408,6 +496,7 @@ def main():
 
     # One thread per page of budget is the most that can ever be in flight
     # (a paper is at least one page); the budget, not the pool, is the limit.
+    gate = ServerGate()
     stop_watching = threading.Event()
     watcher = threading.Thread(target=follow_the_share, args=(budget, stop_watching),
                                daemon=True)
@@ -431,6 +520,10 @@ def main():
     print()
     print(f'Converted {tally["done"]}, failed {tally["failed"]}, '
           f'in {(time.time() - started) / 60:.0f} min.')
+    if gate.gave_up:
+        print('Stopped early: the OCR server stopped answering. '
+              'Re-run when it is back — nothing was lost.')
+        return 1
     return 0
 
 
