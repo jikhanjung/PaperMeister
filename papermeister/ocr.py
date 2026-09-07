@@ -456,7 +456,7 @@ def wrapper_submit(pdf_path: str, *, force: bool = False) -> tuple[str, int, boo
     if resp.status_code != 200:
         logger.error('Wrapper submit %d: %s', resp.status_code, resp.text[:500])
     resp.raise_for_status()
-    data = resp.json()
+    data = _wrapper_json(resp, f'submit of {os.path.basename(pdf_path)}')
     job_id = data['job_id']
     cached = bool(data.get('cached'))
     in_progress = bool(data.get('in_progress'))
@@ -572,12 +572,39 @@ def wrapper_client_concurrency() -> int:
     return max(1, capacity // (int(stats.get('active_clients') or 0) + 1))
 
 
+class WrapperReplyNotJSON(Exception):
+    """The wrapper answered 2xx with something that is not JSON."""
+
+
+def _wrapper_json(resp, what: str):
+    """Parse a wrapper reply, saying what came back when it will not parse.
+
+    A proxy in front of the wrapper can return an HTML page, or nothing, with a
+    perfectly good status code — `raise_for_status` waves it through and
+    `.json()` then fails with "Expecting value: line 1 column 1", which names
+    neither the request nor the reply. That message cost a run's worth of
+    guessing: it looked identical whether the server was down, the upload was
+    refused, or the response was truncated.
+    """
+    try:
+        return resp.json()
+    except ValueError:
+        body = (resp.text or '').strip()
+        logger.error('Wrapper %s: HTTP %d, non-JSON body: %s',
+                     what, resp.status_code, body[:500])
+        raise WrapperReplyNotJSON(
+            f'{what}: server replied HTTP {resp.status_code} with '
+            f'{len(body)} bytes that are not JSON'
+            + (f' — starts {body[:80]!r}' if body else ' (empty body)')
+        ) from None
+
+
 def wrapper_poll(job_id: str) -> dict:
     """Poll a wrapper job. Returns the full job dict."""
     _ensure_config()
     resp = requests.get(f'{_WRAPPER_URL}/ocr/{job_id}', timeout=30)
     resp.raise_for_status()
-    return resp.json()
+    return _wrapper_json(resp, f'poll of job {job_id}')
 
 
 def wrapper_collect(job: dict) -> tuple[dict, int]:
