@@ -19,6 +19,17 @@ APP_LICENSE = 'GPL-3.0-or-later'
 APP_COPYRIGHT = '© 2026 Jikhan Jung'
 APP_VERSION = __version__
 
+
+def window_title() -> str:
+    """What the main window is called: name and version.
+
+    Built from `version.py` rather than written into each window, so a release
+    cannot ship a title claiming the version before it — which is exactly the
+    thing nobody checks, and exactly what a user reads back when reporting a
+    problem.
+    """
+    return f'{APP_NAME} v{APP_VERSION}'
+
 #: Runtime dependencies: (distribution, licence to display, pattern that must
 #: still appear in what that distribution declares about itself).
 #:

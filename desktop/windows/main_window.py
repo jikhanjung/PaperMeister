@@ -18,12 +18,13 @@ from desktop.theme.tokens import LAYOUT, SPACING
 from desktop.views.detail_panel import DetailPanel
 from desktop.views.paper_list import PaperListView
 from desktop.views.source_nav import SourceNav
+from papermeister import about
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('PaperMeister')
+        self.setWindowTitle(about.window_title())
         self.resize(1500, 900)
         self.setMinimumSize(LAYOUT['window.min.width'], LAYOUT['window.min.height'])
 

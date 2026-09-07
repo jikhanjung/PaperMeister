@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The window title says which version you are running** — "PaperMeister
+  v0.1.9" rather than just the name. It is the thing you read back when
+  something goes wrong, and until now it did not say.
+
+---
+
 ## [0.1.9] - 2026-08-28
 
 The Text tab reads like the paper again.

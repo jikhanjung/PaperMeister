@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from .. import about
 from .process_window import ProcessWindow
 
 # ── Workers ──────────────────────────────────────────────────
@@ -132,7 +133,7 @@ class ZoteroScanWorker(QThread):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('PaperMeister')
+        self.setWindowTitle(about.window_title())
         self.setMinimumSize(1200, 700)
         self._scan_worker = None
         self._zotero_worker = None

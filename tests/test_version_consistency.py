@@ -38,3 +38,23 @@ def test_pyproject_does_not_hardcode_a_diverging_version():
     m = re.search(r'(?m)^\s*version\s*=\s*"([^"]+)"', pyproject)
     assert m is None or m.group(1) == __version__, (
         f"pyproject version {m.group(1) if m else None} != version.py {__version__}")
+
+
+@pytest.mark.unit
+def test_the_window_title_carries_the_current_version():
+    """It is what a user reads back when reporting a problem, so it must not
+    be able to drift from version.py."""
+    from papermeister import about
+
+    assert about.window_title() == f"PaperMeister v{__version__}"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("window", [
+    "desktop/windows/main_window.py",
+    "papermeister/ui/main_window.py",
+])
+def test_neither_main_window_hardcodes_its_title(window):
+    source = (ROOT / window).read_text(encoding="utf-8")
+    assert "about.window_title()" in source
+    assert "setWindowTitle('PaperMeister')" not in source
