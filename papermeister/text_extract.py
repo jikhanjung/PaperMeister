@@ -64,6 +64,50 @@ def split_into_passages(text, min_length=50):
     return passages
 
 
+#: The share of a document the OCR must actually come back with. The server
+#: reports how many pages it managed, and a run that captured a fiftieth of a
+#: book is not a partial success — it is a failure that happens to have text in
+#: it, which is the shape that gets mistaken for one.
+MIN_PAGE_COVERAGE = 0.5
+
+
+class IncompleteOCR(Exception):
+    """The OCR came back too short to accept."""
+
+
+def _reject_incomplete_ocr(paper_file, raw_result):
+    """Refuse a result that would replace a document with a fragment of it.
+
+    Nine papers were reduced to between 2% and 8% of themselves this way: the
+    wrapper returned `done_with_errors` after a handful of pages, and the only
+    guard was "did any text come back at all", which a fragment passes. The
+    fragment then overwrote the cache, the passages in the DB and the copy in
+    Zotero, and — being valid structured output — stopped looking like anything
+    that needed doing again.
+
+    Raising here happens before any of that is touched, so the paper keeps
+    whatever it already had and stays visibly retryable.
+    """
+    total = int(raw_result.get('total_pages') or 0)
+    done = int(raw_result.get('done_pages') or 0)
+    if total and done < total * MIN_PAGE_COVERAGE:
+        raise IncompleteOCR(
+            f'OCR returned {done} of {total} pages '
+            f'({done / total:.0%}) — refusing to replace the existing text')
+
+    # Even a result the server is happy with must not shrink what is there:
+    # the previous run is the better one whenever it covered more of the paper.
+    try:
+        existing = _load_ocr_json(paper_file) or {}
+    except Exception:
+        return
+    had = len(existing.get('pages') or [])
+    if had and len(raw_result.get('pages') or []) < had:
+        raise IncompleteOCR(
+            f'OCR returned {len(raw_result.get("pages") or [])} pages where the '
+            f'cached result has {had} — refusing to replace it with less')
+
+
 def _save_ocr_json(paper_file, raw_result):
     """Save raw OCR JSON to the OCR cache dir (atomic write).
 
@@ -428,6 +472,7 @@ def process_paper_file(paper_file, ocr_progress_callback=None, status_callback=N
                 status_callback('Running OCR...')
             from .ocr import ocr_pdf
             ocr_results, raw_result = ocr_pdf(filepath, progress_callback=ocr_progress_callback, force=force)
+            _reject_incomplete_ocr(paper_file, raw_result)
             _save_ocr_json(paper_file, raw_result)
             pages = [(r['page'], r['text']) for r in ocr_results]
         except Exception:

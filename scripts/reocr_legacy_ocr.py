@@ -99,6 +99,13 @@ def has_layout_labels(path):
         return True            # unreadable: not a target, and not our problem
 
 
+#: A cache holding less than this share of its document is a fragment, not a
+#: result. See `papermeister.text_extract.MIN_PAGE_COVERAGE` — the same line,
+#: applied from the other side: that one refuses to write them, this one finds
+#: the ones already written.
+MIN_PAGE_COVERAGE = 0.5
+
+
 def page_count(path):
     """Pages in a cache file, or None if it is empty or unreadable.
 
@@ -114,6 +121,24 @@ def page_count(path):
     if not any((p.get('markdown') or '').strip() for p in pages):
         return None
     return len(pages)
+
+
+def is_fragment(path):
+    """True when the cache holds only a fraction of the document it names.
+
+    A server that gives up part-way still returns valid structured output, so
+    these do not look old — they look done. Nine papers sat at 2-8% of
+    themselves until someone read the server's job list. Coverage is what tells
+    them apart, and the file records both numbers.
+    """
+    try:
+        with open(path, encoding='utf-8') as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return False
+    total = int(data.get('total_pages') or 0)
+    done = int(data.get('done_pages') or len(data.get('pages') or []))
+    return bool(total) and done < total * MIN_PAGE_COVERAGE
 
 
 def find_targets():
@@ -136,14 +161,22 @@ def find_targets():
     started = time.time()
 
     targets = []
+    fragments = 0
     for paper_file in candidates:
         path = cache_path(paper_file)
-        if not path or not os.path.exists(path) or has_layout_labels(path):
+        if not path or not os.path.exists(path):
             continue
+        if has_layout_labels(path):
+            # Converted — unless the conversion only captured a sliver of it.
+            if not is_fragment(path):
+                continue
+            fragments += 1
         pages = page_count(path)
         if pages is None:
             continue
         targets.append((paper_file, pages))
+    if fragments:
+        print(f'  including {fragments} that converted to a fragment of themselves')
     targets.sort(key=lambda pair: pair[1])
     print(f'  scanned in {time.time() - started:.0f}s', flush=True)
     return targets

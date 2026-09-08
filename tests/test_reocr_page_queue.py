@@ -304,3 +304,51 @@ def test_workers_are_held_while_the_outage_is_ridden_out(reocr, monkeypatch):
     gate.ride_out()
     waiter.join(timeout=2)
     assert released.is_set()
+
+
+# ── fragments left by a server that gave up part-way ─────────────────
+
+@pytest.mark.unit
+def test_a_fragment_is_recognised_by_its_own_numbers(reocr, tmp_path):
+    """It carries valid layout labels, so it does not look old — it looks
+    done. Coverage is what tells them apart."""
+    import json
+    path = tmp_path / 'book.json'
+    path.write_text(json.dumps({
+        'total_pages': 694, 'done_pages': 18,
+        'pages': [{'page': i, 'markdown': f'<div data-label="Text">{i}</div>'}
+                  for i in range(18)],
+    }), encoding='utf-8')
+
+    assert reocr.is_fragment(str(path)) is True
+
+
+@pytest.mark.unit
+def test_a_complete_conversion_is_not_a_fragment(reocr, tmp_path):
+    import json
+    path = tmp_path / 'paper.json'
+    path.write_text(json.dumps({
+        'total_pages': 13, 'done_pages': 13,
+        'pages': [{'page': i, 'markdown': 'x'} for i in range(13)],
+    }), encoding='utf-8')
+
+    assert reocr.is_fragment(str(path)) is False
+
+
+@pytest.mark.unit
+def test_a_few_failed_pages_are_not_a_fragment(reocr, tmp_path):
+    import json
+    path = tmp_path / 'scan.json'
+    path.write_text(json.dumps({
+        'total_pages': 210, 'done_pages': 198,
+        'pages': [{'page': i, 'markdown': 'x'} for i in range(198)],
+    }), encoding='utf-8')
+
+    assert reocr.is_fragment(str(path)) is False
+
+
+@pytest.mark.unit
+def test_an_unreadable_cache_is_left_alone(reocr, tmp_path):
+    path = tmp_path / 'broken.json'
+    path.write_text('{ not json', encoding='utf-8')
+    assert reocr.is_fragment(str(path)) is False
