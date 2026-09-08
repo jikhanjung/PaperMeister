@@ -352,3 +352,30 @@ def test_an_unreadable_cache_is_left_alone(reocr, tmp_path):
     path = tmp_path / 'broken.json'
     path.write_text('{ not json', encoding='utf-8')
     assert reocr.is_fragment(str(path)) is False
+
+
+@pytest.mark.unit
+def test_a_fragment_is_sized_by_the_document_not_by_itself(reocr, tmp_path):
+    """The count sorts the queue and is what the paper takes out of the page
+    budget. Using the fragment's own length made a 694-page book look like an
+    18-page paper — first in the queue, and ten of them fitting a budget of
+    twelve pages."""
+    import json
+    path = tmp_path / 'book.json'
+    path.write_text(json.dumps({
+        'total_pages': 694, 'done_pages': 18,
+        'pages': [{'page': i, 'markdown': 'x'} for i in range(18)],
+    }), encoding='utf-8')
+
+    assert reocr.page_count(str(path)) == 694
+
+
+@pytest.mark.unit
+def test_a_cache_without_a_total_falls_back_to_what_it_holds(reocr, tmp_path):
+    import json
+    path = tmp_path / 'old.json'
+    path.write_text(json.dumps({
+        'pages': [{'page': i, 'markdown': 'x'} for i in range(9)],
+    }), encoding='utf-8')
+
+    assert reocr.page_count(str(path)) == 9

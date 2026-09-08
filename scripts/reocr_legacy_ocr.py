@@ -107,7 +107,14 @@ MIN_PAGE_COVERAGE = 0.5
 
 
 def page_count(path):
-    """Pages in a cache file, or None if it is empty or unreadable.
+    """Pages in the *document*, or None if the cache is empty or unreadable.
+
+    Not the pages in the cache. For a fragment those differ wildly — a cache
+    holding 18 pages of a 694-page book — and this number is what sizes the
+    work: it sorts the queue and it is what each paper takes out of the page
+    budget. Reading the fragment's own length instead made a 694-page book look
+    like an 18-page paper, which sorts it to the front and lets ten of them
+    into a budget meant for twelve pages.
 
     An empty cache is a failed OCR rather than an old one — a different queue,
     reachable from the app as "Retry", and not what this script is for.
@@ -120,7 +127,7 @@ def page_count(path):
     pages = data.get('pages') or []
     if not any((p.get('markdown') or '').strip() for p in pages):
         return None
-    return len(pages)
+    return int(data.get('total_pages') or 0) or len(pages)
 
 
 def is_fragment(path):
