@@ -89,6 +89,9 @@
   AppId가 v0.1.4부터 고정됐으므로 **제자리 업그레이드로 깔려야 한다** — 그게 곧 이 항목의 검증이다.
   0.1.7은 PDF 엔진이 바뀌었으므로 **프로즌 빌드에서 PDF 탭이 실제로 그려지는지**를 특히 볼 것
   (소스에서는 확인했으나 PyInstaller 번들에 `pdfium.dll`이 제대로 실리는지는 별개 문제다)
+- [ ] **서버의 옛 `~/backups` 정리** — 백업 대상을 `/mnt/disk1/backups/papermeister`로 옮겼는데,
+  **retention은 새 디렉터리만 청소한다.** 홈에 남은 최대 24개(≈26GB)는 아무도 안 지운다.
+  한 번 지워야 한다: `ssh jikhanserver "ls -t ~/backups/papermeister-*.db.gz"` 로 확인 후 삭제
 - [ ] **백업 스크립트 Windows 실행** — 7/28 이후 첫 성공 백업이 되는지
 - [x] ~~앱 재시작 후 `%LOCALAPPDATA%\PaleoBytes\PaperMeister\preferences.json` 생성 확인~~
   ✅ (2026-08-13 확인) 7/29에 생성됐고 8/5에 갱신됨 — `migrate_legacy_config()`가 라이브에서 실제로 돌았다
