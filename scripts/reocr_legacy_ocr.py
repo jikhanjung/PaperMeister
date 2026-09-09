@@ -116,18 +116,47 @@ def page_count(path):
     like an 18-page paper, which sorts it to the front and lets ten of them
     into a budget meant for twelve pages.
 
-    An empty cache is a failed OCR rather than an old one — a different queue,
-    reachable from the app as "Retry", and not what this script is for.
+    None only when the file cannot be read at all. A cache with no text in it
+    is still a target: it means the paper has no text, and the app cannot reach
+    it either — "Retry" acts on files marked failed, and one of these is
+    recorded as processed. Nothing else would ever pick it up.
     """
     try:
         with open(path, encoding='utf-8') as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
         return None
-    pages = data.get('pages') or []
-    if not any((p.get('markdown') or '').strip() for p in pages):
-        return None
-    return int(data.get('total_pages') or 0) or len(pages)
+    return int(data.get('total_pages') or 0) or len(data.get('pages') or []) or 1
+
+
+def is_textless(path) -> bool:
+    """True when the cache has pages but no text in any of them."""
+    try:
+        with open(path, encoding='utf-8') as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return False
+    return not any((p.get('markdown') or '').strip()
+                   for p in (data.get('pages') or []))
+
+
+def is_short(path) -> bool:
+    """True when the cache holds fewer pages than the document has, at all.
+
+    Looser than `is_fragment`, and opt-in for that reason: most of the papers
+    it catches lost their pages to a backend that was briefly down (404 and
+    502 from the OCR model's own endpoint), which a re-run fixes. But one of
+    them lost a page the renderer cannot read at all, and a paper that can
+    never reach 100% would be picked up by every run forever.
+    """
+    try:
+        with open(path, encoding='utf-8') as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return False
+    total = int(data.get('total_pages') or 0)
+    done = int(data.get('done_pages') or len(data.get('pages') or []))
+    return bool(total) and done < total
 
 
 def is_fragment(path):
@@ -148,7 +177,7 @@ def is_fragment(path):
     return bool(total) and done < total * MIN_PAGE_COVERAGE
 
 
-def find_targets():
+def find_targets(include_short: bool = False):
     """Processed PDFs whose cached OCR is the old flat-markdown form.
 
     Sorted shortest first: the tail of this library is 600-800 page plate
@@ -168,14 +197,17 @@ def find_targets():
     started = time.time()
 
     targets = []
-    fragments = 0
+    fragments = textless = 0
     for paper_file in candidates:
         path = cache_path(paper_file)
         if not path or not os.path.exists(path):
             continue
-        if has_layout_labels(path):
+        empty = is_textless(path)
+        if empty:
+            textless += 1
+        elif has_layout_labels(path):
             # Converted — unless the conversion only captured a sliver of it.
-            if not is_fragment(path):
+            if not (is_fragment(path) or (include_short and is_short(path))):
                 continue
             fragments += 1
         pages = page_count(path)
@@ -184,6 +216,8 @@ def find_targets():
         targets.append((paper_file, pages))
     if fragments:
         print(f'  including {fragments} that converted to a fragment of themselves')
+    if textless:
+        print(f'  including {textless} whose OCR produced no text at all')
     targets.sort(key=lambda pair: pair[1])
     print(f'  scanned in {time.time() - started:.0f}s', flush=True)
     return targets
@@ -448,6 +482,9 @@ def main():
                         help='stop after this many papers — use it for a trial run')
     parser.add_argument('--max-pages', type=int,
                         help='skip papers longer than this (the plate volumes)')
+    parser.add_argument('--incomplete', action='store_true',
+                        help='also redo results that are merely short of their '
+                             'page count, not just the ones that are a sliver')
     parser.add_argument('--paper-ids', type=str,
                         help='comma-separated Paper ids — convert only these, '
                              'for retrying one that failed')
@@ -457,7 +494,7 @@ def main():
     args = parser.parse_args()
 
     init_db()
-    everything = find_targets()
+    everything = find_targets(include_short=args.incomplete)
     targets = everything
     if args.paper_ids:
         wanted = {int(part) for part in args.paper_ids.split(',') if part.strip()}

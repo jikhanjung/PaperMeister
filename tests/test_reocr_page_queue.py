@@ -379,3 +379,66 @@ def test_a_cache_without_a_total_falls_back_to_what_it_holds(reocr, tmp_path):
     }), encoding='utf-8')
 
     assert reocr.page_count(str(path)) == 9
+
+
+@pytest.mark.unit
+def test_a_cache_with_no_text_is_still_a_target(reocr, tmp_path):
+    """The app cannot reach it: "Retry" acts on files marked failed, and one of
+    these is recorded as processed. If this script skips it too, nothing ever
+    picks it up — which is how a 41-page paper sat empty since May."""
+    import json
+    path = tmp_path / 'empty.json'
+    path.write_text(json.dumps({
+        'total_pages': 41, 'done_pages': 0,
+        'pages': [{'page': i, 'markdown': ''} for i in range(41)],
+    }), encoding='utf-8')
+
+    assert reocr.is_textless(str(path)) is True
+    assert reocr.page_count(str(path)) == 41      # sized by the document
+
+
+@pytest.mark.unit
+def test_a_cache_with_text_is_not_textless(reocr, tmp_path):
+    import json
+    path = tmp_path / 'ok.json'
+    path.write_text(json.dumps({
+        'total_pages': 2, 'done_pages': 2,
+        'pages': [{'page': 0, 'markdown': 'words'}, {'page': 1, 'markdown': ''}],
+    }), encoding='utf-8')
+
+    assert reocr.is_textless(str(path)) is False
+
+
+@pytest.mark.unit
+def test_an_unreadable_cache_is_still_the_one_thing_skipped(reocr, tmp_path):
+    path = tmp_path / 'broken.json'
+    path.write_text('{ not json', encoding='utf-8')
+    assert reocr.page_count(str(path)) is None
+
+
+@pytest.mark.unit
+def test_merely_short_results_are_opt_in(reocr, tmp_path):
+    """Most of them lost pages to a backend that was briefly down, which a
+    re-run fixes. One lost a page the renderer cannot read, and that paper
+    would be picked up by every run forever — hence a flag, not a default."""
+    import json
+    path = tmp_path / 'nearly.json'
+    path.write_text(json.dumps({
+        'total_pages': 439, 'done_pages': 415,
+        'pages': [{'page': i, 'markdown': 'x'} for i in range(415)],
+    }), encoding='utf-8')
+
+    assert reocr.is_fragment(str(path)) is False     # not by default
+    assert reocr.is_short(str(path)) is True         # but with --incomplete
+
+
+@pytest.mark.unit
+def test_a_complete_result_is_never_short(reocr, tmp_path):
+    import json
+    path = tmp_path / 'whole.json'
+    path.write_text(json.dumps({
+        'total_pages': 13, 'done_pages': 13,
+        'pages': [{'page': i, 'markdown': 'x'} for i in range(13)],
+    }), encoding='utf-8')
+
+    assert reocr.is_short(str(path)) is False
