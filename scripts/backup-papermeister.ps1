@@ -7,11 +7,30 @@
   app/extraction is writing — never a torn WAL copy), gzips it, scp's it to the
   server with a timestamped name, and prunes old backups to the newest $Keep.
 
-  Runs daily at 04:00 under Windows Task Scheduler (run AS your user so ~/.ssh
-  keys resolve; "run whether logged on or not"):
+  Runs daily at 04:00 under Windows Task Scheduler, as your user so ~/.ssh keys
+  resolve, and with "run whether logged on or not". Register it this way rather
+  than with plain schtasks — the two settings that matter are not available
+  there:
 
-    schtasks /Create /TN "PaperMeister DB Backup" /SC DAILY /ST 04:00 /F `
-      /TR "powershell -NoProfile -ExecutionPolicy Bypass -File C:\path\to\scripts\backup-papermeister.ps1"
+    $action   = New-ScheduledTaskAction -Execute 'powershell' `
+        -Argument '-NoProfile -ExecutionPolicy Bypass -File C:\path\to\scripts\backup-papermeister.ps1'
+    $trigger  = New-ScheduledTaskTrigger -Daily -At 04:00
+    $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun `
+        -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    Register-ScheduledTask -TaskName 'PaperMeister DB Backup' -Force `
+        -Action $action -Trigger $trigger -Settings $settings
+
+  -StartWhenAvailable runs a missed 04:00 at the next opportunity, and
+  -WakeToRun brings the machine out of sleep for it. Neither helps if it is
+  powered off or hibernating, and nothing here can: this is a backup that only
+  exists while one desktop happens to be awake.
+
+  That is the residual risk, and the place to notice it is the server, which is
+  always on. The filenames carry their own timestamps, so a check is one line —
+  worth a cron of its own, because the failure mode is silence:
+
+    find /mnt/disk1/backups/papermeister -name 'papermeister-*.db.gz' -mtime -2 \
+      | grep -q . || echo 'PaperMeister backup is more than 2 days old'
 
   The server directory is created on each run, so there is nothing to set up by
   hand. Restore:  gunzip -c papermeister-YYYYmmdd-HHMMSS.db.gz > papermeister.db
