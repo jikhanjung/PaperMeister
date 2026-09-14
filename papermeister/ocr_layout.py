@@ -260,6 +260,11 @@ def _alt_text(inner_html: str) -> str:
     return html_mod.unescape(m.group(1)) if m else ''
 
 
+def page_anchor(index: int) -> str:
+    """Anchor name of a page in `document_html`, for jumping to it (0-based)."""
+    return f'pm-page-{index}'
+
+
 def document_html(pages: list[str], sizer=None, keep_chrome: bool = False) -> str:
     """The whole OCR document as one HTML string, page markers included."""
     parts: list[str] = []
@@ -267,5 +272,6 @@ def document_html(pages: list[str], sizer=None, keep_chrome: bool = False) -> st
         body = page_html(text or '', index, sizer, keep_chrome)
         if not body.strip():
             continue
-        parts.append(f'<div class="pm-page-mark">page {index + 1}</div>\n{body}')
+        parts.append(f'<a name="{page_anchor(index)}"></a>'
+                     f'<div class="pm-page-mark">page {index + 1}</div>\n{body}')
     return '\n'.join(parts)

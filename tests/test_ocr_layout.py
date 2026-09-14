@@ -189,3 +189,13 @@ def test_document_html_marks_pages_and_skips_empty_ones():
     html = layout.document_html(['', STRUCTURED, ''], sizer=lambda p, b: (10, 10))
     assert html.count('pm-page-mark') == 1
     assert 'page 2' in html      # numbered for the reader, not zero-based
+
+
+@pytest.mark.unit
+def test_every_page_carries_an_anchor_to_jump_to():
+    """The figure list jumps the reader to a figure's page by this anchor."""
+    from papermeister import ocr_layout
+
+    html = ocr_layout.document_html(['<div data-bbox="0 0 10 10" data-label="Text"><p>a</p></div>'] * 3)
+    for index in range(3):
+        assert f'<a name="{ocr_layout.page_anchor(index)}"></a>' in html

@@ -1,28 +1,32 @@
 #!/usr/bin/env python3
-"""P16 Phase 0: what figure assembly finds in the OCR cache, without writing anything.
+"""P16: assemble figures from the OCR cache — survey the cache, or store them.
 
-Before the caption and panel stages cost anything, this answers how many figures
-there are, how many pages are plates, and how many figures look like they have
-panels. The picture-block count in the cache is not that number — plate pages
-hold a block per photograph, and journal logos are pictures too — so the
-estimate has to come from running the real assembly judgement
-(`papermeister.figures`) over the real cache.
+**Survey** (no targets; Phase 0). Runs the assembly judgement
+(`papermeister.figures`) over every cached OCR result and reports how many
+figures, plate pages and cut-up figures there are, and how many look like panel
+candidates. The picture-block count is not that number — plate pages hold a
+block per photograph and journal logos are pictures too. Also picks a pilot set
+for the later phases: papers with plates, cut-up figures, compound captions,
+non-Latin scripts and maps, so the pilot meets the cases that break things.
+Reads the cache only; never opens the database.
 
-It also picks a pilot set for Phases 2 and 3: papers with plates, with compound
-captions, in non-Latin scripts, and with maps, so the pilot meets the cases that
-break things rather than the easy ones.
+**Store** (`--paper-ids` or `--pilot`; Phase 1). Assembles the chosen papers and
+shows what storing would change — new figures, refreshed hints, figures folded
+because a rule no longer produces them. Nothing is written without `--execute`,
+and the dry run opens the database read-only, so it does not even add the new
+tables to the library. Re-running is safe: see `papermeister.figure_store`.
 
-Read-only. Reads the cache directory directly, so it also sees caches whose
-papers have since left the library; those are a handful and do not move the
-estimate.
-
-    python scripts/assemble_figures.py                         # whole cache
-    python scripts/assemble_figures.py --sample 300            # a random sample
-    python scripts/assemble_figures.py --pilot-out pilot.json --report-out report.json
+    python scripts/assemble_figures.py                               # survey the whole cache
+    python scripts/assemble_figures.py --sample 300                  # survey a random sample
+    python scripts/assemble_figures.py --pilot-out pilot.json        # survey + write the pilot list
+    python scripts/assemble_figures.py --pilot pilot.json            # dry run: what would be stored
+    python scripts/assemble_figures.py --pilot pilot.json --execute  # store the pilot's figures
+    python scripts/assemble_figures.py --paper-ids 12,345 --execute
 """
 import argparse
 import json
 import os
+import pathlib
 import random
 import re
 import statistics
@@ -55,6 +59,7 @@ _SCRIPTS = {
 }
 _LATIN = re.compile(r'[A-Za-z]')
 _MAP = re.compile(r'\b(?:maps?|locality|localities|location)\b|지도|위치도|位置図|地図|地图|карта', re.I)
+_CACHE_HASH = re.compile(r'\.([0-9a-f]{8})\.json$')
 
 PILOT_STRATA = (
     ('plates', 9, lambda p: p['plates'] > 0),
@@ -84,6 +89,8 @@ def load_pages(path: str) -> list[str] | None:
     ordered = sorted(data.get('pages') or [], key=lambda p: p.get('page', 0))
     return [(p.get('markdown') or '') for p in ordered]
 
+
+# ── survey ──────────────────────────────────────────────────────────
 
 def survey(names: list[str], cache: str):
     totals: Counter = Counter()
@@ -225,16 +232,7 @@ def report(totals, verdicts, dropped, papers, many_marks) -> dict:
     return summary
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--cache-dir', default=OCR_JSON_DIR)
-    parser.add_argument('--sample', type=int, help='survey a random sample of this many files')
-    parser.add_argument('--seed', type=int, default=16)
-    parser.add_argument('--pilot-out', help='write the pilot paper list (JSON) here')
-    parser.add_argument('--report-out', help='write the summary (JSON) here')
-    args = parser.parse_args()
-
+def survey_mode(args) -> int:
     names = sorted(f for f in os.listdir(args.cache_dir) if f.endswith('.json'))
     if args.sample:
         random.Random(args.seed).shuffle(names)
@@ -258,6 +256,116 @@ def main():
             json.dump({**summary, 'many_marks': many_marks[:200]}, f, ensure_ascii=False, indent=2)
         print(f'Summary written to {args.report_out}')
     return 0
+
+
+# ── store ───────────────────────────────────────────────────────────
+
+def open_database(write: bool):
+    """The live database: migrated for --execute, read-only otherwise.
+
+    `init_db` creates any missing tables — the figure tables included — so a
+    dry run that called it would already have changed the user's library.
+    """
+    if write:
+        from papermeister.database import init_db
+        return init_db()
+    import peewee
+
+    from papermeister.models import db
+    from papermeister.paths import DB_PATH
+    uri = pathlib.Path(DB_PATH).resolve().as_uri() + '?mode=ro'
+    database = peewee.SqliteDatabase(uri, uri=True)
+    db.initialize(database)
+    return database
+
+
+def target_files(args) -> list:
+    """The PDF files to assemble: of the given papers, or of the pilot list."""
+    from papermeister.models import PaperFile
+    pdfs = PaperFile.select().where(
+        (PaperFile.hash != '') & PaperFile.trashed_at.is_null() & ~PaperFile.path.endswith('.json'))
+    if args.paper_ids:
+        ids = [int(x) for x in args.paper_ids.split(',') if x.strip()]
+        return list(pdfs.where(PaperFile.paper.in_(ids)).order_by(PaperFile.paper, PaperFile.id))
+    with open(args.pilot, encoding='utf-8') as f:
+        pilot = json.load(f)
+    files = []
+    for entry in pilot:
+        m = _CACHE_HASH.search(entry['file'])
+        if m is None:
+            print(f"  skip  {entry['file']}  (not a cache file name)")
+            continue
+        found = list(pdfs.where(PaperFile.hash.startswith(m.group(1))).order_by(PaperFile.id))
+        if not found:
+            print(f"  skip  {entry['file']}  (no PDF in the library has this hash)")
+        files.extend(found)
+    return files
+
+
+def store_mode(args) -> int:
+    open_database(write=args.execute)
+    from papermeister import figure_store
+
+    cache_by_hash = {}
+    for name in os.listdir(args.cache_dir):
+        m = _CACHE_HASH.search(name)
+        if m:
+            cache_by_hash.setdefault(m.group(1), name)
+
+    files = target_files(args)
+    print(f"{'Storing' if args.execute else 'Dry run for'} {len(files)} PDF file(s)\n")
+    totals: Counter = Counter()
+    for pf in files:
+        label = os.path.basename(pf.path)[:70]
+        name = cache_by_hash.get(pf.hash[:8])
+        pages = load_pages(os.path.join(args.cache_dir, name)) if name else None
+        if not pages or not any(ocr_layout.is_structured(text) for text in pages):
+            print(f'  skip   paper {pf.paper_id:>6}  {label}  (no structured OCR cache)')
+            totals['skipped'] += 1
+            continue
+        assembled = [f for page in figures.assemble_document(pages) for f in page.figures]
+        plan = figure_store.plan_store(pf, assembled)
+        kinds = Counter(f.assembly for f in assembled)
+        print(f'  paper {pf.paper_id:>6}  {len(assembled):>4} figures '
+              f'(plates {kinds[figures.PLATE_UNION]}, cut-up {kinds[figures.CAPTION_GROUP]})  '
+              f'new {len(plan.create)}, refreshed {len(plan.refresh)}, restored {len(plan.restore)}, '
+              f'folded {len(plan.dismiss)}  {label}')
+        if args.execute:
+            figure_store.apply_plan(plan)
+        totals['files'] += 1
+        totals['figures'] += len(assembled)
+        totals['new'] += len(plan.create)
+        totals['refreshed'] += len(plan.refresh)
+        totals['restored'] += len(plan.restore)
+        totals['folded'] += len(plan.dismiss)
+        totals['left_for_people'] += plan.untouched_by_rule
+
+    print(f"\n{totals['files']} file(s), {totals['figures']} figures: new {totals['new']}, "
+          f"refreshed {totals['refreshed']}, restored {totals['restored']}, folded {totals['folded']}, "
+          f"left alone (person's decision) {totals['left_for_people']}, skipped {totals['skipped']}")
+    if not args.execute:
+        print('Dry run — nothing written. Add --execute to store.')
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--cache-dir', default=OCR_JSON_DIR)
+    parser.add_argument('--sample', type=int, help='survey: a random sample of this many files')
+    parser.add_argument('--seed', type=int, default=16)
+    parser.add_argument('--pilot-out', help='survey: write the pilot paper list (JSON) here')
+    parser.add_argument('--report-out', help='survey: write the summary (JSON) here')
+    parser.add_argument('--paper-ids', help='store: comma-separated paper ids')
+    parser.add_argument('--pilot', help='store: the papers in a pilot list written by --pilot-out')
+    parser.add_argument('--execute', action='store_true', help='store: write to the database')
+    args = parser.parse_args()
+
+    if args.paper_ids or args.pilot:
+        return store_mode(args)
+    if args.execute:
+        parser.error('--execute stores figures for chosen papers: give --paper-ids or --pilot')
+    return survey_mode(args)
 
 
 if __name__ == '__main__':

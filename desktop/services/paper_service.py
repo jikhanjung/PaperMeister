@@ -761,3 +761,27 @@ def load_ego_network(paper_id: int, hops: int = 1, max_nodes: int = 80):
         nodes[_wk(wid)] = EgoNode(key=_wk(wid), paper_id=None, label=label,
                                   title=title, kind='external')
     return _pk(paper_id), nodes, list(edges)
+
+
+@dataclass
+class FigureRow:
+    """One assembled figure, for the Text tab's figure list (P16)."""
+    id: int
+    page: int           # 0-based
+    name: str
+    assembly: str       # single | plate_page_union | caption_group_union
+    pieces: int         # picture blocks merged into it
+    caption: str        # linked caption (P16 ②), '' until then
+    caption_hint: str   # caption block found under it by assembly
+
+
+def load_figures(paper_id: int) -> list[FigureRow]:
+    import json
+
+    from papermeister.figure_store import figures_for_paper
+    return [
+        FigureRow(id=f.id, page=f.page, name=f.name, assembly=f.assembly,
+                  pieces=len(json.loads(f.blocks_json or '[]')),
+                  caption=f.caption, caption_hint=f.caption_hint)
+        for f in figures_for_paper(paper_id)
+    ]

@@ -236,3 +236,94 @@ class Reference(BaseModel):
     model_version = peewee.TextField(default='')    # 'qwen3-32b'
     parse_confidence = peewee.TextField(default='') # high|medium|low
     extracted_at = peewee.DateTimeField(default=datetime.datetime.now)
+
+
+class Figure(BaseModel):
+    """P16 — one printed figure or plate, assembled from OCR picture blocks.
+
+    Coordinates are named for what they are relative to: `bbox_page_1000` is the
+    page (each axis 0..1000, as in the OCR); a panel's `bbox_figure_1000` is this
+    figure's own image. Mixing the two crops the wrong place without an error.
+
+    Automatic paths fold rows (`dismissed`) and never delete them: a re-assembly
+    that stops producing a figure may be a rule regression, and by then the row
+    may carry a caption or panels someone has checked (fsis lost 95 that way).
+    """
+    if TYPE_CHECKING:
+        paper_id: int
+        paper_file_id: int
+
+    paper = peewee.ForeignKeyField(Paper, backref='figures', on_delete='CASCADE')
+    paper_file = peewee.ForeignKeyField(PaperFile, backref='figures', on_delete='CASCADE')
+    file_hash = peewee.TextField()                   # which PDF edition — the server's PDF key too
+    page = peewee.IntegerField()                     # 0-based, as OCR JSON pages[].page
+    bbox_page_1000 = peewee.TextField()              # JSON [x0,y0,x1,y1], page-relative 0..1000
+    blocks_json = peewee.TextField(default='[]')     # the OCR picture blocks merged into it
+    assembly = peewee.TextField(default='single')    # single | plate_page_union | caption_group_union
+    plate = peewee.IntegerField(null=True)           # plate number, for plate_page_union
+    name = peewee.TextField(default='')              # printed name, 'Fig. 3' / 'Plate II'
+    kind = peewee.TextField(default='')              # ③: fossil_plate|map|chart|diagram|photo|mixed|other
+    caption_hint = peewee.TextField(default='')      # ①: caption block found under it — a hint only
+    label_hints_json = peewee.TextField(default='[]')  # ①: panel labels printed among the pieces
+    assembled_at = peewee.DateTimeField(default=datetime.datetime.now)
+
+    # ② caption — printed text only. A description written from the picture never goes here.
+    caption = peewee.TextField(default='')
+    caption_source = peewee.TextField(default='')    # '' (not run) | same_page | explanation_page | none
+    caption_page = peewee.IntegerField(null=True)
+    link_key = peewee.TextField(default='')
+    link_result_digest = peewee.TextField(default='')
+    link_model = peewee.TextField(default='')
+    link_prompt_version = peewee.TextField(default='')
+    link_attempts = peewee.IntegerField(default=0)
+    linked_at = peewee.DateTimeField(null=True)
+
+    # ③ panel split
+    panel_key = peewee.TextField(default='')
+    panel_result_digest = peewee.TextField(default='')
+    panel_model = peewee.TextField(default='')
+    panel_prompt_version = peewee.TextField(default='')
+    is_compound = peewee.BooleanField(null=True)
+    panel_notes_json = peewee.TextField(default='[]')
+    panel_attempts = peewee.IntegerField(default=0)
+    paneled_at = peewee.DateTimeField(null=True)
+
+    user_confirmed = peewee.BooleanField(default=False)  # touched by a person: automatic paths leave it
+    dismissed = peewee.BooleanField(default=False)
+    dismissed_by = peewee.TextField(default='')      # '' | 'reassembly' | 'user'
+
+    class Meta:
+        indexes = (
+            (('paper_file', 'page'), False),
+            (('file_hash',), False),
+        )
+
+
+class FigureEntry(BaseModel):
+    """P16 ② — one item of a figure's caption, split per panel."""
+    if TYPE_CHECKING:
+        figure_id: int
+
+    figure = peewee.ForeignKeyField(Figure, backref='entries', on_delete='CASCADE')
+    order = peewee.IntegerField()
+    label = peewee.TextField(default='')             # '1', '2a', 'A'
+    description = peewee.TextField(default='')
+
+    class Meta:
+        indexes = ((('figure', 'order'), True),)
+
+
+class FigurePanel(BaseModel):
+    """P16 ③ — one panel cut from a figure image."""
+    if TYPE_CHECKING:
+        figure_id: int
+
+    figure = peewee.ForeignKeyField(Figure, backref='panels', on_delete='CASCADE')
+    order = peewee.IntegerField()
+    label = peewee.TextField(default='')             # printed label, '' when unlabelled
+    bbox_figure_1000 = peewee.TextField()            # JSON [x0,y0,x1,y1], figure-image-relative 0..1000
+    entry_orders_json = peewee.TextField(default='[]')
+    confidence = peewee.TextField(default='')        # the model's own judgement; never an approval
+
+    class Meta:
+        indexes = ((('figure', 'order'), True),)

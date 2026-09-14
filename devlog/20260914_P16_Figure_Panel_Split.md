@@ -190,6 +190,10 @@ class Figure(BaseModel):
     assembly    = TextField(default='single')    # 'single' | 'plate_page_union' | 'caption_group_union'
     name        = TextField(default='')          # 인쇄 이름 'Fig. 3' / 'Plate II' (모르면 '')
     kind        = TextField(default='')          # ③ 결과: fossil_plate|map|chart|diagram|photo|mixed|other
+    plate       = IntegerField(null=True)        # ① plate_page_union의 플레이트 번호          (Phase 1 추가)
+    caption_hint = TextField(default='')         # ① 아래 캡션 블록 — 힌트일 뿐 caption이 아니다 (Phase 1 추가)
+    label_hints_json = TextField(default='[]')   # ① 조각 도판 사이의 패널 라벨               (Phase 1 추가)
+    assembled_at = DateTimeField()               #                                           (Phase 1 추가)
 
     # ② 캡션 — 인쇄된 원문만. 지어낸 묘사는 어떤 경우에도 여기에 오지 않는다
     caption        = TextField(default='')
@@ -214,6 +218,7 @@ class Figure(BaseModel):
 
     user_confirmed = BooleanField(default=False) # 사람이 만진 것 — 자동 경로가 덮지 않는 유일한 근거
     dismissed      = BooleanField(default=False) # 지우지 않고 접는다 (fsis 95건 손실의 교훈)
+    dismissed_by   = TextField(default='')       # '' | reassembly | user — 재조립이 접은 것만 재조립이 되살린다 (Phase 1 추가)
 
 
 class FigureEntry(BaseModel):                    # 캡션 분할 항목

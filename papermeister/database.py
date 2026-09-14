@@ -5,6 +5,9 @@ import peewee
 from .models import (
     Author,
     CitedWork,
+    Figure,
+    FigureEntry,
+    FigurePanel,
     Folder,
     Paper,
     PaperBiblio,
@@ -17,8 +20,10 @@ from .models import (
 )
 from .paths import DB_PATH  # noqa: F401  (re-exported: callers import it from here)
 
+# New tables need no _migrate() step: create_tables() adds missing ones to an
+# existing database (P16 figures arrived this way).
 ALL_TABLES = [Source, Folder, Paper, Author, PaperFile, PaperFolder, Passage,
-              PaperBiblio, Reference, CitedWork]
+              PaperBiblio, Reference, CitedWork, Figure, FigureEntry, FigurePanel]
 
 # ---------------------------------------------------------------------------
 # FTS5 (devlog P13). `passage_fts` is EXTERNAL-CONTENT (text-only) over the

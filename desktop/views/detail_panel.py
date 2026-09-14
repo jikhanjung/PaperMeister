@@ -1112,6 +1112,20 @@ class DetailPanel(QWidget):
         self._ocr_browser = browser
         self._apply_search_highlight(browser)
 
+        # P16: figures assembled for this paper, if any have been stored. A
+        # failure here must not cost the reader, which is the tab's real job.
+        if structured:
+            try:
+                figure_rows = paper_service.load_figures(d.paper_id)
+            except Exception:
+                figure_rows = []
+            if figure_rows:
+                from desktop.components.figure_list import FigureList
+                figure_list = FigureList(figure_rows)
+                figure_list.page_requested.connect(
+                    lambda page, b=browser: b.scrollToAnchor(ocr_layout.page_anchor(page)))
+                layout.addWidget(figure_list)
+
         layout.addWidget(browser, 1)
         return host
 

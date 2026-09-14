@@ -236,7 +236,11 @@
   - **Phase 0 완료(2026-09-15, [095](./devlog/20260915_095_P16_Phase0_Figure_Assembly_Survey.md))** — 전 캐시 도판 156,502,
     플레이트 병합 4,463쪽, **조각난 도판 2,211**(계획에 없던 세 번째 조립 방식 `caption_group_union`), 분할 후보 추정 23,745.
     이중 번호 플레이트(Tafel 13 + Plate 2)도 한 장으로. 파일럿 30편 목록은 095 §4
-  - **다음 할 일은 Phase 1** — 스키마 마이그레이션 + `assemble_figures.py --execute`(파일럿) + Text 탭 도판 목록
+  - **Phase 1 구현 완료(2026-09-15, [096](./devlog/20260915_096_P16_Phase1_Figure_Store_And_List.md))** — `Figure`·`FigureEntry`·`FigurePanel`
+    테이블, 다시 돌려도 안전한 저장(`figure_store.py`: 안 나오면 접고 지우지 않음, 사람 결정 보존), Text 탭 도판 목록.
+    라이브 DB 읽기 전용 dry run: 파일럿 30편·도판 295개
+  - [ ] **Windows에서 파일럿 저장**(앱 닫고): `python scripts/assemble_figures.py --pilot "%USERPROFILE%\PaleoBytes\PaperMeister\tmp\p16_pilot.json" --execute`
+  - [ ] **Phase 1 게이트** — 파일럿 30편 Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
     아니면 논문·폴더·전체 우클릭 "Process Figures") · 서버 PDF는 먼저 존재 확인 후 없으면 업로드 · Batches API는 해당 없음
   - ocrserver에 넘길 명세는 P16 §6에 따로 정리돼 있다
