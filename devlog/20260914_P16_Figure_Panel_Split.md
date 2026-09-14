@@ -1,7 +1,7 @@
 # P16 — 도판 패널 분할: 캡션 분할·이미지 분할을 ocrserver에 맡기고, 결과는 PaperMeister DB에
 
 **작성**: 2026-09-14
-**상태**: 계획 (구현 전)
+**상태**: 계획 (구현 전) — 사용자 결정 5건 반영 (2026-09-14, §11)
 **참고한 것**: fsis2026 devlog 248~268 · P37 · P41, `docs/reference_pipeline.md` §9~12,
 `docs/subfigure_panel_separation.md`, `docs/figure_model_comparison_20260908.md`,
 `scripts/astra_panels.py` · `astra_cli_bbox.py` · `claude_augment.py` · `plate_links.py`;
@@ -15,8 +15,10 @@ ocrserver `wrapper/main.py` · `docs/WRAPPER_API.md` · `docs/ENDPOINTS.md` · H
 |---|---|---|
 | 도판 **조립**(OCR 블록 → 도판 하나) | **PaperMeister 클라이언트, 규칙으로** | OCR 레이아웃은 이미 캐시에 있다. 서버·모델이 필요 없고, 되돌리기 쉽다 |
 | 캡션 **연결 + 분할** | **논문 단위 1회 호출**, Claude Opus 5, 서버가 부른다 | fsis가 규칙 → 모델로 옮겨 가며 두 달 치른 교훈(§1.2). 처음부터 모델 경로 하나로 |
-| **이미지 분할**(패널 bbox) | **도판 단위 호출**, GPT-6 Astra(대안 Sol), 서버가 부른다 | fsis 10장 비교에서 Astra·Sol만 표본 잘림이 적었다 |
-| 이미지 전달 | **서버가 자기 PDF에서 직접 자른다** | OCR 때 받은 PDF가 `PDF_DIR/{sha256}.pdf`에 있고, PaperMeister의 파일 해시와 같은 값이다(§2.3) |
+| **이미지 분할**(패널 bbox) | **도판 단위 호출**, **GPT-6 Astra만**, 서버가 부른다 | fsis 10장 비교에서 표본 잘림이 가장 적었다. 대안 모델은 두지 않는다(사용자 결정) |
+| 모델 호출 방식 | **구독 CLI**(`claude -p`, `codex exec`), 서버 **호스트 워커**가 실행 | 사용자 결정. CLI는 Node와 로그인 토큰이 필요해 컨테이너 밖에서 돈다(fsis와 같은 이유) |
+| 실행 단위 | **요청 단위** — 일괄 처리 중이면 끝까지, 아니면 논문·폴더·전체 우클릭 | 사용자 결정. 전체 백필은 계획하지 않는다 |
+| 이미지 전달 | **서버에 PDF가 있는지 먼저 확인**하고, 없으면 올린 뒤 서버가 자른다 | 초기에 OCR한 논문은 서버에 PDF가 없을 수 있다(사용자 확인). 해시는 양쪽이 같은 SHA-256(§2.3) |
 | 결과의 주인 | **PaperMeister DB** | 단계 사이에 DB가 끼어야 사람이 고친 캡션이 패널 분할에 반영된다 |
 | 패널 이미지 파일 | **저장하지 않는다** — bbox만 두고 볼 때 자른다 | Text 탭 `OcrView`가 이미 이렇게 한다. 모델·박스를 바꿔도 다시 자를 필요가 없다 |
 | 캡션이 없는 도판 | **분할하지 않는다** | 라벨을 지어낸다. fsis P37 §6 |
@@ -78,8 +80,9 @@ Chandra2 출력은 블록마다 `data-label`과 `data-bbox`를 가진 HTML이고
 
 - PaperMeister `ingestion.hash_file` = 파일 전체 SHA-256.
 - wrapper `POST /ocr`도 `hashlib.sha256(pdf_bytes)`로 `file_hash`를 만들고 `PDF_DIR/{file_hash}.pdf`에 저장한다.
-- 즉 **OCR을 이 서버에서 한 논문은 해시만 보내면 서버가 이미 PDF를 갖고 있다.** 도판 이미지를 업로드할 필요가 없다.
-  (⚠️ `PDF_DIR` 보관 정책은 문서에 없다 — §11 질문 4)
+- 즉 **서버에 PDF가 있으면 해시만 보내면 된다.** 도판 이미지를 업로드할 필요가 없다.
+- 단 **있다고 가정하지 않는다.** 초기에 OCR한 논문은 서버에 PDF가 없을 수 있다(RunPod 시절 등). 그래서 매번
+  `HEAD /pdfs/{hash}`로 먼저 확인하고, 404면 로컬 PDF를 확보해 올린다(§7.2).
 
 ### 2.4 서버 LLM 호출 선례
 
@@ -102,7 +105,7 @@ biblio·references가 이미 `{ocr_pod_url}/llm/v1/chat/completions`(Qwen3-32B-A
 라이브러리 ~9,800편으로 단순 환산하면 그림 블록 ~17만, 캡션 ~11만, 소패널 표기 캡션 ~2만, 플레이트 쪽 ~3,000.
 
 ⚠️ **그림 블록 수는 도판 수가 아니다.** 편당 17.7은 플레이트 쪽의 사진별 블록·로고·아이콘이 섞인 값이고, 조립(§4.1)을 거쳐야
-실제 도판 수가 나온다. **패널 분할 대상 수는 Phase 0이 세기 전까지 모른다** — 아래 비용은 전부 그 전제 위의 예시다.
+실제 도판 수가 나온다. **패널 분할 대상 수는 Phase 0이 세기 전까지 모른다** — 아래 처리량 추정은 전부 그 전제 위의 예시다.
 
 ---
 
@@ -120,7 +123,7 @@ Figure.caption (+출처) · FigureEntry[{label, description}]
    ▼  ③ 패널 분할 — 서버 POST /figures/panels, Astra, 도판 1회           (Phase 3)
 FigurePanel[{label, bbox_figure, entry 연결, confidence}]
    │
-   ▼  ④ 표시·검색 — Text 탭 패널 타일, 항목 설명 FTS                       (Phase 4)
+   ▼  ④ 표시·검색 — Text 탭 패널 타일, 항목 설명 FTS                       (Phase 5)
 ```
 
 ### 4.1 ① 도판 조립 (클라이언트, 결정적)
@@ -230,9 +233,25 @@ class FigurePanel(BaseModel):                    # 이미지 분할 결과
 
 wrapper는 지금 **OCR job(로컬 GPU)** 과 **LLM 프록시(로컬 vLLM)** 만 한다. 이번 기능은 셋이 새롭다.
 
-1. **외부 모델 API 호출** — Anthropic(Claude Opus 5), OpenAI(GPT-6 Astra). 자격증명은 **서버 `.env`에만**, 클라이언트는 절대 보내지 않는다.
-2. **저장된 PDF에서 도판 영역 렌더·크롭** — OCR 렌더 경로(`fitz`)를 재사용.
-3. **GPU와 무관한 job 종류** — 모드(`2ocr`/`llm+ocr`)·`_mode_switching`에 막히지 않아야 하고, GPU 공평 분배 스케줄러와 **별도의** 외부 API 예산·동시성 제한이 필요하다.
+1. **구독 CLI로 외부 모델 호출** — Claude Opus 5는 `claude -p`, GPT-6 Astra는 `codex exec`. **API 키는 쓰지 않는다**(사용자 결정).
+   CLI는 Node 패키지이고 로그인 토큰이 호스트 사용자 홈에 있어 **wrapper 컨테이너 안에서 돌리지 않는다** — §6.1a의 호스트 워커가 실행한다.
+2. **저장된 PDF에서 도판 영역 렌더·크롭** — `PDF_DIR`은 호스트 볼륨이라 워커가 읽기 전용으로 직접 연다.
+3. **GPU와 무관한 job 종류** — 모드(`2ocr`/`llm+ocr`)·`_mode_switching`에 막히지 않아야 한다. 제약은 GPU가 아니라 **구독 사용량 한도**다.
+
+### 6.1a wrapper와 호스트 워커의 역할 분담
+
+```
+PaperMeister ──HTTP──▶ wrapper (컨테이너)            job 접수·상태·결과 조회. SQLite의 유일한 writer
+                          ▲   │  내부 API (localhost)
+                          │   ▼
+                     figures-worker (호스트, systemd)  job 하나를 받아 → PDF 렌더·크롭 → claude/codex CLI → 결과를 wrapper에 반환
+```
+
+- **DB writer는 wrapper 하나다.** 워커는 SQLite를 직접 만지지 않고 내부 엔드포인트
+  (`POST /internal/figures/claim`, `POST /internal/figures/{job_id}/result`)로만 주고받는다 —
+  fsis의 "호스트는 파일만 쓰고 DB는 컨테이너가 쓴다"(devlog 074)를 HTTP로 옮긴 것이다.
+- 내부 엔드포인트는 **localhost·docker 네트워크에서만** 받는다(nginx에서 막는다).
+- 워커가 죽어도 job은 `processing`으로 남고, heartbeat가 끊기면 wrapper가 `queued`로 되돌린다.
 
 ### 6.2 엔드포인트
 
@@ -287,15 +306,14 @@ GET  /figures/jobs?client_id=     → 목록 (결과 본문 제외)
 }
 ```
 
-**서버 구현 요구**
-- 공식 SDK `anthropic`(`AsyncAnthropic`) 사용. 모델 `claude-opus-5` ($5 / $25 per MTok, 1M context).
-- **structured outputs**(`output_config.format`, JSON schema)로 형식을 강제하고, 그래도 **서버에서 한 번 더 검증**
-  (`figure_id`가 요청에 있던 것인가, entries ≥ 1, label 문자열 등). 형식 이탈은 그 job의 오류로 기록.
-- thinking은 Opus 5 기본값(adaptive)을 두고 `effort`만 옵션으로 받는다.
-- `stop_reason == "refusal"`을 확인한다. Opus 5는 **server-side fallback**(`fallbacks`)을 기본으로 켜는 것을 권한다 —
-  단 Batches API에서는 이 파라미터가 거부된다(§6.6).
-- 지시문(시스템 프롬프트)은 고정해 **prompt caching**이 걸리게 하고, 논문별 가변 내용은 그 뒤에 둔다.
-- 예산 초과 입력은 **플레이트 묶음 단위로 나눠 여러 번** 부르고 합친다. 자르면 `truncated: true`.
+**워커 구현 요구**
+- `claude -p <지시문> --model claude-opus-5 --output-format json`, 최종 출력은 `--json-schema`로 구조화(fsis
+  `figure_model_comparison` 문서에서 동작 확인). 논문별 입력 JSON은 지시문 뒤에 붙인다.
+- 그래도 **워커에서 한 번 더 검증**(`figure_id`가 요청에 있던 것인가, entries ≥ 1, label 문자열 등). 형식이 흐트러졌으면
+  첫 JSON 객체를 중괄호 깊이로 잘라 회수를 시도하고(fsis plate_links 0.6.43), 그래도 안 되면 그 job의 오류.
+- `effort`는 옵션으로 받는다. 지시문은 고정해 두고 논문마다 달라지는 내용은 뒤에 둔다.
+- 입력이 너무 크면 **플레이트 묶음 단위로 나눠 여러 번** 부르고 합친다. 자르면 `truncated: true`.
+- 호출 전 로그인 상태를 확인하고, 타임아웃이면 **프로세스 그룹째 종료**한다(fsis `run_command`).
 
 ### 6.4 `POST /figures/panels` — 도판 단위 이미지 분할
 
@@ -323,30 +341,37 @@ job `result.items[]`:
  "usage": {}, "elapsed_seconds": 0.0}
 ```
 
-**서버 구현 요구**
-- 렌더: `PDF_DIR/{file_hash}.pdf` 해당 쪽 → `bbox_page_1000`으로 크롭(각 축 독립 0..1000) → PNG. PDF가 없으면 그 item은 `pdf_missing`.
-- 모델 호출·프롬프트·스키마·검증은 fsis `scripts/astra_panels.py`를 출발점으로(OpenAI Responses API, `text.format` json_schema strict).
-- **item 하나의 실패가 job 전체를 멈추지 않는다**(fsis 11 §렌더 실패). 단 **401/403/모델 접근 거부/예산 소진은 치명**으로 job을 `failed`로 끝낸다.
+**워커 구현 요구**
+- 렌더: `PDF_DIR/{file_hash}.pdf` 해당 쪽 → `bbox_page_1000`으로 크롭(각 축 독립 0..1000) → 임시 PNG. PDF가 없으면 그 item은 `pdf_missing`.
+- 호출은 fsis `scripts/astra_cli_bbox.py`를 그대로 출발점으로 한다 — `codex exec --ignore-user-config --ephemeral
+  --skip-git-repo-check --sandbox read-only --model gpt-6-astra --image <png> --output-schema <schema>
+  --output-last-message <file> --json -`. 프롬프트·스키마·검증은 `astra_panels.py`의 `PROMPT`/`SCHEMA`/`validate_prediction`
+  (표본 보존 우선 지침 포함).
+- 하위 프로세스 환경에서 `OPENAI_API_KEY`/`CODEX_API_KEY`를 **지운다** — 남아 있으면 구독이 아니라 종량제로 과금된다.
+- 호출 전 `codex login status`가 ChatGPT 로그인인지 확인한다.
+- **item 하나의 실패가 job 전체를 멈추지 않는다**(fsis §11 렌더 실패). 단 **로그인 만료·CLI 없음·사용량 한도는 치명**이라 워커를 멈춘다.
 - 좌표는 **도판 이미지 기준 0..1000**으로 돌려준다. 픽셀 좌표는 클라이언트가 필요할 때 만든다.
 
 ### 6.5 운영 요구
 
 | 항목 | 내용 |
 |---|---|
-| 자격증명 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` — 서버 `.env`. 없으면 해당 엔드포인트가 503 + 이유 |
-| 비용 기록 | 호출마다 model·prompt_version·usage·추정 비용을 SQLite에 (기존 `llm_requests`와 같은 방식, 별도 테이블) |
-| 예산 | 일일 비용 상한(`FIGURES_DAILY_USD_CAP`) — 넘으면 새 job을 `429 budget_exhausted`로 거절 |
-| 동시성 | 외부 API 동시 호출 상한(`FIGURES_API_CONCURRENCY`), **client_id별 공평 분배**는 OCR 스케줄러와 같은 원칙으로 |
-| 영속·재개 | job·item 상태를 SQLite에, 재시작 시 미완 item만 재개 (OCR job과 동일) |
-| dedup | `(file_hash, client_id, 입력 digest, prompt_version)`이 같고 done이면 그 결과 재사용. `force`로 우회 |
-| 보관 | job 결과 TTL(예: 30일). **진실의 원천은 클라이언트 DB**이므로 서버는 캐시 |
-| 문서 | `docs/WRAPPER_API.md`에 절 추가, `/api/stats`·대시보드에 figures job 수·비용 |
+| 로그인 | 호스트 워커 계정으로 `claude` 구독 로그인과 `codex login`(ChatGPT). **API 키 환경변수는 두지 않는다** |
+| PATH | 워커는 systemd에서 비대화형으로 돈다 — `codex`가 nvm 밑이면 **PATH를 명시**할 것. 빠뜨리면 "login required"로 **잘못** 보고된다(fsis devlog 254 §1) |
+| 사용량 한도 | 출력에서 한도 문구를 잡으면 **워커를 멈추고** job을 `queued`로 되돌린 뒤 해제까지 기다린다. 해제 시각은 **문구에서 읽고 박아두지 않는다**(fsis: "resets 12pm (UTC)"처럼 매번 다르다) |
+| 동시성 | CLI 동시 실행은 낮게 시작한다(Opus·Astra 각 1~2). 한도는 돈이 아니라 구독 사용량이라 로그로 보며 조정 |
+| 사용량 기록 | 호출마다 model·prompt_version·CLI usage·경과 시간을 SQLite에(`llm_requests`와 같은 방식, 별도 테이블) |
+| 분배 | **client_id별 공평 분배**는 OCR 스케줄러와 같은 원칙 — 여러 PC가 요청해도 한쪽이 굶지 않게 |
+| 영속·재개 | job·item 상태를 SQLite에 두고, 재시작 시 미완 item만 재개(OCR job과 동일). 워커 heartbeat가 끊기면 재할당 |
+| dedup | `(file_hash, client_id, 입력 digest, prompt_version)`이 같고 done이면 그 결과를 재사용. `force`로 우회 |
+| 보관 | job 결과 TTL(예: 30일). **진실의 원천은 클라이언트 DB**이므로 서버는 캐시일 뿐 |
+| 문서 | `docs/WRAPPER_API.md`에 절 추가, `/api/stats`·대시보드에 figures job 수·대기·한도 상태 |
 
-### 6.6 백필은 Batches API로 할 수 있다
+### 6.6 나중에 API 키로 바꾼다면
 
-수천 편 백필은 지연에 민감하지 않다. **Message Batches는 50% 할인**이고 결과는 비동기로 모인다(순서 무관, `custom_id`로 매칭).
-서버가 `mode=batch` 옵션을 받아 내부적으로 배치를 제출·폴링하면 클라이언트 API는 그대로다.
-⚠️ Batches에서는 server-side fallback 파라미터가 거부된다 — 배치 경로는 refusal을 결과로 받아 개별 재시도 대상으로 돌린다.
+지금은 구독 CLI다. 한도가 병목이 되어 API 키로 옮기면 바뀌는 것은 **워커 안쪽뿐**이고 §6.2~6.4의 API는 그대로다.
+그때 쓸 수 있는 것: Anthropic 공식 SDK의 structured outputs와 prompt caching, 그리고 대량 처리용 **Message Batches**
+(비용 절반, 대부분 1시간 안·최대 24시간에 끝나는 비동기 처리). 구독 CLI에는 해당하지 않는다.
 
 ---
 
@@ -365,32 +390,42 @@ job `result.items[]`:
 
 ### 7.2 lane 규칙 (fsis에서 가져온 것)
 
+- **제출 전에 서버 PDF를 확인한다**: `HEAD /pdfs/{file_hash}` → 404면 로컬 PDF 확보(디렉터리 소스는 원본 경로,
+  Zotero 항목은 기존 `_resolve_filepath`로 `pdf_cache`에 받기) → `POST /pdfs` → 그다음 job 제출.
+  서버가 돌려준 해시가 로컬 해시와 다르면 **제출하지 않고 실패로 기록한다** — 다른 판본의 좌표를 자르게 된다.
 - 대상은 **DB에서 도출**한다(재OCR 스크립트와 같은 원리) — 중단·재개에 커서가 필요 없다.
 - **시도 3회**, 이후엔 `--retry-errors`로만. **치명 오류는 첫 건에서 멈춘다.**
 - 반영은 **트랜잭션 안에서** 기존 entries/panels 삭제 → 재생성. `user_confirmed`인 도판은 건드리지 않는다.
 - **결과 해시가 같을 때만 unchanged** — 파일명·키만 비교하면 새 결과를 놓친다(fsis 268).
 - 서버 공유 원칙은 OCR과 같다: `?client_id=`로 몫을 읽고, 몫만큼 in-flight를 유지한다.
 
-### 7.3 데스크톱
+### 7.3 실행 단위 — 요청할 때만 (사용자 결정)
 
-- Phase 1: Text 탭 도판 목록(이름·쪽·캡션 유무).
-- Phase 3: 도판 우클릭 "Split panels", 논문·폴더 우클릭 "Link captions".
-- Phase 4: Text 탭에서 도판 아래 패널 타일(크롭은 `OcrView` 워커 재사용) + 항목 설명.
+전체 백필은 하지 않는다. 두 경로로만 돈다.
+
+| 경로 | 동작 |
+|---|---|
+| **일괄 처리 중** | 기존 `Process All (OCR→Biblio)` 체인이 **도판 조립 → 캡션 연결 → 패널 분할까지 끝까지** 간다 |
+| **직접 우클릭** | **논문(파일)·폴더·My Library(전체)** 우클릭 → **"Process Figures"**. 그 범위에서 아직 안 된 단계만 순서대로 돈다 |
+
+- 한 액션이 세 단계를 **순서대로** 돈다. 소스 키 덕분에 끝난 단계는 건너뛴다 — 캡션을 고친 도판은 패널만 다시 돈다.
+- 진행창은 기존 Process·References 창과 같은 모양(단계별 진행바, Cancel, 서버가 죽으면 대기 후 재개).
+- 서버 워커가 사용량 한도로 멈추면 진행창은 **"구독 한도 — 해제 대기"**로 보여주고 큐를 유지한다. 멈춘 것과 구분돼야 한다.
+- Phase 1에서는 Text 탭에 도판 목록(이름·쪽·캡션 유무)을, Phase 5에서는 도판 아래 패널 타일(크롭은 `OcrView` 워커 재사용)과 항목 설명을 보인다.
 
 ---
 
-## 8. 모델과 비용
+## 8. 모델과 처리량
 
-| 단계 | 모델 | 단가 | 참고 실측 (fsis) |
+| 단계 | 모델 | 경로 | 참고 실측 (fsis) |
 |---|---|---|---|
-| ② 연결·분할 | **Claude Opus 5** `claude-opus-5` | $5 in / $25 out per MTok, 캐시 읽기 ~0.1×, Batches −50% | 구조화 추출(논문 **전문**) 편당 평균 $1.09 · 중앙 $0.65 (Opus 4.x 동일 단가) |
-| ③ 패널 분할 | **GPT-6 Astra** | $10 in / $50 out per MTok | 10장(난례 포함) **장당 $0.108**, API 15~30초 |
-| ③ 대안 | GPT-5.6 Sol | $4 / $20 | 같은 10장 **장당 $0.043**, 수동 좌표 IoU Astra와 동급(0.9646 vs 0.9630) |
+| ② 연결·분할 | **Claude Opus 5** (`claude-opus-5`) | `claude -p` (구독) | 논문 단위 플레이트 연결(Sonnet) 편당 평균 169초 · 최대 432초 |
+| ③ 패널 분할 | **GPT-6 Astra** | `codex exec` (구독) | CLI 장당 90~130초(초기) → 운영 15~30초 |
 
-- ②는 전문이 아니라 **캡션·설명 쪽만** 싣는다. fsis 전문 추출 단가보다 훨씬 작을 것으로 보지만 **측정 전이다** — Phase 2 파일럿이 잰다.
-- ③ 예시: 대상 도판이 2만 장이면 Astra ≈ $2,200, Sol ≈ $860(10장 평균 단순 환산, 난례 포함 표본이라 견적이 아님).
-- fsis 검토의 권고를 따른다: **Sol을 기본 후보, Astra를 복잡한 도판의 기준선·재시도**로 두는 안을 파일럿에서 비교한다.
-- fsis는 비용 때문에 **구독 CLI**(`claude -p`, `codex exec`)를 호스트에서 돌렸다. 서버 쪽 선택지다 — §11 질문 1.
+- 구독이라 **호출당 과금은 없고, 제약은 사용량 한도**다. fsis는 한도를 모른 채 "10분에 1장"으로 시작해 로그를 보며 올렸다.
+  요청 단위라 폭주 위험은 작지만, 큰 폴더나 My Library 전체를 우클릭하면 한도에 걸린다 — 진행창이 그 상태를 보여줘야 한다(§7.3).
+- ②는 전문이 아니라 **캡션·설명 쪽만** 싣는다. 호출 시간과 한도 소모는 **측정 전이다** — Phase 2 파일럿이 잰다.
+- ③은 Astra만 쓴다(사용자 결정). fsis 10장 비교에서 표본 잘림이 가장 적었다.
 
 ---
 
@@ -398,12 +433,12 @@ job `result.items[]`:
 
 | Phase | 내용 | 서버 변경 | 끝나는 조건 |
 |---|---|---|---|
-| **0 측정** | `figures.py` 조립을 전 캐시에 dry-run → 도판 수·플레이트 쪽 수·entries 후보 수. 파일럿 30편 선정(플레이트·국문/일문/중문·지도·본문 그림 섞어서) | 없음 | 대상 규모와 비용 범위가 숫자로 나옴 |
+| **0 측정** | `figures.py` 조립을 전 캐시에 dry-run → 도판 수·플레이트 쪽 수·entries 후보 수. 파일럿 30편 선정(플레이트·국문/일문/중문·지도·본문 그림 섞어서) | 없음 | 대상 규모가 숫자로 나옴 |
 | **1 조립** | 스키마 마이그레이션 + `assemble_figures.py` + Text 탭 도판 목록 | 없음 | 파일럿 30편 도판 목록을 사람이 보고 맞다 |
-| **2 연결** | wrapper `/pdfs`·`/figures/link` + `link_figures.py` | **있음** | 파일럿 30편: 캡션 연결 정확도, 지어낸 설명 0건, 편당 비용 측정 |
-| **3 분할** | wrapper `/figures/panels` + `split_panels.py` + 검수 목록 | **있음** | 파일럿 도판: 표본 잘림·이웃 혼입·라벨 보존 육안 판정, Astra vs Sol |
-| **4 표시** | 패널 타일 UI, `FigureEntry` 설명 검색 | 없음 | — |
-| **백필** | Phase 2·3 게이트 통과 후 전체. Batches 경로 검토 | 선택 | — |
+| **2 연결** | wrapper `/pdfs`·`/figures/link` + 내부 API + 호스트 워커(Opus CLI) + `link_figures.py` | **있음** | 파일럿 30편: 캡션 연결 정확도, 지어낸 설명 0건, 편당 호출 시간·한도 소모 |
+| **3 분할** | wrapper `/figures/panels` + 호스트 워커(Astra CLI) + `split_panels.py` + 검수 목록 | **있음** | 파일럿 도판: 표본 잘림·이웃 혼입·라벨 보존 육안 판정 |
+| **4 앱 통합** | Process All 체인 편입 + 논문·폴더·My Library 우클릭 "Process Figures" + 진행창(한도 대기 표시) | 없음 | 파일럿 폴더 하나를 우클릭으로 끝까지 |
+| **5 표시** | 패널 타일 UI, `FigureEntry` 설명 검색 | 없음 | — |
 
 **게이트는 사람이 본다.** fsis 검토의 말 그대로 — *IoU 0.5와 개수 일치만으로는 연구용 crop에서 중요한 표본 잘림을 놓친다.*
 
@@ -423,10 +458,17 @@ job `result.items[]`:
 
 ---
 
-## 11. 결정이 필요한 것
+## 11. 결정 기록 (2026-09-14, 사용자)
 
-1. **서버의 모델 호출 방식** — API 키(컨테이너 친화, 동시성·예산 통제 쉬움, 종량제) vs 구독 CLI(싸지만 호스트 로그인·Node 필요, 컨테이너 밖 워커가 된다. fsis가 이 길).
-2. **③ 기본 모델** — Astra vs Sol. 10장 표본에서 품질 비슷, 비용 2.5배 차이.
-3. **범위** — 라이브러리 전체 백필 vs 폴더·요청 시에만.
-4. **서버 PDF 보관** — `PDF_DIR`에 OCR한 PDF가 전부 남아 있나, 정리 정책이 있나. 없으면 업로드 경로가 기본이 된다.
-5. **백필에 Batches API** — 50% 할인 vs 반나절~하루 지연·fallback 미지원.
+| # | 질문 | 결정 | 반영된 곳 |
+|---|---|---|---|
+| 1 | 서버의 모델 호출 방식 | **구독 CLI** (당분간) | §0, §6.1·6.1a·6.3~6.6, §8 |
+| 2 | 패널 분할 모델 | **무조건 Astra** | §0, §6.4, §8, §9 |
+| 3 | 범위 | **요청 단위** — 일괄 처리 중이면 끝까지, 아니면 논문·폴더·전체 우클릭 | §0, §7.3, §9 |
+| 4 | 서버 PDF 보관 | **없을 수 있다** — 먼저 존재 확인, 없으면 업로드 | §0, §2.3, §7.2 |
+| 5 | Batches API | **해당 없음** — API 키 전용이라 1번 결정과 함께 빠진다 | §6.6 |
+
+### 남은 확인
+
+- 호스트 워커를 **어느 계정으로** 돌릴지, 그 계정의 Claude·ChatGPT 구독 로그인 — ocrserver 호스트에서 정할 일
+- Opus·Astra 동시 실행 수 초기값 — Phase 2·3 파일럿 로그로 정한다

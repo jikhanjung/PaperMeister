@@ -234,7 +234,8 @@
   결과는 **PaperMeister DB**(`Figure`/`FigureEntry`/`FigurePanel`). 조립은 클라이언트 규칙.
   fsis2026이 두 달 치른 교훈(지어낸 묘사가 캡션 칸에, 사후 연결 추론, 원본 삭제로 95건 손실)을 구조로 막는다
   - **다음 할 일은 Phase 0 측정**(서버 변경 없음) — 조립 dry-run으로 도판·플레이트·분할 후보 수를 센다
-  - **사용자 결정 5건 대기**(P16 §11): API 키 vs 구독 CLI · Astra vs Sol · 범위 · 서버 PDF 보관 · Batches 백필
+  - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
+    아니면 논문·폴더·전체 우클릭 "Process Figures") · 서버 PDF는 먼저 존재 확인 후 없으면 업로드 · Batches API는 해당 없음
   - ocrserver에 넘길 명세는 P16 §6에 따로 정리돼 있다
 
 ### 즉시 착수 가능 (Phase 4 hookup)
