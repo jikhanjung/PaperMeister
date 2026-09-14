@@ -227,6 +227,16 @@
 - [ ] **직전 PARTIAL 53편** — `Reference` 행은 있는데 `references_checked`가 안 찍힌 것들
 - [ ] **처리된 PDF 없음 67편** — 애초에 추출할 본문이 없다. references 문제가 아니라 OCR 문제
 
+### P16 도판 패널 분할 (계획, 2026-09-14)
+
+- [ ] **[P16](./devlog/20260914_P16_Figure_Panel_Split.md)** — 논문 도판·플레이트를 소패널 단위로:
+  캡션 연결·분할(Claude Opus 5, 논문 1회) + 이미지 분할(GPT-6 Astra/Sol, 도판 1회)을 **ocrserver가 호출**,
+  결과는 **PaperMeister DB**(`Figure`/`FigureEntry`/`FigurePanel`). 조립은 클라이언트 규칙.
+  fsis2026이 두 달 치른 교훈(지어낸 묘사가 캡션 칸에, 사후 연결 추론, 원본 삭제로 95건 손실)을 구조로 막는다
+  - **다음 할 일은 Phase 0 측정**(서버 변경 없음) — 조립 dry-run으로 도판·플레이트·분할 후보 수를 센다
+  - **사용자 결정 5건 대기**(P16 §11): API 키 vs 구독 CLI · Astra vs Sol · 범위 · 서버 PDF 보관 · Batches 백필
+  - ocrserver에 넘길 명세는 P16 §6에 따로 정리돼 있다
+
 ### 즉시 착수 가능 (Phase 4 hookup)
 - [ ] **`extracted` 잔존분 재시도** — 실측 **10편**(2026-07-29). LLM은 끝났는데 apply를 못 하고 멈춘 것들. 해당 폴더를 다시 Process 한 번 돌리면 정리된다
 - [ ] **모드 라벨 status bar 영구 표시 여부 결정** — 지금은 Process 시작 시 한 번만 출력. 항상 표시 vs 공간 절약 트레이드오프
