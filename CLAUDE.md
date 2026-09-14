@@ -181,6 +181,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 | `citation_stats.py` | (P14 L0) held→held 인용 그래프 통계 |
 | `export_citation_graph.py` | (P14 L1) nodes/edges CSV + GEXF(Gephi), `--with-external` |
 | `audit_matches.py` | (P14 A2) 참조 매칭 감사 (의심 FP / 미연결 FN 탐지) |
+| `assemble_figures.py` | (P16 Phase 0) 도판 조립 조사 — 전 캐시의 도판·플레이트·조각 도판·분할 후보 수 + 파일럿 목록. **read-only**, 판정은 `papermeister/figures.py` 한 곳 |
 | `verify_image.py` | OCR 이미지 경로(Pillow) 1-커맨드 검증 |
 | `migrate_data_dir.py` | 데이터 디렉터리 `~/.papermeister` → `~/PaleoBytes/PaperMeister` 이동 (`--execute`, `--copy`). **앱을 닫고 실행** |
 

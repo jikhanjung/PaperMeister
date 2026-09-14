@@ -233,7 +233,10 @@
   캡션 연결·분할(Claude Opus 5, 논문 1회) + 이미지 분할(GPT-6 Astra/Sol, 도판 1회)을 **ocrserver가 호출**,
   결과는 **PaperMeister DB**(`Figure`/`FigureEntry`/`FigurePanel`). 조립은 클라이언트 규칙.
   fsis2026이 두 달 치른 교훈(지어낸 묘사가 캡션 칸에, 사후 연결 추론, 원본 삭제로 95건 손실)을 구조로 막는다
-  - **다음 할 일은 Phase 0 측정**(서버 변경 없음) — 조립 dry-run으로 도판·플레이트·분할 후보 수를 센다
+  - **Phase 0 완료(2026-09-15, [095](./devlog/20260915_095_P16_Phase0_Figure_Assembly_Survey.md))** — 전 캐시 도판 156,502,
+    플레이트 병합 4,463쪽, **조각난 도판 2,211**(계획에 없던 세 번째 조립 방식 `caption_group_union`), 분할 후보 추정 23,745.
+    이중 번호 플레이트(Tafel 13 + Plate 2)도 한 장으로. 파일럿 30편 목록은 095 §4
+  - **다음 할 일은 Phase 1** — 스키마 마이그레이션 + `assemble_figures.py --execute`(파일럿) + Text 탭 도판 목록
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
     아니면 논문·폴더·전체 우클릭 "Process Figures") · 서버 PDF는 먼저 존재 확인 후 없으면 업로드 · Batches API는 해당 없음
   - ocrserver에 넘길 명세는 P16 §6에 따로 정리돼 있다

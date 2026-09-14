@@ -91,7 +91,11 @@ biblio·references가 이미 `{ocr_pod_url}/llm/v1/chat/completions`(Qwen3-32B-A
 
 ---
 
-## 3. 규모 (실측 표본 — 확정치 아님)
+## 3. 규모
+
+> **Phase 0 실측(전 캐시, [095](./20260915_095_P16_Phase0_Figure_Assembly_Survey.md))**: 도판 **156,502**
+> (보통 149,828 · 플레이트 병합 4,463쪽/1,008편 · 조각 병합 2,211) · 캡션 힌트 63% · **패널 분할 후보 추정 23,745**.
+> 아래 표는 계획 당시의 300편 표본이다.
 
 구조화 캐시 300편 무작위 표본(9,630쪽):
 
@@ -131,6 +135,15 @@ FigurePanel[{label, bbox_figure, entry 연결, confidence}]
 - **보통 쪽**: 그림 블록 하나 = 도판 하나. 로고·아이콘 제거는 **폭이 아니라 쪽 위치·크기 조합**으로 하되,
   fsis의 `MIN_FIGURE_WIDTH_PERMILLE = 350`이 플레이트 사진 766장을 버린 사례를 기억할 것 — **플레이트 판정을 먼저** 한다.
 - **플레이트 쪽**(§1.1 판정 셋): 사진 블록 합집합 = 도판 하나. `assembly = 'plate_page_union'`, 원 블록 목록을 `blocks_json`에 남긴다(되돌릴 근거).
+- **조각난 도판** (Phase 0에서 발견 — fsis에는 없던 규모): OCR이 도판 하나를 여러 그림 블록으로 자른 경우다.
+  A–D 사진 넷 아래 `Figure 2` 캡션 하나, 저어콘 격자 아래 `그림 3-1-22` 하나. 블록마다 따로 조립하면
+  조각마다 소제목("L Caradoc")이 캡션으로 붙는다. 규칙:
+  - `Fig. N` 캡션이 **같은 단**(그림 폭의 50% 이상 겹침)에서 **가장 가까운 아래 캡션**이면 그 그림을 소유한다.
+  - 사이에 본문 블록(Text·Section-Header·Table…)이 끼면, 또는 그림 바로 위(40‰ 이내)에 **자기 `Fig. N` 캡션**이 있으면
+    (캡션-위 양식) 소유가 끊긴다.
+  - 소유한 그림이 2개 이상이면 합집합 = 도판 하나, `assembly = 'caption_group_union'`. 조각 사이의 짧은 `Caption`
+    ("A. Ajacingenia yanshini")은 `label_hints`로 남기고 도판 상자에 포함한다.
+  - 작은 그림 제거(0.4%)는 조각에 적용하지 않는다 — 플레이트와 같은 이유.
 - **같은 쪽 캡션 힌트**: 그림 바로 아래 `Caption` 블록(세로 간격 150‰ 이내, fsis `_caption_for_figure`)을 **힌트로만** 붙인다.
   확정은 ②가 한다 — 규칙과 모델이 따로 캡션을 쓰면 §1.2-4가 된다.
 - 판정은 **`papermeister/figures.py` 한 곳**. 조립·재조립·검수 명령이 모두 이 함수를 쓴다.
@@ -156,6 +169,8 @@ FigurePanel[{label, bbox_figure, entry 연결, confidence}]
 - **대상**: `entries ≥ 2`인 도판. 지도(`kind=map`)는 기본 제외(분할 가치 낮음, fsis 결정 유지).
 - 서버가 `PDF_DIR/{file_hash}.pdf`에서 해당 쪽을 렌더하고 `bbox_page`로 자른다 — 216 dpi, 긴 변 상한(fsis 실험과 같은 조건).
 - 이미지 + 원문 캡션 + entries → Astra → 검증 → **도판 이미지 기준 0..1000** 좌표로 반환.
+- `caption_group_union` 도판은 OCR이 찾은 **조각 상자와 라벨 힌트를 힌트로** 같이 넘긴다. 분할은 그래도 Astra가 한다(결정 2) —
+  조각 상자는 한 조각에 표본 둘이 든 경우도, 라벨이 조각 밖에 있는 경우도 모른다.
 - 클라이언트 반영 시 **패널 수 타당성**(항목 수의 절반 이상·두 배 이하)을 확인해 벗어나면 검수 목록으로.
 
 ---
@@ -172,7 +187,7 @@ class Figure(BaseModel):
     page        = IntegerField()                 # 0-based (OCR JSON pages[].page 와 같은 기준)
     bbox_page_1000 = TextField()                 # JSON [x0,y0,x1,y1], 페이지 기준 0..1000
     blocks_json = TextField(default='[]')        # 조립에 쓴 OCR 블록들 — 되돌릴 근거
-    assembly    = TextField(default='single')    # 'single' | 'plate_page_union'
+    assembly    = TextField(default='single')    # 'single' | 'plate_page_union' | 'caption_group_union'
     name        = TextField(default='')          # 인쇄 이름 'Fig. 3' / 'Plate II' (모르면 '')
     kind        = TextField(default='')          # ③ 결과: fossil_plate|map|chart|diagram|photo|mixed|other
 
@@ -323,7 +338,8 @@ GET  /figures/jobs?client_id=     → 목록 (결과 본문 제외)
   "file_hash": "<sha256>",
   "items": [
     {"figure_key": "f12@<panel_key>", "page": 14, "bbox_page_1000": [71, 125, 930, 880],
-     "caption": "<원문>", "entries": [{"label": "1", "description": "..."}]}
+     "caption": "<원문>", "entries": [{"label": "1", "description": "..."}],
+     "piece_boxes_figure_1000": [], "label_hints": []}
   ],
   "options": {"model": "gpt-6-astra", "effort": "high", "dpi": 216}
 }
@@ -433,7 +449,7 @@ job `result.items[]`:
 
 | Phase | 내용 | 서버 변경 | 끝나는 조건 |
 |---|---|---|---|
-| **0 측정** | `figures.py` 조립을 전 캐시에 dry-run → 도판 수·플레이트 쪽 수·entries 후보 수. 파일럿 30편 선정(플레이트·국문/일문/중문·지도·본문 그림 섞어서) | 없음 | 대상 규모가 숫자로 나옴 |
+| **0 측정** ✅ | `figures.py` 조립을 전 캐시에 dry-run → 도판 수·플레이트 쪽 수·entries 후보 수. 파일럿 30편 선정(플레이트·국문/일문/중문·지도·본문 그림 섞어서) | 없음 | 대상 규모가 숫자로 나옴 — [095](./20260915_095_P16_Phase0_Figure_Assembly_Survey.md) |
 | **1 조립** | 스키마 마이그레이션 + `assemble_figures.py` + Text 탭 도판 목록 | 없음 | 파일럿 30편 도판 목록을 사람이 보고 맞다 |
 | **2 연결** | wrapper `/pdfs`·`/figures/link` + 내부 API + 호스트 워커(Opus CLI) + `link_figures.py` | **있음** | 파일럿 30편: 캡션 연결 정확도, 지어낸 설명 0건, 편당 호출 시간·한도 소모 |
 | **3 분할** | wrapper `/figures/panels` + 호스트 워커(Astra CLI) + `split_panels.py` + 검수 목록 | **있음** | 파일럿 도판: 표본 잘림·이웃 혼입·라벨 보존 육안 판정 |
