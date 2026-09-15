@@ -7,8 +7,9 @@ figures, plate pages and cut-up figures there are, and how many look like panel
 candidates. The picture-block count is not that number — plate pages hold a
 block per photograph and journal logos are pictures too. Also picks a pilot set
 for the later phases: papers with plates, cut-up figures, compound captions,
-non-Latin scripts and maps, so the pilot meets the cases that break things.
-Reads the cache only; never opens the database.
+non-Latin scripts and maps, so the pilot meets the cases that break things,
+spread across publication years and lengths. Reads the cache, and the library
+read-only for years.
 
 **Store** (`--paper-ids` or `--pilot`; Phase 1). Assembles the chosen papers and
 shows what storing would change — new figures, refreshed hints, figures folded
@@ -61,14 +62,32 @@ _LATIN = re.compile(r'[A-Za-z]')
 _MAP = re.compile(r'\b(?:maps?|locality|localities|location)\b|지도|위치도|位置図|地図|地图|карта', re.I)
 _CACHE_HASH = re.compile(r'\.([0-9a-f]{8})\.json$')
 
+#: What the pilot must meet, as shares of its size — the cases that break things.
 PILOT_STRATA = (
-    ('plates', 9, lambda p: p['plates'] > 0),
-    ('cut_up', 6, lambda p: p['groups'] > 0),
-    ('compound', 7, lambda p: p['compound'] > 0),
-    ('non_latin', 5, lambda p: p['script'] != 'latin'),
-    ('maps', 3, lambda p: p['maps']),
+    ('plates', 0.30, lambda p: p['plates'] > 0),
+    ('cut_up', 0.20, lambda p: p['groups'] > 0),
+    ('compound', 0.23, lambda p: p['compound'] > 0),
+    ('non_latin', 0.17, lambda p: p['script'] != 'latin'),
+    ('maps', 0.10, lambda p: p['maps']),
 )
-PILOT_MAX_PAGES = 80
+PILOT_SIZE = 100
+#: Long enough for monographs, short of the Treatise volumes (2,500 figures in one file).
+PILOT_MAX_PAGES = 300
+#: Publication years and lengths the pilot spreads across. A 1852 plate volume and
+#: a 2019 PLOS paper break different rules; so do a 4-page note and a 200-page monograph.
+YEAR_BINS = ((None, 1899, '<1900'), (1900, 1949, '1900-49'), (1950, 1979, '1950-79'),
+             (1980, 1999, '1980-99'), (2000, 2009, '2000-09'), (2010, None, '2010-'))
+LENGTH_BINS = ((1, 10, '1-10p'), (11, 25, '11-25p'), (26, 60, '26-60p'),
+               (61, 150, '61-150p'), (151, None, '151p+'))
+
+
+def _bin(value, bins) -> str:
+    if value is None:
+        return 'unknown'
+    for low, high, name in bins:
+        if (low is None or value >= low) and (high is None or value <= high):
+            return name
+    return 'unknown'
 
 
 def dominant_script(text: str) -> str:
@@ -158,17 +177,71 @@ def survey(names: list[str], cache: str):
     return totals, verdicts, dropped, papers, many_marks
 
 
-def choose_pilot(papers: list[dict], seed: int) -> list[dict]:
+def _quotas(size: int) -> list[int]:
+    """Each stratum's share of `size`, rounded so the quotas add up to `size`."""
+    raw = [share * size for _, share, _ in PILOT_STRATA]
+    quotas = [int(r) for r in raw]
+    for i in sorted(range(len(raw)), key=lambda i: raw[i] - quotas[i], reverse=True)[:size - sum(quotas)]:
+        quotas[i] += 1
+    return quotas
+
+
+def choose_pilot(papers: list[dict], seed: int, size: int = PILOT_SIZE) -> list[dict]:
+    """Papers for the pilot: each stratum's quota, spread across years and lengths.
+
+    Within a stratum every pick takes the paper whose year bin and length bin the
+    pilot holds least of so far, so the common case (a 2010s article of 10–25
+    pages) does not crowd out old plate volumes and long monographs. Ties go to
+    the shuffled order, so the same seed gives the same pilot.
+    """
     rng = random.Random(seed)
-    usable = [p for p in papers if p['figures'] and p['pages'] <= PILOT_MAX_PAGES]
+    usable = [p for p in papers
+              if p['figures'] and p['pages'] <= PILOT_MAX_PAGES and p.get('in_library', True)]
     chosen, seen = [], set()
-    for stratum, size, wanted in PILOT_STRATA:
+    years: Counter = Counter()
+    lengths: Counter = Counter()
+    for (stratum, _share, wanted), quota in zip(PILOT_STRATA, _quotas(size), strict=True):
         pool = [p for p in usable if wanted(p) and p['file'] not in seen]
         rng.shuffle(pool)
-        for paper in pool[:size]:
-            chosen.append({**paper, 'stratum': stratum})
+        for _ in range(quota):
+            pool = [p for p in pool if p['file'] not in seen]
+            if not pool:
+                break
+            year_bin = lambda p: _bin(p.get('year'), YEAR_BINS)  # noqa: E731
+            length_bin = lambda p: _bin(p['pages'], LENGTH_BINS)  # noqa: E731
+            # A paper without a year spreads nothing across years: take one only
+            # when the stratum has no dated paper left.
+            paper = min(pool, key=lambda p: (p.get('year') is None,
+                                             years[year_bin(p)] + lengths[length_bin(p)]))
+            chosen.append({**paper, 'stratum': stratum,
+                           'year_bin': year_bin(paper), 'length_bin': length_bin(paper)})
             seen.add(paper['file'])
+            years[year_bin(paper)] += 1
+            lengths[length_bin(paper)] += 1
     return chosen
+
+
+def library_years(cache_dir_names: list[str]) -> dict[str, int | None] | None:
+    """{hash prefix: publication year} for PDFs in the library, read-only; None without a library.
+
+    The cache file name carries the PDF hash prefix, and the year lives on the
+    paper. A cache whose PDF has left the library gets no entry, and the pilot
+    leaves it out — storing figures needs the PDF's library row.
+    """
+    try:
+        open_database(write=False)
+        from papermeister.models import Paper, PaperFile
+        rows = (PaperFile.select(PaperFile.hash, Paper.year).join(Paper)
+                .where((PaperFile.hash != '') & PaperFile.trashed_at.is_null()
+                       & ~PaperFile.path.endswith('.json')).tuples())
+        years: dict[str, int | None] = {}
+        for file_hash, year in rows:
+            if years.get(file_hash[:8]) is None:
+                years[file_hash[:8]] = year
+        return years
+    except Exception as exc:
+        print(f'  (library not readable, pilot ignores years: {exc})')
+        return None
 
 
 def report(totals, verdicts, dropped, papers, many_marks) -> dict:
@@ -253,11 +326,19 @@ def survey_mode(args) -> int:
     totals, verdicts, dropped, papers, many_marks = survey(names, args.cache_dir)
     summary = report(totals, verdicts, dropped, papers, many_marks)
 
-    pilot = choose_pilot(papers, args.seed)
+    years = library_years(names)
+    if years is not None:
+        for paper in papers:
+            m = _CACHE_HASH.search(paper['file'])
+            key = m.group(1) if m else ''
+            paper['in_library'] = key in years
+            paper['year'] = years.get(key)
+    pilot = choose_pilot(papers, args.seed, args.pilot_size)
     print()
-    print('Pilot set')
-    for stratum, count in Counter(p['stratum'] for p in pilot).items():
-        print(f'  {stratum:<10} {count}')
+    print(f'Pilot set ({len(pilot)} papers)')
+    for title, key in (('stratum', 'stratum'), ('year', 'year_bin'), ('length', 'length_bin')):
+        counts = Counter(p[key] for p in pilot)
+        print(f'  {title:<8} ' + '  '.join(f'{k} {v}' for k, v in sorted(counts.items())))
     if args.pilot_out:
         with open(args.pilot_out, 'w', encoding='utf-8') as f:
             json.dump(pilot, f, ensure_ascii=False, indent=2)
@@ -367,6 +448,7 @@ def main():
     parser.add_argument('--sample', type=int, help='survey: a random sample of this many files')
     parser.add_argument('--seed', type=int, default=16)
     parser.add_argument('--pilot-out', help='survey: write the pilot paper list (JSON) here')
+    parser.add_argument('--pilot-size', type=int, default=PILOT_SIZE, help='survey: papers in the pilot')
     parser.add_argument('--report-out', help='survey: write the summary (JSON) here')
     parser.add_argument('--paper-ids', help='store: comma-separated paper ids')
     parser.add_argument('--pilot', help='store: the papers in a pilot list written by --pilot-out')

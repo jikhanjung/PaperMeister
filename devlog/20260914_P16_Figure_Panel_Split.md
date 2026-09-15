@@ -500,9 +500,9 @@ job `result.items[]`:
 
 | Phase | 내용 | 서버 변경 | 끝나는 조건 |
 |---|---|---|---|
-| **0 측정** ✅ | `figures.py` 조립을 전 캐시에 dry-run → 도판 수·플레이트 쪽 수·entries 후보 수. 파일럿 30편 선정(플레이트·국문/일문/중문·지도·본문 그림 섞어서) | 없음 | 대상 규모가 숫자로 나옴 — [095](./20260915_095_P16_Phase0_Figure_Assembly_Survey.md) |
-| **1 조립** | 스키마 마이그레이션 + `assemble_figures.py` + Text 탭 도판 목록 | 없음 | 파일럿 30편 도판 목록을 사람이 보고 맞다 |
-| **2 연결** | wrapper `/pdfs`·`/figures/link` + 내부 API + 호스트 워커(Opus CLI) + `link_figures.py` | **있음** | 파일럿 30편: 캡션 연결 정확도, 지어낸 설명 0건, 편당 호출 시간·한도 소모 |
+| **0 측정** ✅ | `figures.py` 조립을 전 캐시에 dry-run → 도판 수·플레이트 쪽 수·entries 후보 수. 파일럿 100편 선정(플레이트·국문/일문/중문·지도·본문 그림 섞어서) | 없음 | 대상 규모가 숫자로 나옴 — [095](./20260915_095_P16_Phase0_Figure_Assembly_Survey.md) |
+| **1 조립** | 스키마 마이그레이션 + `assemble_figures.py` + Text 탭 도판 목록 | 없음 | 파일럿 100편 도판 목록을 사람이 보고 맞다 |
+| **2 연결** | wrapper `/pdfs`·`/figures/link` + 내부 API + 호스트 워커(Opus CLI) + `link_figures.py` | **있음** | 파일럿 100편: 캡션 연결 정확도, 지어낸 설명 0건, 편당 호출 시간·한도 소모 |
 | **3 분할** | wrapper `/figures/panels` + 호스트 워커(Astra CLI) + `split_panels.py` + 검수 목록 | **있음** | 파일럿 도판: 표본 잘림·이웃 혼입·라벨 보존 육안 판정 |
 | **4 앱 통합** | Process All 체인 편입 + 논문·폴더·My Library 우클릭 "Process Figures" + 진행창(한도 대기 표시) | 없음 | 파일럿 폴더 하나를 우클릭으로 끝까지 |
 | **5 표시** | 패널 타일 UI, `FigureEntry` 설명 검색 | 없음 | — |

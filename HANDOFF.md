@@ -244,7 +244,7 @@
     재 OCR로 좌표만 옮겨진 행 유지. 라이브 렌더 검토에서 둘을 더 고침(마주 보는 두 쪽 플레이트, 인용 캡션). Phase 2·3 요구는 P16 §1.3.
     **파일럿 목록이 새 규칙으로 다시 뽑혔다** — 아래 저장은 이 목록으로
   - [ ] **Windows에서 파일럿 저장**(앱 닫고): `python scripts/assemble_figures.py --pilot "%USERPROFILE%\PaleoBytes\PaperMeister\tmp\p16_pilot.json" --execute`
-  - [ ] **Phase 1 게이트** — 파일럿 30편 Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
+  - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
     아니면 논문·폴더·전체 우클릭 "Process Figures") · 서버 PDF는 먼저 존재 확인 후 없으면 업로드 · Batches API는 해당 없음
   - ocrserver에 넘길 명세는 P16 §6에 따로 정리돼 있다
