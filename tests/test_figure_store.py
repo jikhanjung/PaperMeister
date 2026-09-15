@@ -162,6 +162,34 @@ def test_hints_refresh_but_a_linked_name_is_kept(paper_file):
 
 
 @pytest.mark.unit
+def test_a_figure_whose_box_moved_after_a_re_ocr_keeps_its_row_and_caption(paper_file):
+    """A re-OCR draws the same block a few permille differently. Folding the row and
+    creating a new one would lose the linked caption (fsis 'shifted' rows)."""
+    import datetime
+    store(paper_file, [fig()])
+    (row,) = rows(paper_file)
+    row.caption, row.linked_at = 'Fig. 1. The linked caption.', datetime.datetime.now()
+    row.save()
+
+    plan = store(paper_file, [fig(bbox=(104, 97, 903, 806))])
+
+    assert (len(plan.move), len(plan.create), len(plan.dismiss)) == (1, 0, 0)
+    (row,) = rows(paper_file)
+    assert json.loads(row.bbox_page_1000) == [104, 97, 903, 806]
+    assert row.caption == 'Fig. 1. The linked caption.'
+
+
+@pytest.mark.unit
+def test_a_page_kind_and_an_inferred_plate_number_are_stored(paper_file):
+    plate = AssembledFigure(page=14, bbox=(90, 100, 910, 880), blocks=((90, 100, 910, 880),),
+                            assembly=SINGLE, plate=1, name_hint='Plate I', page_kind='plate',
+                            plate_inferred=True)
+    store(paper_file, [plate])
+    (row,) = rows(paper_file)
+    assert (row.page_kind, row.plate, row.plate_inferred) == ('plate', 1, True)
+
+
+@pytest.mark.unit
 def test_figures_of_an_earlier_pdf_edition_are_folded(paper_file):
     store(paper_file, [fig()])
     paper_file.hash = 'cd' * 32

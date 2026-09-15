@@ -260,7 +260,9 @@ class Figure(BaseModel):
     bbox_page_1000 = peewee.TextField()              # JSON [x0,y0,x1,y1], page-relative 0..1000
     blocks_json = peewee.TextField(default='[]')     # the OCR picture blocks merged into it
     assembly = peewee.TextField(default='single')    # single | plate_page_union | caption_group_union
-    plate = peewee.IntegerField(null=True)           # plate number, for plate_page_union
+    plate = peewee.IntegerField(null=True)           # plate number, printed or inferred
+    plate_inferred = peewee.BooleanField(default=False)  # not printed on this page (previous/next page, bare PLATE)
+    page_kind = peewee.TextField(default='body')     # body | plate | captioned_plate (own captions: not linked)
     name = peewee.TextField(default='')              # printed name, 'Fig. 3' / 'Plate II'
     kind = peewee.TextField(default='')              # ③: fossil_plate|map|chart|diagram|photo|mixed|other
     caption_hint = peewee.TextField(default='')      # ①: caption block found under it — a hint only

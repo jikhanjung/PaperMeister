@@ -239,6 +239,10 @@
   - **Phase 1 구현 완료(2026-09-15, [096](./devlog/20260915_096_P16_Phase1_Figure_Store_And_List.md))** — `Figure`·`FigureEntry`·`FigurePanel`
     테이블, 다시 돌려도 안전한 저장(`figure_store.py`: 안 나오면 접고 지우지 않음, 사람 결정 보존), Text 탭 도판 목록.
     라이브 DB 읽기 전용 dry run: 파일럿 30편·도판 295개
+  - **fsis edge case 정리 반영(2026-09-15, [097](./devlog/20260915_097_P16_Assembly_Rules_From_fsis_Edge_Cases.md))** — 표지 줄·사진 한 장 플레이트·
+    번호 추론(앞 쪽 설명 제목·다음 쪽 N-1·번호 없는 PLATE)·도판별 캡션 플레이트(`Plate N, Fig. M`)·조각 그림 틈 제한·옆 단 캡션·
+    재 OCR로 좌표만 옮겨진 행 유지. 라이브 렌더 검토에서 둘을 더 고침(마주 보는 두 쪽 플레이트, 인용 캡션). Phase 2·3 요구는 P16 §1.3.
+    **파일럿 목록이 새 규칙으로 다시 뽑혔다** — 아래 저장은 이 목록으로
   - [ ] **Windows에서 파일럿 저장**(앱 닫고): `python scripts/assemble_figures.py --pilot "%USERPROFILE%\PaleoBytes\PaperMeister\tmp\p16_pilot.json" --execute`
   - [ ] **Phase 1 게이트** — 파일럿 30편 Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,

@@ -125,9 +125,13 @@ def survey(names: list[str], cache: str):
             for figure in assembled.figures:
                 record['figures'] += 1
                 caption = figure.caption_hint
-                if figure.assembly == figures.PLATE_UNION:
+                if figure.plate_inferred:
+                    totals['plates_inferred'] += 1
+                if figure.page_kind == figures.PLATE_KIND:
                     record['plates'] += 1
-                    totals['figures_plate'] += 1
+                    totals['figures_plate' if figure.assembly == figures.PLATE_UNION else 'figures_plate_single'] += 1
+                elif figure.page_kind == figures.CAPTIONED_PLATE:
+                    totals['figures_captioned_plate'] += 1
                 elif figure.assembly == figures.CAPTION_GROUP:
                     record['groups'] += 1
                     totals['figures_group'] += 1
@@ -170,7 +174,7 @@ def choose_pilot(papers: list[dict], seed: int) -> list[dict]:
 def report(totals, verdicts, dropped, papers, many_marks) -> dict:
     figure_counts = [p['figures'] for p in papers]
     with_figures = [c for c in figure_counts if c]
-    candidates = (totals['figures_plate'] + totals['figures_group']
+    candidates = (totals['figures_plate'] + totals['figures_plate_single'] + totals['figures_group']
                   + totals['figures_single_compound'])
     summary = {
         'files': totals['files'],
@@ -186,7 +190,11 @@ def report(totals, verdicts, dropped, papers, many_marks) -> dict:
         'figures_group': totals['figures_group'],
         'group_blocks': totals['group_blocks'],
         'figures_group_labelled': totals['figures_group_labelled'],
-        'figures_total': totals['figures_single'] + totals['figures_plate'] + totals['figures_group'],
+        'figures_plate_single': totals['figures_plate_single'],
+        'plates_inferred': totals['plates_inferred'],
+        'figures_captioned_plate': totals['figures_captioned_plate'],
+        'figures_total': (totals['figures_single'] + totals['figures_plate'] + totals['figures_plate_single']
+                          + totals['figures_group'] + totals['figures_captioned_plate']),
         'figures_captioned': totals['figures_captioned'],
         'figures_single_compound': totals['figures_single_compound'],
         'figures_map_caption': totals['figures_map_caption'],
@@ -218,6 +226,9 @@ def report(totals, verdicts, dropped, papers, many_marks) -> dict:
     print(f"  ordinary               {summary['figures_single']:>9,}")
     print(f"  plate pages merged     {summary['figures_plate']:>9,}   "
           f"in {summary['papers_with_plates']:,} papers")
+    print(f"  one-photo plate pages  {summary['figures_plate_single']:>9,}")
+    print(f"  plate number inferred  {summary['plates_inferred']:>9,}   (not printed on the page)")
+    print(f"  captioned plate photos {summary['figures_captioned_plate']:>9,}   (named Plate N, Fig. M)")
     print(f"  cut-up pieces merged   {summary['figures_group']:>9,}   "
           f"from {summary['group_blocks']:,} blocks; {summary['figures_group_labelled']:,} with panel labels")
     print(f"  with a caption below   {summary['figures_captioned']:>9,}")
@@ -328,7 +339,8 @@ def store_mode(args) -> int:
         kinds = Counter(f.assembly for f in assembled)
         print(f'  paper {pf.paper_id:>6}  {len(assembled):>4} figures '
               f'(plates {kinds[figures.PLATE_UNION]}, cut-up {kinds[figures.CAPTION_GROUP]})  '
-              f'new {len(plan.create)}, refreshed {len(plan.refresh)}, restored {len(plan.restore)}, '
+              f'new {len(plan.create)}, refreshed {len(plan.refresh)}, moved {len(plan.move)}, '
+              f'restored {len(plan.restore)}, '
               f'folded {len(plan.dismiss)}  {label}')
         if args.execute:
             figure_store.apply_plan(plan)

@@ -773,6 +773,7 @@ class FigureRow:
     pieces: int         # picture blocks merged into it
     caption: str        # linked caption (P16 ②), '' until then
     caption_hint: str   # caption block found under it by assembly
+    plate_inferred: bool = False   # plate number not printed on its page
 
 
 def load_figures(paper_id: int) -> list[FigureRow]:
@@ -782,6 +783,6 @@ def load_figures(paper_id: int) -> list[FigureRow]:
     return [
         FigureRow(id=f.id, page=f.page, name=f.name, assembly=f.assembly,
                   pieces=len(json.loads(f.blocks_json or '[]')),
-                  caption=f.caption, caption_hint=f.caption_hint)
+                  caption=f.caption, caption_hint=f.caption_hint, plate_inferred=f.plate_inferred)
         for f in figures_for_paper(paper_id)
     ]

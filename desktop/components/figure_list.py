@@ -24,6 +24,8 @@ def describe(row) -> str:
         parts.append(f'plate, {row.pieces} photos')
     elif row.assembly == 'caption_group_union':
         parts.append(f'{row.pieces} pieces')
+    if getattr(row, 'plate_inferred', False):
+        parts.append('plate number inferred')
     if row.caption:
         parts.append('caption')
     elif row.caption_hint:

@@ -30,6 +30,15 @@ def test_each_figure_says_its_page_and_how_it_was_assembled(qapp):
 
 
 @pytest.mark.ui
+def test_an_inferred_plate_number_says_so(qapp):
+    """The number was read off a neighbouring page, not this one — the reviewer should know."""
+    from desktop.components.figure_list import FigureList
+
+    widget = FigureList([row(name='Plate I', page=13, assembly='plate_page_union', pieces=12, plate_inferred=True)])
+    assert 'plate number inferred' in widget.list.item(0).text()
+
+
+@pytest.mark.ui
 def test_a_caption_hint_is_not_presented_as_the_caption(qapp):
     from desktop.components.figure_list import FigureList
 

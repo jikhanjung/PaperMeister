@@ -61,6 +61,47 @@ ocrserver `wrapper/main.py` · `docs/WRAPPER_API.md` · `docs/ENDPOINTS.md` · H
 
 **이 계획의 구조는 거의 전부 이 일곱 줄에서 나온다.** 특히 1·2·4는 "연결과 분할을 한 곳에서, 출처를 기록하며, 한 번에"로 푼다.
 
+### 1.3 fsis 2026-09-15 정리에서 더 가져온 것
+
+fsis가 하루 동안 사용자 검수로 규칙을 아홉 번 고치고 `docs/figure_edge_cases.md`(증상 → 원인 → 찾는 법 → 처리)와
+`docs/figure_pipeline_design_guide.md`로 묶었다. 조립에 해당하는 것은 **Phase 1에 반영했다**(097), 나머지는 해당 Phase의 요구로 둔다.
+
+**조립 — 반영됨 (`figures.py`)**
+
+| 경우 | fsis 사례 | 규칙 |
+|---|---|---|
+| `PLM` → Plate M | 2648 | `pl` 뒤에 마침표·공백이 있어야 번호 |
+| 플레이트 표지 줄이 `Text`로 | 2407 · 3817 · 2263 | 짧은 한 줄 · 쪽 위아래 가장자리 · 번호 있음 · `fig`/`그림` 없음이면 표지 |
+| 사진 한 장짜리 플레이트 쪽 | 2263 | 번호 정확히 하나면 `Plate N` 이름. 작은 장식은 거른다 |
+| 번호 중복(OCR 오독) | 3011 · 4051 | 한 장 쪽이 다른 쪽과 번호가 겹치면 이름을 안 준다 — 사진이 3배 이상 크면 예외. **마주 보는 두 쪽의 한 플레이트**(`Tafel 16: 1`/`16: 2`, 이 라이브러리)는 예외(097) |
+| 쪽에 번호가 없다 | 3359 · 2100 · 2097 | 앞 쪽 끝 `Explanation of Plate N` → N · 다음 쪽 `PLATE N` → N-1 · 번호 없는 `PLATE`가 논문에 한 쪽뿐 → `Plate`. 모두 `plate_inferred` |
+| 도판별 캡션 플레이트 | 2360 · 3075 | 머리말(캡션 제외) 번호 하나 + 사진마다 제 `Fig. N` → 사진마다 도판, 이름 `Plate N, Fig. M`, `page_kind='captioned_plate'` |
+| 조각난 그림 | 2211 · 3856 · 2162 · 3716 | 번호 캡션 바로 아래 조각 + 위로 틈 80(패널 글자 낀 틈 160)·가로 70% 겹침으로 잇기 · 옆에 번호 캡션 있는 조각 제외 · `Photo N`/`사진 N`도 번호 캡션 · 짧은 무번호 캡션(`B. Sketch`)은 제 캡션 찾기에서 건너뜀 |
+| 조각을 두 캡션이 가져감 | 2117 · 3281 | 둘 다 안 합친다 |
+| 옆 단 캡션 | 2100 p.10 | 캡션 바로 위에 이 그림보다 가로로 더 겹치는 그림이 있으면 그 그림 것 |
+| 재 OCR 뒤 좌표만 낡음 | stale "shifted" | 같은 쪽·같은 조립·IoU ≥ 0.5면 **행을 옮긴다**(접고 새로 만들면 연결된 캡션을 잃는다) — `figure_store` |
+
+**Phase 2 (캡션 연결) 요구**
+- `page_kind='captioned_plate'` 도판은 **입력에서 빼고 반영에서도 건너뛴다** — 제 캡션이 끝나 있다. 안 빼면 플레이트 설명을 한 행에 몰아넣는다(2360)
+- 설명 쪽은 **설명 시작점부터 9,000자**, 일반 쪽 2,500자. 설명 쪽이 모든 플레이트를 덮으면 **설명 쪽만** 준다(본문 인용 쪽을 섞으면 모델이 인용 쪽을 고른다, 2492)
+- 긴 논문은 **설명 쪽 5쪽씩 배치**. 연결 레인 락·배치 남음 표시
+- 쓰기·읽기 양쪽 검증: 준 쪽·준 도판 id 안 · 항목 수 타당 범위 · **항목이 줄면 덮지 않는다 — 출처 있는 캡션일 때만**(출처 없는 원본은 지어낸 묘사일 수 있다, 3607)
+- 한 그림이 여러 쪽에 걸침 — 캡션 뒷부분이 다음 쪽 꼬리말(`Page-Footer`)로(2641), 패널이 쪽마다((a) p.4 · (b) p.5, 2754). 연결 입력에 다음 쪽 꼬리말을 싣고, 결과 검증에서 "그림 없는 쪽의 같은 이름 행" 을 합칠 후보로 보고
+- 이미지 하나 아래 번호 캡션 둘 이상(`그림 2.`/`그림 3.`, 3415) — 규칙이 아니라 **범위 이름(`그림 2–3`) + 캡션별 항목**, 자르기는 Astra. 옆으로 나란한 두 그림 + 좌우 캡션은 세로로 나눈다(2929) — 검수 목록 사유로
+- 지어낸 항목 의심: Astra가 `single_image_many_captions`로 답했는데 항목 글자가 인쇄 캡션에 없음 → **한 장씩** 검수(일괄 비우지 않는다, 2811은 실제 플레이트였다)
+
+**Phase 3 (패널 분할) 요구**
+- 결과는 `non_compound_reason ∈ {legend_labels, image_incomplete, single_image_many_captions}` + 레이블별 역할 · `annotation_indices`(범례·그림 속 표시는 캡션 수에서 뺀다)
+- Astra가 패널 `label`을 비우고 `caption_indices`만 주면 그 항목 글자로 채운다. 둘 다 빈 뒤쪽 패널은 **안 붙은 패널 수 = 안 쓰인 항목 수**일 때만 읽는 순서로 붙인다
+- 반영 판정은 **결과 내용 해시**로(같은 파일명의 새 결과 157장 미반영). 해시 없는 옛 기록을 "같다"로 보지 않는다
+- **항목을 바꾸면 다시 자른다** — 패널 설명은 `caption_indices`로 붙는다. 캡션이 바뀐 도판은 `panel_key`(entries digest 포함)가 알아서 stale
+- 호스트 워커 코드는 **배포와 같은 버전**으로(fsis: 옛 체크아웃이 네 번의 배포 동안 새 방어를 안 받았다)
+- 치명 오류(한도·로그인) 문구는 **stdout·stderr 둘 다**에서 찾는다
+
+**검수 (Phase 1 게이트부터)**
+- 새 규칙은 **운영 데이터 dry-run → 모르는 것은 렌더해 눈으로** — 이번에도 마주 보는 두 쪽 플레이트가 그렇게 나왔다
+- 사유는 할 일이 다른 것끼리: 패널 1개 · 패널 0개 · 시도 소진 · 설명 되돌림 후보 · `plate_inferred` · 좌표 같은 중복
+
 ---
 
 ## 2. PaperMeister가 이미 가진 것
@@ -95,6 +136,9 @@ biblio·references가 이미 `{ocr_pod_url}/llm/v1/chat/completions`(Qwen3-32B-A
 
 > **Phase 0 실측(전 캐시, [095](./20260915_095_P16_Phase0_Figure_Assembly_Survey.md))**: 도판 **156,502**
 > (보통 149,828 · 플레이트 병합 4,463쪽/1,008편 · 조각 병합 2,211) · 캡션 힌트 63% · **패널 분할 후보 추정 23,745**.
+> **097 규칙(fsis edge case 반영) 뒤**: 도판 **153,355** (보통 140,071 · 플레이트 병합 4,659 · 사진 한 장 플레이트 5,793 ·
+> 도판별 캡션 플레이트 사진 342 · 조각 병합 2,490) · 플레이트 있는 편 1,808 · 번호 추론 90 · **패널 분할 후보 추정 29,928**
+> ([097](./20260915_097_P16_Assembly_Rules_From_fsis_Edge_Cases.md) §5).
 > 아래 표는 계획 당시의 300편 표본이다.
 
 구조화 캐시 300편 무작위 표본(9,630쪽):
@@ -190,7 +234,9 @@ class Figure(BaseModel):
     assembly    = TextField(default='single')    # 'single' | 'plate_page_union' | 'caption_group_union'
     name        = TextField(default='')          # 인쇄 이름 'Fig. 3' / 'Plate II' (모르면 '')
     kind        = TextField(default='')          # ③ 결과: fossil_plate|map|chart|diagram|photo|mixed|other
-    plate       = IntegerField(null=True)        # ① plate_page_union의 플레이트 번호          (Phase 1 추가)
+    plate       = IntegerField(null=True)        # ① 플레이트 번호(인쇄 또는 추론)             (Phase 1 추가)
+    plate_inferred = BooleanField(default=False) # ① 이 쪽에 인쇄되지 않은 번호(앞·뒤 쪽, 번호 없는 PLATE) (§1.3)
+    page_kind   = TextField(default='body')      # ① body | plate | captioned_plate — 마지막은 ② 입력에서 뺀다 (§1.3)
     caption_hint = TextField(default='')         # ① 아래 캡션 블록 — 힌트일 뿐 caption이 아니다 (Phase 1 추가)
     label_hints_json = TextField(default='[]')   # ① 조각 도판 사이의 패널 라벨               (Phase 1 추가)
     assembled_at = DateTimeField()               #                                           (Phase 1 추가)

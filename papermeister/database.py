@@ -190,6 +190,14 @@ def _migrate(database):
     if 'trashed_at' not in pf_columns:
         database.execute_sql('ALTER TABLE paperfile ADD COLUMN trashed_at DATETIME')
 
+    # P16 Figure columns added after the table first shipped.
+    cursor = database.execute_sql("PRAGMA table_info('figure')").fetchall()
+    fig_columns = {row[1] for row in cursor}
+    if fig_columns and 'page_kind' not in fig_columns:
+        database.execute_sql("ALTER TABLE figure ADD COLUMN page_kind TEXT DEFAULT 'body'")
+    if fig_columns and 'plate_inferred' not in fig_columns:
+        database.execute_sql('ALTER TABLE figure ADD COLUMN plate_inferred INTEGER DEFAULT 0')
+
     # PaperFolder backfill: seed from Paper.folder for existing data.
     # After backfill, flag for full item sync to populate multi-collection membership.
     tables = [t[0] for t in database.execute_sql(
