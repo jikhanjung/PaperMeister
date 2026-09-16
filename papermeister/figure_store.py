@@ -13,7 +13,21 @@ and assembly), and then:
   and creating a new row would throw that work away; fsis found such rows among
   its "stale" ones and chose to keep them;
 - **no longer produced** — folded (`dismissed_by='reassembly'`), never deleted;
-- **touched by a person** (`user_confirmed`, or dismissed by a person) — left exactly as it is.
+- **touched by a person** (`user_confirmed`, `bbox_locked`, or dismissed by a person) — left exactly as it is;
+- **spoken for by a person's row** — when someone widened a box or merged rows,
+  the OCR blocks inside are listed in that row's `blocks_json`, and re-assembly
+  does not raise them again as figures of their own. fsis's nightly sync did
+  exactly that (EC §6-14), and every merge needed a person to fold the pieces
+  again the next morning.
+
+A page the rule doubts without a figure to carry the doubt (a plate mark over
+nothing, a figure caption over nothing) gets a **placeholder row** —
+`assembly='page'`, the whole page as its box — so the re-judgement stage has a
+row to key, count attempts on and fold, like any other.
+
+What protects a row from which automatic path is one judgement, `protection()`.
+fsis checked three flags in three places and a person's fix was overwritten by
+the path that looked at the wrong one (EC §6-13).
 
 Planning is separate from writing so a dry run shows precisely what `--execute`
 would do.
@@ -26,8 +40,38 @@ from . import figures
 from .models import Figure, PaperFile, db
 
 REASSEMBLY = 'reassembly'
+USER = 'user'
+#: A placeholder row's assembly: a page-level doubt with no figure of its own.
+PAGE = 'page'
+PAGE_BOX = (0, 0, 1000, 1000)
 #: A new box overlapping an unmatched stored one this much is the same figure, moved.
 MOVED_MIN_IOU = 0.5
+
+
+@dataclass(frozen=True)
+class Protection:
+    """Which automatic paths must leave this row alone."""
+
+    assembly: bool     # re-assembly and detect: box, blocks, folding
+    caption: bool      # the caption stage: caption, entries, name
+    panels: bool       # the panel stage: panels
+
+    @property
+    def any(self) -> bool:
+        return self.assembly or self.caption or self.panels
+
+
+def protection(row: Figure) -> Protection:
+    """The one judgement of what a person has claimed on a row.
+
+    `user_confirmed` claims all of it; the locks claim one aspect each, so a
+    person can fix a box and still let captions and panels be found. A row a
+    person folded is theirs too — no path revives it.
+    """
+    person = row.user_confirmed or (row.dismissed and row.dismissed_by == USER)
+    return Protection(assembly=person or row.bbox_locked,
+                      caption=person or row.caption_locked,
+                      panels=person or row.panels_locked)
 
 
 def _key(file_hash: str, page: int, bbox, assembly: str):
@@ -56,7 +100,24 @@ def _hints(fig: figures.AssembledFigure) -> dict:
         'page_kind': fig.page_kind,
         'caption_hint': fig.caption_hint,
         'label_hints_json': json.dumps(list(fig.label_hints), ensure_ascii=False),
+        'uncertain_reasons_json': json.dumps(list(fig.reasons)),
     }
+
+
+def placeholder(page: int, suspicions: list[str]) -> figures.AssembledFigure:
+    """The row that carries a page-level doubt."""
+    return figures.AssembledFigure(page=page, bbox=PAGE_BOX, blocks=(), assembly=PAGE,
+                                   reasons=tuple(suspicions))
+
+
+def with_placeholders(assemblies: list[figures.PageAssembly]) -> list[figures.AssembledFigure]:
+    """Every figure of a document plus a placeholder per doubted empty page."""
+    out: list[figures.AssembledFigure] = []
+    for a in assemblies:
+        out.extend(a.figures)
+        if a.suspicions and not a.figures:
+            out.append(placeholder(a.page, a.suspicions))
+    return out
 
 
 def _stale(row: Figure, fig: figures.AssembledFigure) -> bool:
@@ -75,7 +136,9 @@ class StorePlan:
     move: list[tuple[Figure, figures.AssembledFigure]] = field(default_factory=list)
     restore: list[tuple[Figure, figures.AssembledFigure]] = field(default_factory=list)
     dismiss: list[Figure] = field(default_factory=list)
-    untouched_by_rule: int = 0          # rows a person confirmed or dismissed
+    untouched_by_rule: int = 0          # rows a person confirmed, locked or dismissed
+    absorbed: int = 0                   # figures a person's row already covers block for block
+    contested: int = 0                  # figures two of a person's rows both claim — made by neither
 
     @property
     def changes(self) -> int:
@@ -92,14 +155,32 @@ def plan_store(paper_file: PaperFile, assembled: list[figures.AssembledFigure]) 
     for row in existing:
         by_key.setdefault(_row_key(row), row)
 
+    # Blocks a person's rows already speak for, by page: a widened or merged
+    # row lists the OCR blocks inside it, and those are not new figures.
+    claimed: dict[tuple[int, tuple], list[int]] = {}
+    for row in existing:
+        if row.file_hash == paper_file.hash and not row.dismissed and protection(row).assembly:
+            for block in json.loads(row.blocks_json or '[]'):
+                claimed.setdefault((row.page, tuple(block)), []).append(row.id)
+
     matched = set()
     for fig in assembled:
         stored: Figure | None = by_key.get(_key(paper_file.hash, fig.page, fig.bbox, fig.assembly))
         if stored is None or stored.id in matched:
+            owners = {owner for b in fig.blocks for owner in claimed.get((fig.page, tuple(b)), [])}
+            if fig.blocks and all((fig.page, tuple(b)) in claimed for b in fig.blocks):
+                # Exactly these blocks, not a box that merely contains them: a
+                # containing box would swallow an independent photograph.
+                if len(owners) == 1:
+                    plan.absorbed += 1
+                else:
+                    plan.contested += 1
+                continue
             plan.create.append(fig)
             continue
         matched.add(stored.id)
-        if stored.user_confirmed or (stored.dismissed and stored.dismissed_by != REASSEMBLY):
+        if protection(stored).assembly or (stored.dismissed and stored.dismissed_by != REASSEMBLY):
+            # A person's row, or one another stage folded: re-assembly revives only its own folds.
             plan.untouched_by_rule += 1
         elif stored.dismissed:
             plan.restore.append((stored, fig))
@@ -108,7 +189,7 @@ def plan_store(paper_file: PaperFile, assembled: list[figures.AssembledFigure]) 
 
     # Figures whose box moved a little: same PDF edition, page and assembly.
     movable = [row for row in existing if row.id not in matched and not row.dismissed
-               and not row.user_confirmed and row.file_hash == paper_file.hash]
+               and not protection(row).assembly and row.file_hash == paper_file.hash]
     for fig in list(plan.create):
         best, best_iou = None, MOVED_MIN_IOU
         for row in movable:
@@ -125,7 +206,7 @@ def plan_store(paper_file: PaperFile, assembled: list[figures.AssembledFigure]) 
     for row in existing:
         if row.id in matched or row.dismissed:
             continue
-        if row.user_confirmed:
+        if protection(row).assembly:
             plan.untouched_by_rule += 1
         else:
             # Includes figures of an earlier edition of the PDF: a changed hash
@@ -172,7 +253,8 @@ def apply_plan(plan: StorePlan) -> None:
 
 
 def figures_for_paper(paper_id: int) -> list[Figure]:
-    """A paper's figures in reading order, without folded ones."""
+    """A paper's figures in reading order, without folded ones or placeholders."""
     return list(Figure.select()
-                .where((Figure.paper == paper_id) & (Figure.dismissed == False))  # noqa: E712 (peewee)
+                .where((Figure.paper == paper_id) & (Figure.dismissed == False)  # noqa: E712 (peewee)
+                       & (Figure.assembly != PAGE))
                 .order_by(Figure.page, Figure.id))

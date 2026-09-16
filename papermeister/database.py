@@ -190,13 +190,40 @@ def _migrate(database):
     if 'trashed_at' not in pf_columns:
         database.execute_sql('ALTER TABLE paperfile ADD COLUMN trashed_at DATETIME')
 
-    # P16 Figure columns added after the table first shipped.
-    cursor = database.execute_sql("PRAGMA table_info('figure')").fetchall()
-    fig_columns = {row[1] for row in cursor}
-    if fig_columns and 'page_kind' not in fig_columns:
-        database.execute_sql("ALTER TABLE figure ADD COLUMN page_kind TEXT DEFAULT 'body'")
-    if fig_columns and 'plate_inferred' not in fig_columns:
-        database.execute_sql('ALTER TABLE figure ADD COLUMN plate_inferred INTEGER DEFAULT 0')
+    # P16 figure columns added after the tables first shipped (096 → 097 → D, devlog 100).
+    _FIGURE_COLUMNS = {
+        'figure': (
+            ("page_kind", "TEXT DEFAULT 'body'"),
+            ('plate_inferred', 'INTEGER DEFAULT 0'),
+            ("uncertain_reasons_json", "TEXT DEFAULT '[]'"),
+            ("bbox_source", "TEXT DEFAULT 'assembly'"),
+            ("detect_key", "TEXT DEFAULT ''"),
+            ('detect_attempts', 'INTEGER DEFAULT 0'),
+            ('detected_at', 'DATETIME'),
+            ("detect_caption_json", "TEXT DEFAULT '{}'"),
+            ("caption_pages_json", "TEXT DEFAULT '[]'"),
+            ('continuation_of_id', 'INTEGER REFERENCES figure(id)'),
+            ("panel_entries_digest", "TEXT DEFAULT ''"),
+            ('bbox_locked', 'INTEGER DEFAULT 0'),
+            ('caption_locked', 'INTEGER DEFAULT 0'),
+            ('panels_locked', 'INTEGER DEFAULT 0'),
+        ),
+        'figureentry': (
+            ("printed_label", "TEXT DEFAULT ''"),
+            ("label_status", "TEXT DEFAULT ''"),
+            ("specimen_number", "TEXT DEFAULT ''"),
+        ),
+        'figurepanel': (
+            ('annotation', 'INTEGER DEFAULT 0'),
+        ),
+    }
+    for table, columns in _FIGURE_COLUMNS.items():
+        have = {row[1] for row in database.execute_sql(f"PRAGMA table_info('{table}')").fetchall()}
+        if not have:
+            continue    # the table does not exist yet: create_tables() makes it whole
+        for name, ddl in columns:
+            if name not in have:
+                database.execute_sql(f'ALTER TABLE {table} ADD COLUMN {name} {ddl}')
 
     # PaperFolder backfill: seed from Paper.folder for existing data.
     # After backfill, flag for full item sync to populate multi-collection membership.

@@ -32,8 +32,8 @@ USER = 'user'
 OPERATIONS = ('confirm', 'dismiss', 'restore', 'rename', 'set-bbox', 'merge')
 
 #: What a record keeps of a row, enough to find it again and to undo by hand.
-_SNAPSHOT = ('name', 'bbox_page_1000', 'blocks_json', 'assembly', 'user_confirmed',
-             'dismissed', 'dismissed_by')
+_SNAPSHOT = ('name', 'bbox_page_1000', 'blocks_json', 'assembly', 'user_confirmed', 'bbox_locked',
+             'bbox_source', 'dismissed', 'dismissed_by')
 
 
 class CurationError(ValueError):
@@ -137,7 +137,8 @@ def plan(op: str, rows: list[Figure], reason: str, name: str = '', bbox: list[in
                 or bbox[0] >= bbox[2] or bbox[1] >= bbox[3]:
             raise CurationError('--bbox must be x0,y0,x1,y1 in 0..1000 with x0<x1, y0<y1')
         out.args['bbox'] = bbox
-        out.changes.append(Change(rows[0], {'bbox_page_1000': json.dumps(bbox), 'user_confirmed': True}))
+        out.changes.append(Change(rows[0], {'bbox_page_1000': json.dumps(bbox), 'bbox_source': USER,
+                                            'bbox_locked': True, 'user_confirmed': True}))
     elif op == 'merge':
         if len(rows) < 2:
             raise CurationError('merge takes two or more figures')
@@ -147,8 +148,8 @@ def plan(op: str, rows: list[Figure], reason: str, name: str = '', bbox: list[in
         boxes = [json.loads(r.bbox_page_1000) for r in rows]
         blocks = [b for r in rows for b in json.loads(r.blocks_json)]
         out.changes.append(Change(survivor, {
-            'bbox_page_1000': json.dumps(_union(boxes)),
-            'blocks_json': json.dumps(blocks), 'user_confirmed': True}))
+            'bbox_page_1000': json.dumps(_union(boxes)), 'bbox_source': USER,
+            'blocks_json': json.dumps(blocks), 'bbox_locked': True, 'user_confirmed': True}))
         for row in others:
             out.changes.append(Change(row, {'dismissed': True, 'dismissed_by': USER, 'user_confirmed': True}))
     return out

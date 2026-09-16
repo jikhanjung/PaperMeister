@@ -219,3 +219,137 @@ def test_deleting_the_file_deletes_its_figures(paper_file):
     store(paper_file, [fig()])
     paper_file.delete_instance()
     assert Figure.select().count() == 0
+
+
+# ── D: protection in one place, a person's rows speak for their blocks, page doubts (100)
+
+@pytest.mark.unit
+def test_the_migration_adds_the_new_columns_to_an_older_figure_table(db):
+    """A library whose figure tables were made before D still gets the columns."""
+    from papermeister.database import init_db
+    from papermeister.paths import DB_PATH
+    for table, column in (('figure', 'bbox_locked'), ('figure', 'uncertain_reasons_json'),
+                          ('figureentry', 'printed_label'), ('figurepanel', 'annotation')):
+        db.execute_sql(f'ALTER TABLE {table} DROP COLUMN {column}')   # (a FK column cannot be dropped)
+    db.close()
+    database = init_db(DB_PATH)
+    for table, column in (('figure', 'bbox_locked'), ('figure', 'continuation_of_id'),
+                          ('figureentry', 'printed_label'), ('figurepanel', 'annotation')):
+        columns = {row[1] for row in database.execute_sql(f"PRAGMA table_info('{table}')").fetchall()}
+        assert column in columns, (table, column)
+
+
+@pytest.mark.unit
+def test_protection_is_one_judgement(paper_file):
+    from papermeister.figure_store import protection
+    from papermeister.models import Figure
+    def row(**kw):
+        return Figure(paper=paper_file.paper_id, paper_file=paper_file.id, file_hash=HASH, page=1,
+                      bbox_page_1000='[0, 0, 1, 1]', **kw)
+    from dataclasses import astuple
+    assert not protection(row()).any
+    assert astuple(protection(row(user_confirmed=True))) == (True, True, True)
+    assert astuple(protection(row(bbox_locked=True))) == (True, False, False)
+    assert astuple(protection(row(caption_locked=True))) == (False, True, False)
+    assert astuple(protection(row(panels_locked=True))) == (False, False, True)
+    assert protection(row(dismissed=True, dismissed_by='user')).any
+    assert not protection(row(dismissed=True, dismissed_by='reassembly')).any
+
+
+@pytest.mark.unit
+def test_a_persons_merged_row_keeps_its_pieces_from_coming_back(paper_file):
+    """fsis EC §6-14: widen a box and the nightly sync raised the OCR blocks
+    inside it as new rows, every night. The merged row lists its blocks."""
+    from papermeister import figure_curation as cur
+    from papermeister.figure_store import plan_store
+    pieces = [fig(page=4, bbox=b, name='') for b in ((100, 100, 480, 480), (520, 100, 900, 480))]
+    store(paper_file, pieces)
+    cur.apply(cur.plan('merge', rows(paper_file), 'one figure'), os.path.join(
+        os.environ['PAPERMEISTER_DATA_DIR'], 'rec.json'))
+    survivor = rows(paper_file)[0]
+    assert survivor.bbox_locked and json.loads(survivor.bbox_page_1000) == [100, 100, 900, 480]
+
+    plan = plan_store(paper_file, pieces)
+    # the first piece's box is now the survivor's union, so it is found by its
+    # block; the second still matches the row the person folded
+    assert plan.create == [] and plan.absorbed == 1 and plan.untouched_by_rule == 2
+    # a new figure the person's row does not cover is still created
+    plan = plan_store(paper_file, [*pieces, fig(page=4, bbox=(100, 520, 900, 900))])
+    assert len(plan.create) == 1
+
+
+@pytest.mark.unit
+def test_a_block_two_persons_rows_both_claim_is_made_by_neither(paper_file):
+    from papermeister.figure_store import plan_store
+    from papermeister.models import Figure
+    piece = fig(page=4, bbox=(100, 100, 480, 480), name='')
+    for box in ((100, 100, 900, 480), (100, 100, 480, 900)):
+        Figure.create(paper=paper_file.paper_id, paper_file=paper_file.id, file_hash=HASH, page=4,
+                      bbox_page_1000=json.dumps(list(box)), blocks_json=json.dumps([list(piece.bbox)]),
+                      bbox_locked=True)
+    plan = plan_store(paper_file, [piece])
+    assert plan.create == [] and plan.contested == 1
+
+
+@pytest.mark.unit
+def test_a_locked_box_is_left_alone_and_not_reproduced(paper_file):
+    from papermeister import figure_curation as cur
+    from papermeister.figure_store import plan_store
+    original = fig(page=2, bbox=(100, 100, 480, 480))
+    store(paper_file, [original])
+    cur.apply(cur.plan('set-bbox', rows(paper_file), 'right column left out', bbox=[100, 100, 900, 480]),
+              os.path.join(os.environ['PAPERMEISTER_DATA_DIR'], 'rec.json'))
+    plan = plan_store(paper_file, [original])
+    assert plan.create == [] and plan.move == [] and plan.absorbed == 1 and plan.dismiss == []
+
+
+@pytest.mark.unit
+def test_reassembly_revives_only_its_own_folds(paper_file):
+    from papermeister.figure_store import plan_store
+    from papermeister.models import Figure
+    f = fig()
+    store(paper_file, [f])
+    row = rows(paper_file)[0]
+    row.dismissed, row.dismissed_by = True, 'detect'
+    row.save()
+    plan = plan_store(paper_file, [f])
+    assert plan.restore == [] and plan.untouched_by_rule == 1
+    row.dismissed_by = 'reassembly'
+    row.save()
+    assert len(plan_store(paper_file, [f]).restore) == 1
+    assert Figure.select().count() == 1
+
+
+@pytest.mark.unit
+def test_doubts_are_stored_and_refreshed(paper_file):
+    from papermeister.figure_store import plan_store
+    doubted = AssembledFigure(page=3, bbox=(100, 100, 900, 800), blocks=((100, 100, 900, 800),),
+                              assembly=SINGLE, reasons=('no_caption',))
+    store(paper_file, [doubted])
+    assert json.loads(rows(paper_file)[0].uncertain_reasons_json) == ['no_caption']
+    settled = AssembledFigure(page=3, bbox=(100, 100, 900, 800), blocks=((100, 100, 900, 800),),
+                              assembly=SINGLE, caption_hint='Fig. 1. Found.')
+    plan = plan_store(paper_file, [settled])
+    assert len(plan.refresh) == 1
+    store(paper_file, [settled])
+    assert json.loads(rows(paper_file)[0].uncertain_reasons_json) == []
+
+
+@pytest.mark.unit
+def test_a_page_doubt_gets_a_placeholder_row_that_the_text_tab_does_not_list(paper_file):
+    from papermeister import figures
+    from papermeister.figure_store import PAGE, figures_for_paper, plan_store, with_placeholders
+    from papermeister.models import Figure
+    empty_plate = figures.PageAssembly(page=7, picture_blocks=1, verdict='plate',
+                                       suspicions=['plate_without_pictures'])
+    body = figures.PageAssembly(page=8, picture_blocks=1, figures=[fig(page=8)])
+    assembled = with_placeholders([empty_plate, body])
+    assert [f.assembly for f in assembled] == [PAGE, SINGLE]
+    store(paper_file, assembled)
+    placeholder = Figure.get(Figure.assembly == PAGE)
+    assert placeholder.page == 7 and json.loads(placeholder.bbox_page_1000) == [0, 0, 1000, 1000]
+    assert json.loads(placeholder.uncertain_reasons_json) == ['plate_without_pictures']
+    assert [f.page for f in figures_for_paper(paper_file.paper_id)] == [8]
+    # settled next time: the placeholder folds like any row
+    plan = plan_store(paper_file, [fig(page=8)])
+    assert [r.id for r in plan.dismiss] == [placeholder.id] and plan.create == []

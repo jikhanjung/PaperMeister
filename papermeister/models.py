@@ -267,12 +267,22 @@ class Figure(BaseModel):
     kind = peewee.TextField(default='')              # ③: fossil_plate|map|chart|diagram|photo|mixed|other
     caption_hint = peewee.TextField(default='')      # ①: caption block found under it — a hint only
     label_hints_json = peewee.TextField(default='[]')  # ①: panel labels printed among the pieces
+    uncertain_reasons_json = peewee.TextField(default='[]')  # ①: why the rule doubts this row (099) — the detect stage's input
+    bbox_source = peewee.TextField(default='assembly')  # who set the box: assembly | detect | user
     assembled_at = peewee.DateTimeField(default=datetime.datetime.now)
+
+    # ①′ re-judgement (a model shown the paper; client plan §2)
+    detect_key = peewee.TextField(default='')        # file_hash|page|hint bbox|ocr_digest|prompt_version
+    detect_attempts = peewee.IntegerField(default=0)
+    detected_at = peewee.DateTimeField(null=True)
+    detect_caption_json = peewee.TextField(default='{}')  # what detect read as the caption — a hint for ②, never `caption`
 
     # ② caption — printed text only. A description written from the picture never goes here.
     caption = peewee.TextField(default='')
-    caption_source = peewee.TextField(default='')    # '' (not run) | same_page | explanation_page | none
+    caption_source = peewee.TextField(default='')    # '' (not run) | same_page | explanation_page | none | user
     caption_page = peewee.IntegerField(null=True)
+    caption_pages_json = peewee.TextField(default='[]')  # every page the caption was read from — one plate's explanation can span two
+    continuation_of = peewee.ForeignKeyField('self', null=True, backref='continuations')  # one figure over several pages (fsis EC §4-3)
     link_key = peewee.TextField(default='')
     link_result_digest = peewee.TextField(default='')
     link_model = peewee.TextField(default='')
@@ -281,7 +291,8 @@ class Figure(BaseModel):
     linked_at = peewee.DateTimeField(null=True)
 
     # ③ panel split
-    panel_key = peewee.TextField(default='')
+    panel_key = peewee.TextField(default='')         # the image's identity only: file_hash|page|bbox|dpi|prompt_version
+    panel_entries_digest = peewee.TextField(default='')  # the entries the panels were matched to; differs from now → re-match, not re-split
     panel_result_digest = peewee.TextField(default='')
     panel_model = peewee.TextField(default='')
     panel_prompt_version = peewee.TextField(default='')
@@ -290,9 +301,15 @@ class Figure(BaseModel):
     panel_attempts = peewee.IntegerField(default=0)
     paneled_at = peewee.DateTimeField(null=True)
 
+    # Protection. `user_confirmed` shields the whole row; the locks shield one
+    # aspect, so a person can fix the box and still let captions and panels run.
+    # Every automatic path asks `figure_store.protection()` — one judgement.
     user_confirmed = peewee.BooleanField(default=False)  # touched by a person: automatic paths leave it
+    bbox_locked = peewee.BooleanField(default=False)     # re-assembly and detect keep their hands off the box
+    caption_locked = peewee.BooleanField(default=False)  # the caption stage does not overwrite caption/entries
+    panels_locked = peewee.BooleanField(default=False)   # the panel stage does not overwrite panels
     dismissed = peewee.BooleanField(default=False)
-    dismissed_by = peewee.TextField(default='')      # '' | 'reassembly' | 'user'
+    dismissed_by = peewee.TextField(default='')      # '' | 'reassembly' | 'user' | 'detect'
 
     class Meta:
         indexes = (
@@ -308,7 +325,10 @@ class FigureEntry(BaseModel):
 
     figure = peewee.ForeignKeyField(Figure, backref='entries', on_delete='CASCADE')
     order = peewee.IntegerField()
-    label = peewee.TextField(default='')             # '1', '2a', 'A'
+    label = peewee.TextField(default='')             # '1', '2a', 'A' — normalised
+    printed_label = peewee.TextField(default='')     # as printed; differs from `label` only after a person's correction
+    label_status = peewee.TextField(default='')      # '' | printed | inferred | user_editorial_correction (fsis DG §4-6)
+    specimen_number = peewee.TextField(default='')   # 'YSUG 00287' when the caption names one — a seed for entity linking
     description = peewee.TextField(default='')
 
     class Meta:
@@ -326,6 +346,7 @@ class FigurePanel(BaseModel):
     bbox_figure_1000 = peewee.TextField()            # JSON [x0,y0,x1,y1], figure-image-relative 0..1000
     entry_orders_json = peewee.TextField(default='[]')
     confidence = peewee.TextField(default='')        # the model's own judgement; never an approval
+    annotation = peewee.BooleanField(default=False)  # a legend/key mark, not a panel — kept, but not counted (fsis DG §4-5)
 
     class Meta:
         indexes = ((('figure', 'order'), True),)

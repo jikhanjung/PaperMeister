@@ -273,7 +273,11 @@
     text_as_figure · fragmented), 쪽마다 `suspicions`(plate_without_pictures · caption_without_figure). 파일럿 24.6%(≈450 항목) · 전 캐시 **33.4%**(≈29,000 항목) —
     4분의 3이 `no_caption`인데 **그건 ② link가 어차피 푼다** → detect 사전 항목은 `no_caption`을 빼면 파일럿 ≈140 · 전 캐시 ≈7,000. 덤: `图 版`·`Tabl.`·키릴 로마숫자(`ХХV`) 파싱 구멍 셋 고침
     - G 단계 메모(099 §4): detect 항목은 **쪽 단위**(힌트 상자 여러 개) · 쪽 의심은 **자리표시 행** · 결과 verdict에 **`merge`** 추가
-  - [ ] **D 스키마·보호 판정·조각 부활 방지·예외 격리** (P17 §3.6·3.7 + 클라이언트 계획 §2.4 + `uncertain_reasons_json` 저장) — 파일럿 재저장 전에 넣는 게 좋다
+  - ✅ **D (2026-09-16, [100](./devlog/20260916_100_P16_Schema_Protection_Placeholders.md))** — 스키마(`uncertain_reasons_json`·`bbox_source`·detect_*·`caption_pages_json`·`continuation_of`·
+    `panel_entries_digest`·`*_locked` / entry `printed_label`·`label_status`·`specimen_number` / panel `annotation`, `_migrate` 표 하나) · **`figure_store.protection()` 한 곳** ·
+    사람의 행이 `blocks_json`으로 조각을 대변(absorbed/contested) · 쪽 의심 자리표시 행(`assembly='page'`) · `store_mode` 파일 단위 격리. 라이브 사본 dry run: new 66(자리표시 37 + 키릴/Tabl. 플레이트 10) · refreshed 909 · failed 0
+    - [ ] **Windows에서 `assemble_figures.py --pilot … --execute`**(스스로 마이그레이션) → `figure_contact_sheet.py` 재생성
+  - [ ] **E `link_payload` + `validate_link_result`·`apply_link`** (클라이언트 계획 §3 · P17 §3.4)
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
     아니면 논문·폴더·전체 우클릭 "Process Figures") · 서버 PDF는 먼저 존재 확인 후 없으면 업로드 · Batches API는 해당 없음

@@ -390,7 +390,23 @@ def open_database(write: bool):
     uri = pathlib.Path(DB_PATH).resolve().as_uri() + '?mode=ro'
     database = peewee.SqliteDatabase(uri, uri=True)
     db.initialize(database)
+    _require_migrated(database)
     return database
+
+
+def _require_migrated(database) -> None:
+    """A read-only run cannot add columns; say so instead of failing on every file."""
+    from papermeister.models import Figure, FigureEntry, FigurePanel
+    missing = []
+    for model in (Figure, FigureEntry, FigurePanel):
+        table = model._meta.table_name
+        have = {row[1] for row in database.execute_sql(f"PRAGMA table_info('{table}')").fetchall()}
+        if have:
+            missing += [f'{table}.{f.column_name}' for f in model._meta.sorted_fields if f.column_name not in have]
+    if missing:
+        sys.exit('The library\'s figure tables predate this version (missing '
+                 + ', '.join(missing[:3]) + (', …' if len(missing) > 3 else '') + ').\n'
+                 'Open the app once, or run `python cli.py list papers -n 1`, to migrate; then retry.')
 
 
 def target_files(args) -> list:
@@ -429,6 +445,7 @@ def store_mode(args) -> int:
     files = target_files(args)
     print(f"{'Storing' if args.execute else 'Dry run for'} {len(files)} PDF file(s)\n")
     totals: Counter = Counter()
+    failed: list[tuple[int, str, str]] = []
     for pf in files:
         label = os.path.basename(pf.path)[:70]
         name = cache_by_hash.get(pf.hash[:8])
@@ -437,30 +454,49 @@ def store_mode(args) -> int:
             print(f'  skip   paper {pf.paper_id:>6}  {label}  (no structured OCR cache)')
             totals['skipped'] += 1
             continue
-        assembled = [f for page in figures.assemble_document(pages) for f in page.figures]
-        plan = figure_store.plan_store(pf, assembled)
+        try:
+            assemblies = figures.assemble_document(pages)
+            assembled = figure_store.with_placeholders(assemblies)
+            plan = figure_store.plan_store(pf, assembled)
+            if args.execute:
+                figure_store.apply_plan(plan)
+        except Exception as exc:  # one broken cache file must not stop the other hundred (fsis DG §6-1)
+            print(f'  FAIL   paper {pf.paper_id:>6}  {label}  {type(exc).__name__}: {exc}')
+            failed.append((pf.paper_id, label, f'{type(exc).__name__}: {exc}'))
+            continue
         kinds = Counter(f.assembly for f in assembled)
+        doubts = sum(1 for f in assembled if f.reasons)
         print(f'  paper {pf.paper_id:>6}  {len(assembled):>4} figures '
-              f'(plates {kinds[figures.PLATE_UNION]}, cut-up {kinds[figures.CAPTION_GROUP]})  '
+              f'(plates {kinds[figures.PLATE_UNION]}, cut-up {kinds[figures.CAPTION_GROUP]}, '
+              f'page doubts {kinds[figure_store.PAGE]}, doubted {doubts})  '
               f'new {len(plan.create)}, refreshed {len(plan.refresh)}, moved {len(plan.move)}, '
-              f'restored {len(plan.restore)}, '
-              f'folded {len(plan.dismiss)}  {label}')
-        if args.execute:
-            figure_store.apply_plan(plan)
+              f'restored {len(plan.restore)}, folded {len(plan.dismiss)}'
+              + (f', absorbed {plan.absorbed}' if plan.absorbed else '')
+              + (f', contested {plan.contested}' if plan.contested else '')
+              + f'  {label}')
         totals['files'] += 1
         totals['figures'] += len(assembled)
+        totals['doubted'] += doubts
         totals['new'] += len(plan.create)
         totals['refreshed'] += len(plan.refresh)
+        totals['moved'] += len(plan.move)
         totals['restored'] += len(plan.restore)
         totals['folded'] += len(plan.dismiss)
         totals['left_for_people'] += plan.untouched_by_rule
+        totals['absorbed'] += plan.absorbed
+        totals['contested'] += plan.contested
 
-    print(f"\n{totals['files']} file(s), {totals['figures']} figures: new {totals['new']}, "
-          f"refreshed {totals['refreshed']}, restored {totals['restored']}, folded {totals['folded']}, "
-          f"left alone (person's decision) {totals['left_for_people']}, skipped {totals['skipped']}")
+    print(f"\n{totals['files']} file(s), {totals['figures']} figures ({totals['doubted']} doubted): "
+          f"new {totals['new']}, refreshed {totals['refreshed']}, moved {totals['moved']}, "
+          f"restored {totals['restored']}, folded {totals['folded']}, "
+          f"left alone (person's decision) {totals['left_for_people']}, "
+          f"absorbed by a person's row {totals['absorbed']}, contested {totals['contested']}, "
+          f"skipped {totals['skipped']}, failed {len(failed)}")
+    for paper_id, label, why in failed:
+        print(f'  failed  paper {paper_id}  {label}  {why}')
     if not args.execute:
         print('Dry run — nothing written. Add --execute to store.')
-    return 0
+    return 1 if failed else 0
 
 
 def main():
