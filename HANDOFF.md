@@ -261,8 +261,10 @@
     `<DATA_DIR>/tmp/p16_curation/` 기록 + `replay`). 파일럿 시트는 이미 생성돼 있다: `$env:USERPROFILE\PaleoBytes\PaperMeister\tmp\p16_review\index.html`
     (그림 있는 쪽 2,857 — dropped 34 · plate_inferred 11 · dup_number 28 · many_marks 7 · plate_single 467 · plate_union 191 · cut_up 94 · body 2,025)
     - 🔴 **첫 발견**: `tiny` 필터가 번호 캡션 달린 작은 본문 그림을 버린다(Westergård p.27 `Fig. 10`). C 단계에서 "번호 캡션이 바로 아래면 크기 무관"을 전 캐시 dry-run으로 재고 넣을 것
-  - [ ] **B. Windows에서 파일럿 저장**(앱 닫고): `python scripts/assemble_figures.py --pilot "$env:USERPROFILE\PaleoBytes\PaperMeister\tmp\p16_pilot.json" --execute`
-    → `python scripts/figure_contact_sheet.py --pilot "…\p16_pilot.json"` 다시(식별자가 `#id`로) → `index.html` 층별 검수 → 틀린 것은 `figure_curate.py … --execute`
+  - ✅ **B-1 파일럿 저장 완료 (2026-09-16, Windows)** — `Figure` **3,750행**(dry run과 동일): body single 2,980 · cut-up 101 · plate union 202 · plate single 467 ·
+    plate_inferred 11. 시트도 `#id`로 재생성됨(`$env:USERPROFILE\PaleoBytes\PaperMeister\tmp\p16_review\index.html`)
+  - [ ] **B-2 사람이 본다 (Phase 1 게이트)** — `index.html` 층별. 작은 층(dropped 34 · plate_inferred 11 · dup_number 28 · many_marks 7)은 전부, 나머지는 표본 40.
+    틀린 것은 `python scripts/figure_curate.py <op> --figure-ids … --reason "…" --execute`(앱 닫고). 판정 결과와 발견된 규칙 오류는 devlog로
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
     아니면 논문·폴더·전체 우클릭 "Process Figures") · 서버 PDF는 먼저 존재 확인 후 없으면 업로드 · Batches API는 해당 없음
