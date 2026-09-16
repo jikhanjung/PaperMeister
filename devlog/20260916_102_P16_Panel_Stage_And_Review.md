@@ -46,7 +46,7 @@ SQLite는 그걸 빈 인덱스로 둔다 → `integrity_check`가 "row N missing
 
 ## 5. 테스트
 
-`tests/test_figure_panels.py` 9건(대상·키·조각 좌표·정상 답 + 무라벨 채움·거절과 시도·검수 사유·재연결 성공/실패·지도는 재분할에만·5범주) + `test_figure_store.py` +1(옛 스키마 마이그레이션 무결성). 전체 **510** 통과.
+`tests/test_figure_panels.py` 9건(대상·키·조각 좌표·정상 답 + 무라벨 채움·거절과 시도·검수 사유·재연결 성공/실패·지도는 재분할에만·5범주) + `test_figure_store.py` +1(옛 스키마 마이그레이션 무결성). 전체 **501** 통과.
 
 ## 6. 다음 — G
 
