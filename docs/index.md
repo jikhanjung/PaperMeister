@@ -26,6 +26,9 @@
 
 ## 2. 아키텍처 / 데이터 모델
 
+- [figure_pipeline_client_plan.md](/home/jikhanjung/projects/PaperMeister/docs/figure_pipeline_client_plan.md)
+  - 도판 파이프라인 클라이언트 계획 (2026-09-16) — P16/P17 위에 ①′ 재판정(Astra + 앞뒤 쪽)과 ② Astra 전환을 얹은 것
+
 - [sync_centric_architecture_spec.md](/home/jikhanjung/projects/PaperMeister/docs/sync_centric_architecture_spec.md)
   - multi-source, sync 중심 아키텍처
 
