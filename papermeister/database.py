@@ -221,9 +221,16 @@ def _migrate(database):
         have = {row[1] for row in database.execute_sql(f"PRAGMA table_info('{table}')").fetchall()}
         if not have:
             continue    # the table does not exist yet: create_tables() makes it whole
+        added = False
         for name, ddl in columns:
             if name not in have:
                 database.execute_sql(f'ALTER TABLE {table} ADD COLUMN {name} {ddl}')
+                added = True
+        if added:
+            # create_tables() ran first and already made the indexes of the
+            # model's fields — including one on a column that did not exist
+            # yet, which SQLite leaves empty ("row N missing from index").
+            database.execute_sql(f'REINDEX {table}')
 
     # PaperFolder backfill: seed from Paper.folder for existing data.
     # After backfill, flag for full item sync to populate multi-collection membership.

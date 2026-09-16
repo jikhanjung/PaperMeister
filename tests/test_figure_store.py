@@ -237,6 +237,43 @@ def test_the_migration_adds_the_new_columns_to_an_older_figure_table(db):
                           ('figureentry', 'printed_label'), ('figurepanel', 'annotation')):
         columns = {row[1] for row in database.execute_sql(f"PRAGMA table_info('{table}')").fetchall()}
         assert column in columns, (table, column)
+    assert database.execute_sql('PRAGMA integrity_check').fetchall() == [('ok',)]
+
+
+@pytest.mark.unit
+def test_migrating_a_pre_d_library_leaves_its_indexes_whole(monkeypatch):
+    """create_tables() runs before _migrate(): peewee makes the index on
+    `continuation_of_id` before the column exists, and SQLite leaves it empty
+    for every existing row. Seen on a copy of the live library."""
+    import sqlite3
+    import subprocess
+    import types
+    work = tempfile.mkdtemp(prefix='pm-pre-d-')
+    monkeypatch.setenv('PAPERMEISTER_DATA_DIR', work)
+    path = os.path.join(work, 'papermeister.db')
+    try:
+        source = subprocess.run(['git', 'show', '74f34c9:papermeister/models.py'], capture_output=True, text=True,
+                                cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))).stdout
+    except OSError:
+        source = ''
+    if not source:
+        pytest.skip('the pre-D models are not in this checkout')
+    old = types.ModuleType('old_models')
+    old.__package__ = 'papermeister'
+    exec(compile(source.replace('from .', 'from papermeister.'), 'old_models', 'exec'), old.__dict__)  # noqa: S102
+    import peewee
+    d = peewee.SqliteDatabase(path)
+    old.db.initialize(d)
+    d.create_tables([old.Paper, old.PaperFile, old.Figure, old.FigureEntry, old.FigurePanel])
+    old.Paper.create(title='x')
+    pf = old.PaperFile.create(paper=1, path='a.pdf', hash=HASH)
+    for i in range(3):
+        old.Figure.create(paper=1, paper_file=pf.id, file_hash=HASH, page=i, bbox_page_1000='[0, 0, 1, 1]')
+    d.close()
+    from papermeister.database import init_db
+    database = init_db(path)
+    assert sqlite3.connect(path).execute('PRAGMA integrity_check').fetchall() == [('ok',)]
+    database.close()
 
 
 @pytest.mark.unit

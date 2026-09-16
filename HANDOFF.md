@@ -276,11 +276,13 @@
   - ✅ **D (2026-09-16, [100](./devlog/20260916_100_P16_Schema_Protection_Placeholders.md))** — 스키마(`uncertain_reasons_json`·`bbox_source`·detect_*·`caption_pages_json`·`continuation_of`·
     `panel_entries_digest`·`*_locked` / entry `printed_label`·`label_status`·`specimen_number` / panel `annotation`, `_migrate` 표 하나) · **`figure_store.protection()` 한 곳** ·
     사람의 행이 `blocks_json`으로 조각을 대변(absorbed/contested) · 쪽 의심 자리표시 행(`assembly='page'`) · `store_mode` 파일 단위 격리. 라이브 사본 dry run: new 66(자리표시 37 + 키릴/Tabl. 플레이트 10) · refreshed 909 · failed 0
-    - [ ] **Windows에서 `assemble_figures.py --pilot … --execute`**(스스로 마이그레이션) → `figure_contact_sheet.py` 재생성
+    - [ ] **Windows에서 `assemble_figures.py --pilot … --execute`**(스스로 마이그레이션 — **102 §4 수정 이후 버전으로**) → `figure_contact_sheet.py` 재생성 → `figure_review.py --pilot …`
   - ✅ **E (2026-09-16, [101](./devlog/20260916_101_P16_Link_Stage_Client_Side.md))** — `papermeister/figure_link.py`: `link_targets`(due/context/excluded 사유) · `link_payload`(도판+힌트, 텍스트 없음) ·
     `workspace_payload`(캐시 그대로 + `ocr_digest`) · `validate_link_result`(밖의 id/쪽 거절, 지어낸 캡션·설명/공유 캡션/빈 플레이트는 검수 사유, 항목 감소는 덮지 않음, skipped는 기존 값 유지) ·
     `apply_link`(보호 판정·내용 해시 unchanged). `scripts/link_figures.py --dump`: 파일럿 due 3,752 · 요청 중앙값 6 KB · 작업 폴더 텍스트 중앙값 147 KB, 합 36 MB. 이름 정규화는 불필요(결과가 figure_id로 온다)
-  - [ ] **F `panel_key` 재정의 · `split_targets` 제외 사유 · 조각 상자 변환 · 라벨 재연결 · `figure_review.py` 5범주** (P17 §3.5·3.10)
+  - ✅ **F (2026-09-16, [102](./devlog/20260916_102_P16_Panel_Stage_And_Review.md))** — `figure_panels.py`(`panel_key`=이미지 정체만 · `split_targets` 사유 · 조각 상자→도판 좌표 · fsis 검증기 이식+무라벨 채움 · `apply_panels` · **`rematch`** 라벨 재연결) ·
+    `figure_review.py`(5범주, 레인과 같은 판정) · `scripts/split_panels.py`·`figure_review.py`. 🔴 **D 마이그레이션 버그 잡음**: `continuation_of` 인덱스가 컬럼보다 먼저 생겨 UPDATE가 malformed → `REINDEX`(102 §4). 사본 재검증 failed 0
+  - [ ] **G 프롬프트·스키마 3벌 + 명세 v2** → ocrserver에 넘긴다
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
     아니면 논문·폴더·전체 우클릭 "Process Figures") · 서버 PDF는 먼저 존재 확인 후 없으면 업로드 · Batches API는 해당 없음
