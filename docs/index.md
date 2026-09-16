@@ -29,6 +29,9 @@
 - [figure_pipeline_client_plan.md](/home/jikhanjung/projects/PaperMeister/docs/figure_pipeline_client_plan.md)
   - 도판 파이프라인 클라이언트 계획 (2026-09-16) — P16/P17 위에 ①′ 재판정(Astra + 앞뒤 쪽)과 ② Astra 전환을 얹은 것
 
+- [figure_server_spec_v2.md](/home/jikhanjung/projects/PaperMeister/docs/figure_server_spec_v2.md)
+  - 도판 분할 서버 명세 v2 (2026-09-16) — ocrserver에 넘기는 원본: workspace·detect·link·panels 요청/응답, 프롬프트 블록, 워커 요구. 프롬프트·스키마는 `papermeister/figure_prompts/`
+
 - [sync_centric_architecture_spec.md](/home/jikhanjung/projects/PaperMeister/docs/sync_centric_architecture_spec.md)
   - multi-source, sync 중심 아키텍처
 

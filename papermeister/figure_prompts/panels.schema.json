@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["is_compound", "figure_kind", "non_compound_reason", "panels", "annotation_indices", "notes"],
+  "properties": {
+    "is_compound": {"type": "boolean"},
+    "figure_kind": {"type": "string", "enum": ["fossil_plate", "map", "chart", "diagram", "photo", "mixed", "other"]},
+    "non_compound_reason": {"type": "string", "enum": ["", "legend_labels", "image_incomplete", "single_image_many_captions", "not_a_figure"]},
+    "panels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "bbox_figure_1000", "caption_indices", "confidence"],
+        "properties": {
+          "label": {"type": "string"},
+          "bbox_figure_1000": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4,
+                               "description": "[x0, y0, x1, y1] in 0..1000 of the supplied image"},
+          "caption_indices": {"type": "array", "items": {"type": "integer"}},
+          "confidence": {"type": "string", "enum": ["high", "medium", "low"]}
+        }
+      }
+    },
+    "annotation_indices": {"type": "array", "items": {"type": "integer"},
+                           "description": "entries that are legend keys or in-figure marks, not panels"},
+    "notes": {"type": "array", "items": {"type": "string"}}
+  }
+}

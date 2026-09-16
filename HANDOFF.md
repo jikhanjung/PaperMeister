@@ -282,7 +282,9 @@
     `apply_link`(보호 판정·내용 해시 unchanged). `scripts/link_figures.py --dump`: 파일럿 due 3,752 · 요청 중앙값 6 KB · 작업 폴더 텍스트 중앙값 147 KB, 합 36 MB. 이름 정규화는 불필요(결과가 figure_id로 온다)
   - ✅ **F (2026-09-16, [102](./devlog/20260916_102_P16_Panel_Stage_And_Review.md))** — `figure_panels.py`(`panel_key`=이미지 정체만 · `split_targets` 사유 · 조각 상자→도판 좌표 · fsis 검증기 이식+무라벨 채움 · `apply_panels` · **`rematch`** 라벨 재연결) ·
     `figure_review.py`(5범주, 레인과 같은 판정) · `scripts/split_panels.py`·`figure_review.py`. 🔴 **D 마이그레이션 버그 잡음**: `continuation_of` 인덱스가 컬럼보다 먼저 생겨 UPDATE가 malformed → `REINDEX`(102 §4). 사본 재검증 failed 0
-  - [ ] **G 프롬프트·스키마 3벌 + 명세 v2** → ocrserver에 넘긴다
+  - ✅ **G (2026-09-16, [103](./devlog/20260916_103_P16_Prompts_And_Server_Spec_v2.md))** — `papermeister/figure_prompts/`(detect·link·panels `.md` + `.schema.json`, `load()`가 해시 버전) ·
+    **[`docs/figure_server_spec_v2.md`](./docs/figure_server_spec_v2.md)** = 서버 명세 원본(workspace·detect 쪽 단위·`from`/`dismiss`·워커 요구·규모). **→ ocrserver P02 0단계 해제, 서버 착수 가능**
+  - [ ] **H (서버 착수 후)** — `figure_client.py` · `detect_figures.py`+`apply_detect` · 레인의 제출·폴링·반영 · Phase 2 게이트(② 30편 · ①′ 표본 30)
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
     아니면 논문·폴더·전체 우클릭 "Process Figures") · 서버 PDF는 먼저 존재 확인 후 없으면 업로드 · Batches API는 해당 없음

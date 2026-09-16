@@ -27,13 +27,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from assemble_figures import _CACHE_HASH, _print_utf8, load_pages, open_database, target_files
 
-from papermeister import figure_link, ocr_layout
+from papermeister import figure_link, figure_prompts, ocr_layout
 from papermeister.paths import OCR_JSON_DIR
 
 _print_utf8()
 
-#: Until the prompt files exist (client plan §5), the version is a placeholder.
-PROMPT_VERSION = 'link-v0-draft'
+PROMPT = figure_prompts.load('link')
+PROMPT_VERSION = PROMPT['version']
 
 
 def main() -> int:
@@ -77,6 +77,7 @@ def main() -> int:
             continue
         totals['papers due'] += 1
         request = figure_link.link_payload(pf, pages, targets, digest, client_id)
+        request['prompt'] = PROMPT
         workspace = figure_link.workspace_payload(pf, pages)
         req_bytes = len(json.dumps(request, ensure_ascii=False).encode('utf-8'))
         ws_bytes = len(json.dumps(workspace, ensure_ascii=False).encode('utf-8'))

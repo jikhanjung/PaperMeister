@@ -23,11 +23,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from assemble_figures import _print_utf8, open_database, target_files
 
-from papermeister import figure_panels
+from papermeister import figure_panels, figure_prompts
 
 _print_utf8()
 
-PROMPT_VERSION = 'panels-v0-draft'
+PROMPT = figure_prompts.load('panels')
+PROMPT_VERSION = PROMPT['version']
 
 
 def main() -> int:

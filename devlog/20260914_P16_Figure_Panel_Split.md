@@ -297,6 +297,9 @@ class FigurePanel(BaseModel):                    # 이미지 분할 결과
 
 ## 6. ocrserver wrapper에 넘길 명세 (초안)
 
+> **2026-09-16: 이 절은 [`docs/figure_server_spec_v2.md`](../docs/figure_server_spec_v2.md)로 대체됐다** — 결정 D1~D8(② Astra·프롬프트는 요청에·작업 폴더는 클라이언트가 올림·detect 쪽 단위) 반영.
+> 아래는 역사 기록으로 남긴다.
+
 > 이 절은 ocrserver 저장소에 그대로 옮길 수 있게 썼다. PaperMeister 쪽 결정과 무관한 서버 내부 사항은 서버 쪽 판단에 맡긴다.
 
 ### 6.1 무엇이 새로 필요한가

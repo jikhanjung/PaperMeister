@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["figures", "dismiss", "pages_consulted", "notes"],
+  "properties": {
+    "figures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["bbox_page_1000", "from", "name", "name_inferred", "kind", "caption", "caption_pages", "caption_kind", "confidence"],
+        "properties": {
+          "bbox_page_1000": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+          "from": {"type": "array", "items": {"type": "string"}, "description": "parser figure_ids this figure replaces"},
+          "name": {"type": "string"},
+          "name_inferred": {"type": "boolean"},
+          "kind": {"type": "string", "enum": ["plate", "captioned_plate", "body", "table", "text", "other"]},
+          "caption": {"type": "string"},
+          "caption_pages": {"type": "array", "items": {"type": "integer"}},
+          "caption_kind": {"type": "string", "enum": ["", "same_page", "facing_page", "explanation_page"]},
+          "confidence": {"type": "string", "enum": ["high", "medium", "low"]}
+        }
+      }
+    },
+    "dismiss": {"type": "array", "items": {"type": "string"}, "description": "parser figure_ids that are not figures"},
+    "pages_consulted": {"type": "array", "items": {"type": "integer"}},
+    "notes": {"type": "array", "items": {"type": "string"}}
+  }
+}

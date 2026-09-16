@@ -1,0 +1,51 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["figures", "skipped", "pages_consulted", "notes"],
+  "properties": {
+    "figures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["figure_id", "name", "caption", "caption_source", "caption_pages", "continuation_of", "entries"],
+        "properties": {
+          "figure_id": {"type": "string"},
+          "name": {"type": "string", "description": "printed designation, '' when not printed"},
+          "caption": {"type": "string", "description": "the printed caption or explanation, verbatim"},
+          "caption_source": {"type": "string", "enum": ["same_page", "facing_page", "explanation_page", "none"]},
+          "caption_pages": {"type": "array", "items": {"type": "integer"}, "description": "0-based pages the caption was read from"},
+          "continuation_of": {"type": ["string", "null"], "description": "figure_id of the first part when this is a later part of one figure"},
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["label", "printed_label", "description", "specimen_number"],
+              "properties": {
+                "label": {"type": "string"},
+                "printed_label": {"type": "string"},
+                "description": {"type": "string"},
+                "specimen_number": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "skipped": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["figure_id", "reason"],
+        "properties": {
+          "figure_id": {"type": "string"},
+          "reason": {"type": "string", "enum": ["explanation_not_found", "not_a_figure", "ambiguous", "other"]}
+        }
+      }
+    },
+    "pages_consulted": {"type": "array", "items": {"type": "integer"}},
+    "notes": {"type": "array", "items": {"type": "string"}}
+  }
+}

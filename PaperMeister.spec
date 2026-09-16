@@ -12,10 +12,11 @@ Distribute the whole dist/PaperMeister/ folder (zip it).
 Notes
 -----
 - Entry point is run_desktop.py (== `python -m desktop`).
-- The only bundled data files are the SVG rail/chevron icons. They are loaded
-  at runtime via `Path(__file__).parent / 'icons'` in both desktop/theme/icons.py
-  and desktop/theme/qss.py, so they must keep their `desktop/theme/icons/...`
-  layout under the bundle — hence the (src, dest) pair below.
+- Bundled data files: the SVG rail/chevron icons (loaded at runtime via
+  `Path(__file__).parent / 'icons'` in desktop/theme/icons.py and qss.py) and
+  the figure-stage prompts and reply schemas (papermeister/figure_prompts/*.md,
+  *.schema.json, loaded next to `__file__`). Both must keep their source layout
+  under the bundle — hence the (src, dest) pairs below.
 - `claude -p` (biblio extraction) is an EXTERNAL CLI shelled out via subprocess;
   it is NOT bundled. The packaged app needs `claude` on PATH for biblio work,
   exactly like `python -m desktop` does today.
@@ -29,6 +30,7 @@ block_cipher = None
 
 datas = [
     ('desktop/theme/icons', 'desktop/theme/icons'),
+    ('papermeister/figure_prompts', 'papermeister/figure_prompts'),
 ]
 
 hiddenimports = [
