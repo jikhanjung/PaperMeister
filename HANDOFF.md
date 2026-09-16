@@ -267,7 +267,7 @@
     틀린 것은 규칙 버그 둘(→ 고침: tiny 소형 그림 `c67cb71` · `Pl. 2 A/2.B` 접미사 `b34abff`, 덤으로 번호 캡션 겹침 허용 → 캡션 힌트 +302)과
     **규칙으로 못 만드는 것**(블록 없는 플레이트 1191 · PDF 안 중복 1080 · 펼침 스캔 562/8833 · 글자를 그림으로 8615 · 빈 영역 #889).
     **사용자 결정: 규칙은 여기까지, 안 걸리는 건 LLM에 텍스트를 다 주고 찾게 한다**(D4) → 위 다섯이 ①′ detect의 첫 사유 목록
-    - [ ] Windows에서 `assemble_figures.py --pilot … --execute` **다시**(규칙 셋 반영, refresh/new만) · 1334 구분선·#889 빈 영역은 `figure_curate.py dismiss`
+    - [ ] Windows에서 `assemble_figures.py --pilot … --execute` **다시**(규칙 셋 반영, refresh/new만) · 구분선 #791(1334)·빈 영역 #889(7987)는 `figure_curate.py dismiss`
   - [ ] **C 조립 후보 측정** — 이번 검수로 사실상 끝(tiny·접미사 반영, 다음 쪽 설명·전폭 캡션은 detect로). 남은 건 없음
   - [ ] **D′ `figures.uncertainty()`** — 사유: `plate_without_pictures` · `dup_number` · `spread_two_plates` · `text_as_figure` · `empty_region` + 클라이언트 계획 §2.1 → 파일럿 3,750에 dry-run해 의심 비율
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
