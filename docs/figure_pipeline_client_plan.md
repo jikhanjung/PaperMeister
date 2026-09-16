@@ -16,6 +16,10 @@ P16·P17에 이미 있는 내용은 반복하지 않고 절 번호로 가리킨�
 | D2 | **② 캡션 연결·분할도 Astra**로 | **P16 §0·§8 변경** — Opus 5(`claude -p`) → Astra(`codex exec`, 텍스트 전용) |
 | D3 | 도판 추출(①)은 **클라이언트가** — HTML 레이아웃을 이미 갖고 있다 | P16 §4.1 그대로 |
 | D4 | ①은 자주 틀린다(edge case 대부분). 문제가 있으면 **Astra 가 스스로 주변 쪽을 불러오거나 텍스트 전체를 훑어보며** 도판 판정을 다시 한다 — 어디까지 볼지는 클라이언트가 아니라 **Astra 가 판단** | **새 단계 ①′ 재판정** (§2). 서버는 논문 전체를 작업 폴더로 준다 |
+| D5 | P17 §3.2 **채택** — 프롬프트·스키마는 PaperMeister 가 갖고 요청에 싣는다 | P16 §6.3·6.4 변경 확정 |
+| D6 | P17 §3.5 **채택** — `panel_key` 에서 entries 를 뺀다. 박스가 맞으면 재분할 없이 다시 잇는다 | P16 §5 변경 확정 |
+| D7 | ②는 **Astra 로 확정**. Opus 복귀 여지를 두지 않는다 | 워커에 `claude` CLI 경로 없음 |
+| D8 | 호출 속도는 **5분에 1건**으로 시작 (서버 워커 최소 간격 300 s, 단계 무관). 로그를 보며 조정 | 하루 상한 대신 간격 |
 
 D2의 결과: 서버 워커는 **CLI 하나(`codex`), 로그인 하나, 구독 한도 하나**만 다룬다. `claude` CLI 의존이 사라진다.
 P17 §3.2("프롬프트·스키마는 클라이언트가 갖고 요청에 실어 보낸다")가 자연스러워진다 — 서버는
@@ -143,9 +147,9 @@ POST /figures/detect
 - 검증·반영(`validate_link_result` · `apply_link`)은 P17 §3.4 그대로. ①′ 가 남긴 `detect_caption_json` 이 있으면 힌트로 싣는다.
 - 위험: 모델이 스스로 고르면 **빠뜨린 쪽을 모른다**. 그래서 `pages_consulted` 와 클라이언트 검증이 필수이고, Phase 2 게이트에서
   "플레이트가 있는데 항목 0" 비율을 센다. 못 미치면 P17 §3.3 의 클라이언트 쪽 선정을 `suggested_pages` 힌트로 되살린다(API 는 그대로).
-- **미검증 위험**: P16이 ②에 Opus 를 고른 이유는 텍스트 추론 강도였다. Astra 의 텍스트 연결 품질은 재 본 적 없다.
-  Phase 2 파일럿 게이트(P16 §9)에서 **연결 정확도·지어낸 설명 0건**을 그대로 재고, 못 미치면 ②만 Opus 로 되돌린다
-  (API 는 `options.model` 하나라 서버 변경 없음 — 단 워커에 `claude` CLI 경로가 다시 필요).
+- P16이 ②에 Opus 를 고른 이유는 텍스트 추론 강도였고 Astra 의 텍스트 연결 품질은 아직 잰 적 없다. **그래도 Astra 로 확정(D7)**.
+  Phase 2 파일럿 게이트(P16 §9)에서 **연결 정확도·지어낸 설명 0건**을 재되, 못 미치면 모델을 바꾸는 게 아니라 프롬프트·힌트
+  (`explanation_hints`, `plate_pages`)를 고친다.
 - 호출 시간은 **미실측** (Opus 기준 fsis 편당 169초). 파일럿에서 잰다.
 
 ---
@@ -157,12 +161,12 @@ POST /figures/detect
 
 ---
 
-## 5. P17 의 🔴 확인 2건 — 권고
+## 5. P17 의 🔴 확인 2건 — 채택 (2026-09-16)
 
 | 항목 | 권고 | 이유 |
 |---|---|---|
-| P17 §3.2 프롬프트·스키마를 클라이언트가 갖고 요청에 싣기 | **채택** | D2 로 세 단계(①′②③)가 전부 같은 CLI 다. 서버는 "지시문+스키마(+이미지) → codex → JSON" 하나면 되고, 프롬프트 규칙(9/16 하루에 넷이 늘었다)은 서버 배포 없이 고친다. dedup 키에 prompt digest |
-| P17 §3.5 `panel_key` 에서 entries 제외 + 재연결 규칙 | **채택** | Astra 는 구독 한도다. 캡션 한 글자에 재분할은 낭비. 박스가 맞으면 다시 잇는다 |
+| P17 §3.2 프롬프트·스키마를 클라이언트가 갖고 요청에 싣기 | **채택됨 (D5)** | D2 로 세 단계(①′②③)가 전부 같은 CLI 다. 서버는 "지시문+스키마(+이미지) → codex → JSON" 하나면 되고, 프롬프트 규칙(9/16 하루에 넷이 늘었다)은 서버 배포 없이 고친다. dedup 키에 prompt digest |
+| P17 §3.5 `panel_key` 에서 entries 제외 + 재연결 규칙 | **채택됨 (D6)** | Astra 는 구독 한도다. 캡션 한 글자에 재분할은 낭비. 박스가 맞으면 다시 잇는다 |
 
 프롬프트 파일: `papermeister/figure_prompts/detect.md` · `link.md` · `panels.md` + `*.schema.json`. `link.md` 출발점은
 fsis `plate_links.py`·`claude_augment.py`, `panels.md` 는 `astra_panels.py`(ocrserver `scripts/subfigure/` 에 사본),
@@ -210,7 +214,7 @@ fsis `plate_links.py`·`claude_augment.py`, `panels.md` 는 `astra_panels.py`(oc
  G. 프롬프트 3벌 + 명세 v2 (P17 §3.1 + §2.2·2.3 의 detect) ──▶ ocrserver 에 넘긴다
 [서버 착수 후 — ocrserver P02]
  H. figure_client.py · detect_figures.py · link_figures.py · split_panels.py
- I. Phase 2 게이트: 의심 도판 표본 30 의 ①′ 판정을 사람이 본다 + ② 연결 정확도(Astra) + `pages_consulted` 로 놓친 설명 쪽 비율 — 못 미치면 §3 되돌리기
+ I. Phase 2 게이트: 의심 도판 표본 30 의 ①′ 판정을 사람이 본다 + ② 연결 정확도(Astra) + `pages_consulted` 로 놓친 설명 쪽 비율 — 못 미치면 프롬프트·힌트를 고친다
 ```
 
 ---
@@ -223,8 +227,13 @@ fsis `plate_links.py`·`claude_augment.py`, `panels.md` 는 `astra_panels.py`(oc
 - 서버가 레이아웃을 파싱하거나 의심 사유를 정하기 — 판정은 클라이언트 `figures.py` 한 곳.
 - 클라이언트가 Astra 에게 줄 쪽을 미리 고르기 — 힌트까지만. 어디를 볼지는 Astra.
 
-## 10. 남은 확인 (사용자)
+## 10. 결정 기록 (2026-09-16, 사용자)
 
-1. §5 두 권고(P17 🔴) 채택 여부.
-2. ②를 Astra 로 하되 **파일럿에서 못 미치면 Opus 로 되돌린다**는 안전장치를 둘지, 아니면 Astra 로 확정할지.
-3. 하루 Astra 호출 상한. 서버의 `codex` 는 개인 ChatGPT 구독이고 PaperMeister 인스턴스 둘이 같이 쓴다.
+| 질문 | 결정 |
+|---|---|
+| P17 §3.2 프롬프트 소재 | 클라이언트가 갖고 요청에 싣는다 (D5) |
+| P17 §3.5 `panel_key` | entries 제외, 재연결 규칙 (D6) |
+| ② 모델 | Astra 확정, 되돌릴 여지 없음 (D7) |
+| 호출 속도 | 5분에 1건으로 시작 (D8). 서버 `FIGURES_MIN_INTERVAL=300` |
+
+남은 것: 없음. 다음은 P17 §4 의 A 부터.

@@ -250,6 +250,9 @@
     `link_payload`(앞·뒤 쪽 포함, 설명 쪽 우선, 배치) + 검증·반영(skipped ≠ cleared, 이름 정규화 양쪽) → `panel_key`에서 entries 제외 · `split_targets` 제외 사유 출력 →
     프롬프트·스키마 파일 + **명세 v2** → 서버에 넘긴다
     - 🔴 **사용자 확인 2건**: 프롬프트·스키마를 PaperMeister가 갖고 요청에 실어 보내기(P17 §3.2, P16 §6.3·6.4 변경) / `panel_key`에서 entries digest 빼고 재연결 규칙(P17 §3.5, P16 §5 변경)
+    - ✅ **결정(2026-09-16)** — 둘 다 채택. 같은 날 더 정한 것: ②도 Astra(Opus 안 씀, 확정) · 의심 도판은 ①′ 재판정(Astra 가
+      작업 폴더에서 앞뒤 쪽·전체 텍스트를 스스로 본다) · 호출은 5분에 1건으로 시작. 정리: [`docs/figure_pipeline_client_plan.md`](./docs/figure_pipeline_client_plan.md)
+      (서버 짝 문서 ocrserver `devlog/20260916_P02_…`)
   - [ ] **Windows에서 파일럿 저장**(앱 닫고): `python scripts/assemble_figures.py --pilot "%USERPROFILE%\PaleoBytes\PaperMeister\tmp\p16_pilot.json" --execute`
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
