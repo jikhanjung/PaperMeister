@@ -269,7 +269,11 @@
     **사용자 결정: 규칙은 여기까지, 안 걸리는 건 LLM에 텍스트를 다 주고 찾게 한다**(D4) → 위 다섯이 ①′ detect의 첫 사유 목록
     - [ ] Windows에서 `assemble_figures.py --pilot … --execute` **다시**(규칙 셋 반영, refresh/new만) · 구분선 #791(1334)·빈 영역 #889(7987)는 `figure_curate.py dismiss`
   - [ ] **C 조립 후보 측정** — 이번 검수로 사실상 끝(tiny·접미사 반영, 다음 쪽 설명·전폭 캡션은 detect로). 남은 건 없음
-  - [ ] **D′ `figures.uncertainty()`** — 사유: `plate_without_pictures` · `dup_number` · `spread_two_plates` · `text_as_figure` · `empty_region` + 클라이언트 계획 §2.1 → 파일럿 3,750에 dry-run해 의심 비율
+  - ✅ **D′ `figures.suspect()` (2026-09-16, [099](./devlog/20260916_099_P16_Uncertainty_Reasons.md))** — 도판마다 `reasons`(dup_number · many_marks · unmarked_plate_page · no_caption ·
+    text_as_figure · fragmented), 쪽마다 `suspicions`(plate_without_pictures · caption_without_figure). 파일럿 24.6%(≈450 항목) · 전 캐시 **33.4%**(≈29,000 항목) —
+    4분의 3이 `no_caption`인데 **그건 ② link가 어차피 푼다** → detect 사전 항목은 `no_caption`을 빼면 파일럿 ≈140 · 전 캐시 ≈7,000. 덤: `图 版`·`Tabl.`·키릴 로마숫자(`ХХV`) 파싱 구멍 셋 고침
+    - G 단계 메모(099 §4): detect 항목은 **쪽 단위**(힌트 상자 여러 개) · 쪽 의심은 **자리표시 행** · 결과 verdict에 **`merge`** 추가
+  - [ ] **D 스키마·보호 판정·조각 부활 방지·예외 격리** (P17 §3.6·3.7 + 클라이언트 계획 §2.4 + `uncertain_reasons_json` 저장) — 파일럿 재저장 전에 넣는 게 좋다
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
     아니면 논문·폴더·전체 우클릭 "Process Figures") · 서버 PDF는 먼저 존재 확인 후 없으면 업로드 · Batches API는 해당 없음
