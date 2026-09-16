@@ -109,12 +109,14 @@ def test_the_payload_carries_figures_and_hints_but_no_page_text(stored):
     from papermeister import figure_link as fl
     pf, rows = stored
     t = fl.link_targets(pf, DIGEST, PROMPT)
-    p = fl.link_payload(pf, PAGES, t, DIGEST, 'papermeister-test')
-    assert p['file_hash'] == HASH and p['ocr_digest'] == DIGEST and p['page_count'] == 4
-    assert [f['page'] for f in p['figures']] == [2, 3] and all(not f['locked'] for f in p['figures'])
-    assert p['figures'][0]['page_kind'] == 'plate' and p['figures'][0]['plate'] == 2
-    assert p['hints'] == {'plate_pages': [1, 2], 'explanation_pages': [1], 'caption_pages': [3]}
-    assert 'pages' not in p
+    p = fl.link_payload(pf, PAGES, t, DIGEST, 'papermeister-test', {'version': 'link-v1-x'})
+    assert p['file_hash'] == HASH and p['ocr_digest'] == DIGEST and p['prompt'] == {'version': 'link-v1-x'}
+    item = p['items'][0]
+    assert item['key'].endswith('@link-v1-x') and item['page_count'] == 4
+    assert [f['page'] for f in item['figures']] == [2, 3] and all(not f['locked'] for f in item['figures'])
+    assert item['figures'][0]['page_kind'] == 'plate' and item['figures'][0]['plate'] == 2
+    assert item['hints'] == {'plate_pages': [1, 2], 'explanation_pages': [1], 'caption_pages': [3]}
+    assert 'pages' not in p and 'pages' not in item
     ws = fl.workspace_payload(pf, PAGES)
     assert ws['ocr_digest'] == fl.ocr_digest(PAGES) and [x['page'] for x in ws['pages']] == [0, 1, 2, 3]
 
@@ -241,7 +243,7 @@ def test_a_locked_caption_is_context_and_never_written(stored):
     rows[3].save()
     t = fl.link_targets(pf, DIGEST, PROMPT)
     p = fl.link_payload(pf, PAGES, t, DIGEST, 'c')
-    locked = [f for f in p['figures'] if f['locked']]
+    locked = [f for f in p['items'][0]['figures'] if f['locked']]
     assert len(locked) == 1 and locked[0]['caption'] == 'Fig. 4. A person wrote this.'
     r = reply(str(rows[2].id), str(rows[3].id))
     check = fl.validate_link_result(p, r, PAGES)

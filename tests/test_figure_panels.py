@@ -78,7 +78,7 @@ def test_piece_boxes_travel_in_the_figures_frame(plate):
     from papermeister import figure_panels as fp
     pf, rows = plate
     item = fp.panel_item(rows[2], PROMPT)
-    assert item['figure_key'].startswith(f'{rows[2].id}@') and item['page'] == 2
+    assert item['key'].startswith(f'{rows[2].id}@') and item['page'] == 2
     assert item['piece_boxes_figure_1000'] == [[0, 0, 475, 543], [525, 0, 1000, 543], [0, 600, 1000, 1000]]
     assert [e['label'] for e in item['entries']] == ['A', 'B', 'C']
     assert fp.to_page_frame([100, 100, 900, 800], [0, 0, 475, 543]) == [100, 100, 480, 480]

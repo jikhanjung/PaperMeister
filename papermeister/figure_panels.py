@@ -127,7 +127,7 @@ def panel_item(row: Figure, prompt_version: str, dpi: int = RENDER_DPI) -> dict:
     box = json.loads(row.bbox_page_1000)
     entries = entries_of(row)
     return {
-        'figure_key': f'{row.id}@{panel_key(row, prompt_version, dpi)}',
+        'key': f'{row.id}@{panel_key(row, prompt_version, dpi)}',   # comes back on the result unchanged
         'page': row.page,                                    # 0-based
         'bbox_page_1000': box,
         'caption': row.caption,

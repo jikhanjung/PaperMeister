@@ -14,7 +14,15 @@
 - 스키마는 Codex 구조화 출력 제약(모든 키 required · `additionalProperties: false`)을 지킨다 — 테스트가 재귀로 검사.
 - 레인 스크립트(`link_figures.py`·`split_panels.py`·`figure_review.py`)가 자리표시 버전 대신 이걸 쓴다. PyInstaller `datas`에 폴더 추가.
 
-## 2. `docs/figure_server_spec_v2.md` — 서버 명세의 원본
+## 2. `docs/figure_server_spec_v2.md` — 클라이언트가 보내고 믿는 것의 원본 (wrapper 0.3.2에 맞춤)
+
+쓰는 사이 ocrserver가 앞서 갔다 — wrapper 0.3.0→0.3.2 + `scripts/figures_worker.py`(systemd)가 이미 있고, 099 §4의 detect 쪽 단위 계약까지 반영돼 있었다
+(`473dd6d`). 그래서 전송 형식은 **구현(ocrserver `docs/WRAPPER_API.md`)이 이기고**, 이 문서는 그 위에서 항목 내용과 응답 스키마를 정한다. 맞춘 것:
+- 모든 항목은 `items[].key`(응답에 그대로), `options`는 요청 최상위(`model`·`effort`·`dpi`), `force`
+- **link는 논문당 항목 하나** — `link_payload`가 `items: [link_item]`로 바뀜(`figure_link.link_item`)
+- detect 항목은 워커가 읽는 `page`·`hint_boxes[]`·`figure_keys[]` + 모델이 읽는 `figures[]`·`reasons`·`hints` — 워커는 항목을 **그대로** 모델 입력에 넣으므로 둘이 공존한다
+- panels 항목 `figure_key` → `key`; 워커는 `caption`·`entries`를 fsis 이름(`original_caption`·`existing_subfigures`)으로도 넣어 준다
+- 잡 상태에 `done_with_errors`, 워커 재개는 `/figures/worker/resume`, 세션 상한 600/1200/600 s
 
 P16 §6(역사 기록으로 남김) + P17 §3.1 + 클라이언트 계획 §2·§3·§10 + 099 §4를 하나로. ocrserver P02와 대조해 어긋남 없음.
 - **`POST /figures/workspace`** — 텍스트는 클라이언트가 올린다(키 `file_hash|ocr_digest`)

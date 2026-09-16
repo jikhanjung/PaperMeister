@@ -76,15 +76,14 @@ def main() -> int:
             totals['papers with nothing due'] += 1
             continue
         totals['papers due'] += 1
-        request = figure_link.link_payload(pf, pages, targets, digest, client_id)
-        request['prompt'] = PROMPT
+        request = figure_link.link_payload(pf, pages, targets, digest, client_id, PROMPT)
         workspace = figure_link.workspace_payload(pf, pages)
         req_bytes = len(json.dumps(request, ensure_ascii=False).encode('utf-8'))
         ws_bytes = len(json.dumps(workspace, ensure_ascii=False).encode('utf-8'))
         sizes.append((len(pages), req_bytes, ws_bytes))
         print(f'  paper {pf.paper_id:>6}  {len(pages):>4} pages  due {len(targets.due):>3}  context {len(targets.context):>2}  '
               f'request {req_bytes / 1024:6.1f} KB  workspace {ws_bytes / 1024:7.1f} KB  '
-              f"hints plate {len(request['hints']['plate_pages'])} expl {len(request['hints']['explanation_pages'])}  "
+              f"hints plate {len(request['items'][0]['hints']['plate_pages'])} expl {len(request['items'][0]['hints']['explanation_pages'])}  "
               f'{os.path.basename(pf.path)[:60]}')
         if args.dump:
             with open(os.path.join(args.dump, f'link_{pf.id}.json'), 'w', encoding='utf-8') as f:

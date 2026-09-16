@@ -136,20 +136,19 @@ def _figure_item(row: Figure, locked: bool) -> dict:
     return item
 
 
-def link_payload(paper_file: PaperFile, pages: list[str], targets: LinkTargets,
-                 digest: str, client_id: str) -> dict:
-    """The request body, without the prompt block (the lane adds it).
+def link_item(paper_file: PaperFile, pages: list[str], targets: LinkTargets, digest: str,
+              prompt_version: str) -> dict:
+    """The one item of a paper's link job (wrapper API: `POST /figures/link`).
 
     Page texts are not in here: the server holds them as the paper's
     workspace, keyed by the same `ocr_digest` (client plan §10.1). What is
     here is every figure the model must consider and the pages the rule
-    thinks talk about plates — hints, not instructions.
+    thinks talk about plates — hints, not instructions. `key` comes back on
+    the result unchanged.
     """
     facts = [figures.read_page(i, t or '') for i, t in enumerate(pages)]
     return {
-        'client_id': client_id,
-        'file_hash': paper_file.hash,
-        'ocr_digest': digest,
+        'key': f'{paper_file.hash[:12]}@{digest[:12]}@{prompt_version}',
         'page_count': len(pages),
         'figures': ([_figure_item(r, locked=False) for r in targets.due]
                     + [_figure_item(r, locked=True) for r in targets.context]),
@@ -160,6 +159,22 @@ def link_payload(paper_file: PaperFile, pages: list[str], targets: LinkTargets,
                               if any(r.label == 'Caption' and r.is_numbered_caption for r in f.regs)],
         },
     }
+
+
+def link_payload(paper_file: PaperFile, pages: list[str], targets: LinkTargets,
+                 digest: str, client_id: str, prompt: dict | None = None) -> dict:
+    """The request body of `POST /figures/link`: one item, plus the prompt block."""
+    version = (prompt or {}).get('version', '')
+    body = {
+        'client_id': client_id,
+        'file_hash': paper_file.hash,
+        'ocr_digest': digest,
+        'items': [link_item(paper_file, pages, targets, digest, version)],
+        'options': {'model': 'gpt-6-astra', 'effort': 'high'},
+    }
+    if prompt:
+        body['prompt'] = prompt
+    return body
 
 
 def workspace_payload(paper_file: PaperFile, pages: list[str]) -> dict:
@@ -209,8 +224,9 @@ def validate_link_result(payload: dict, result: dict, pages: list[str],
     person: the reply may be right, and the rule cannot tell.
     """
     check = LinkCheck()
-    sent = {f['figure_id']: f for f in payload['figures']}
-    page_count = payload.get('page_count', len(pages))
+    item = payload['items'][0] if 'items' in payload else payload
+    sent = {f['figure_id']: f for f in item['figures']}
+    page_count = item.get('page_count', len(pages))
     seen_captions: dict[tuple[int, str], str] = {}
     existing = existing or {}
 

@@ -1,9 +1,10 @@
 # 도판 분할 서버 명세 v2 — PaperMeister → ocrserver
 
-**작성**: 2026-09-16 · **상태**: 확정 초안 (G 단계 산출물). 이 문서가 서버 명세의 **원본**이다 —
+**작성**: 2026-09-16 · **상태**: 확정 (G 단계 산출물, **wrapper 0.3.2와 대조해 맞춤**). 이 문서가 클라이언트가 보내고 믿는 것의 **원본**이다 —
 [P16 §6](../devlog/20260914_P16_Figure_Panel_Split.md)·[P17 §3.1](../devlog/20260916_P17_P16_Client_Readiness_For_ocrserver.md)·
-[클라이언트 계획](figure_pipeline_client_plan.md) §2·§3·§10·[099 §4](../devlog/20260916_099_P16_Uncertainty_Reasons.md)를 하나로 모았고,
-서로 어긋나면 이 문서가 이긴다. 서버 쪽 짝 문서는 ocrserver `devlog/20260916_P02_figure_split_service_design.md`.
+[클라이언트 계획](figure_pipeline_client_plan.md) §2·§3·§10·[099 §4](../devlog/20260916_099_P16_Uncertainty_Reasons.md)를 하나로 모았다.
+서버 쪽은 ocrserver `docs/WRAPPER_API.md` "도판 분할" 절(wrapper 0.3.2, `scripts/figures_worker.py`)이 구현이고, 이 문서는 그 위에서
+**항목 안의 내용**(워커가 모델에 그대로 넘기는 것)과 **응답 스키마**(클라이언트가 보내는 것)를 정한다. 전송 형식은 서버 문서가 이긴다.
 
 **클라이언트가 이미 만들어 둔 것**: 요청을 만드는 코드(`papermeister/figure_link.py`·`figure_panels.py`), 답을 검증·반영하는 코드,
 그리고 **프롬프트·스키마 3벌**(`papermeister/figure_prompts/`). 서버는 이 명세대로 받아서 `codex exec`를 돌리고 스키마로 검증한 JSON을 돌려주면 된다.
@@ -25,28 +26,32 @@
 
 ---
 
-## 1. 엔드포인트
+## 1. 엔드포인트 (wrapper 0.3.2 — 구현됨)
 
 ```
-HEAD /pdfs/{file_hash}                 200 | 404
-POST /pdfs                             multipart file (+client_id) → {file_hash}      없을 때만
+HEAD/GET /pdfs/{file_hash}                         200 | 404
+POST     /pdfs                                     multipart file (+client_id) → 201 {file_hash, existed, size}   없을 때만
 
-POST /figures/workspace                {file_hash, ocr_digest, pages[]} → {file_hash, ocr_digest, pages}   논문당 1회
-HEAD /figures/workspace/{file_hash}/{ocr_digest}    200 | 404
+POST     /figures/workspace                        {client_id, file_hash, ocr_digest, pages[]} → 201.  PDF 없으면 404 pdf_missing
+HEAD/GET /figures/workspace/{file_hash}/{ocr_digest}   200 | 404
 
-POST /figures/detect                   → {job_id}     ①′ 재판정   쪽 단위 항목, 이미지 + 작업 폴더
-POST /figures/link                     → {job_id}     ② 캡션      논문 단위, 작업 폴더 텍스트
-POST /figures/panels                   → {job_id}     ③ 패널      도판 단위 항목, 크롭 이미지
-GET  /figures/{kind}/{job_id}          → job
-GET  /figures/jobs?client_id=          → [{job_id, kind, status, submitted_at, completed_at}]   결과 본문 제외
-POST /figures/{kind}/{job_id}/resume   치명 정지 뒤 운영자 재개
+POST     /figures/{kind}                           kind ∈ detect | link | panels → 202 {job_id, total, cached, queued}
+GET      /figures/{kind}/{job_id}                  job + 항목별 결과
+GET      /figures/jobs?client_id=&kind=&status=    목록 (결과 본문 없음)
+POST     /figures/{kind}/{job_id}/resume?retry_errors=   실패·예산 소진 항목 재큐 (retry_errors=true면 시도 초기화)
+POST     /figures/worker/resume                    치명 정지 해제 (호스트에서 원인을 고친 뒤)
+GET      /api/figures                              대시보드 요약
 ```
 
-모든 요청에 `client_id`(JSON 필드 또는 `X-Client-ID`). 공평 분배는 OCR과 같은 `_FairScheduler`.
-
-**job** — `{job_id, kind, status: queued|processing|done|paused|failed, submitted_at, completed_at, prompt_version, error, items[]}`.
-item마다 `{key, status: queued|processing|done|failed|budget_exhausted|pdf_missing|workspace_missing, result, error, attempts, elapsed_seconds, usage}`.
-**한 item의 실패는 그 item만** 실패시킨다. 치명 오류(§6)는 job을 `paused`로.
+**요청 공통**:
+```json
+{"client_id": "papermeister-…", "file_hash": "<sha256>", "ocr_digest": "<…>",
+ "items": [{"key": "…", …}], "prompt": {"kind", "version", "instructions", "schema"},
+ "options": {"model": "gpt-6-astra", "effort": "high", "dpi": 216}, "force": false}
+```
+`key`는 응답에 그대로 돌아온다. dedup: `(kind, file_hash, ocr_digest, item 내용, prompt, options)`가 같고 같은 `client_id`로 `done`이면 `cached`.
+항목 상태 `queued → processing → done | failed(3회) | budget_exhausted`, 잡 상태 `queued | processing | done | done_with_errors | failed`.
+치명 오류는 시도로 세지 않고 항목을 큐로, 워커를 `paused`로(`GET` 응답의 `worker.state`·`paused_reason`).
 
 ---
 
@@ -55,15 +60,15 @@ item마다 `{key, status: queued|processing|done|failed|budget_exhausted|pdf_mis
 ```json
 {"client_id": "papermeister-c2a80813",
  "file_hash": "<sha256 of the PDF>",
- "ocr_digest": "<sha256 over the pages' text, client-computed>",
+ "ocr_digest": "<sha256 over the pages' text, client-computed (figure_link.ocr_digest)>",
  "pages": [{"page": 0, "markdown": "<Chandra HTML of page 0, verbatim>"}, …]}
 ```
 
-- 서버는 `/data/figure_ws/{file_hash}/{ocr_digest}/`를 만든다: `README.txt`(쪽 수·규칙·"쪽 번호는 0-based"), `text/pNNN.txt`(태그 벗긴 텍스트),
-  `text/all.txt`(`=== page NNN ===` 구분), `pages/pNNN.png`(100 dpi 전 쪽 렌더 — PDF가 있을 때; 없으면 텍스트만 만들고 응답에 `pdf: false`).
-- 키가 `file_hash|ocr_digest`이므로 재OCR(텍스트가 바뀜)은 새 폴더다. TTL 7일, 상한 20 GB(오래된 것부터).
+- **PDF가 먼저 있어야 한다**(404 `pdf_missing`) — `HEAD /pdfs/{hash}` → 없으면 `POST /pdfs`.
+- 서버는 `figure_ws/{file_hash}/{ocr_digest}/`를 만든다: `README.txt`, `text/pNNN.txt`(블록마다 `[Label x0 y0 x1 y1] text`, 그림은 `[image: alt]`),
+  `text/all.txt`(`=== page N ===`), `pages/pNNN.png`(100 dpi 전 쪽). 재OCR은 새 폴더. TTL 7일.
 - 크기: 파일럿 108편 중앙값 147 KB, 최대 1.8 MB(215쪽).
-- detect·link 요청은 `ocr_digest`를 싣고, 폴더가 없으면 item이 `workspace_missing`으로 끝난다(클라이언트가 올리고 다시 낸다).
+- detect·link 요청은 `ocr_digest`를 싣는다(작업 폴더 키). 클라이언트는 `HEAD /figures/workspace/…`로 확인하고 없으면 올린다.
 
 ---
 
@@ -73,35 +78,35 @@ item마다 `{key, status: queued|processing|done|failed|budget_exhausted|pdf_mis
 "prompt": {"kind": "link", "version": "link-v1-80d89c4e6900", "instructions": "<markdown>", "schema": {…JSON Schema…}}
 ```
 
-- `version`은 지시문+스키마의 해시에서 클라이언트가 만든다. 서버 dedup 키와 `figure_calls` 기록에 그대로 쓴다.
-- 워커 호출: `codex exec -C <작업 폴더 또는 임시 폴더> --sandbox read-only --model gpt-6-astra [-i <png>…] --output-schema <schema 파일> --output-last-message <out> -` 로,
-  stdin에 **`instructions` + 빈 줄 + 요청 JSON(prompt 블록 제외)** 을 준다. fsis `astra_cli_bbox.run_command` 재사용(프로세스 그룹 kill, 타임아웃).
-- 서버는 출력이 **스키마에 맞는지만** 검증한다(형식이 흐트러지면 첫 JSON 객체를 중괄호 깊이로 회수 시도, 그래도 안 되면 item 실패). 도메인 검증은 클라이언트가 한다.
-- 스키마는 Codex 구조화 출력 제약(모든 키 required, `additionalProperties: false`)을 이미 지킨다.
+- `version`은 지시문+스키마의 해시에서 클라이언트가 만든다(`figure_prompts.load(kind)`). 서버 dedup 키와 `figure_calls` 기록에 그대로 쓴다.
+- 워커는 `instructions` 뒤에 `=== INPUT (JSON) ===` 구분선과 JSON 하나를 붙여 `codex exec` stdin으로 보낸다. JSON은 `{kind, item: <요청 항목 그대로>, workspace: {…}, …}` —
+  즉 **항목 안에 넣은 것은 전부 모델에게 간다**(§4~6의 항목 필드는 그래서 "워커가 읽는 것"과 "모델이 읽는 것"으로 나뉜다). `schema`는 `--output-schema`.
+- 서버는 출력이 **스키마에 맞는지만** 검증한다(type/required/properties/items/enum). 도메인 검증은 클라이언트가 한다.
+- 스키마는 Codex 구조화 출력 제약(모든 키 required, `additionalProperties: false`)을 지킨다 — 테스트가 검사.
 
 ---
 
 ## 4. `POST /figures/link` — ② 캡션 연결·분할 (논문 단위)
 
-요청(클라이언트 `figure_link.link_payload`가 만든다):
+요청(클라이언트 `figure_link.link_payload` → `items: [link_item]`, 논문당 항목 하나):
 
 ```json
-{"client_id": "…", "file_hash": "…", "ocr_digest": "…", "page_count": 126,
- "figures": [
-   {"figure_id": "984", "page": 14, "bbox_page_1000": [71,125,930,880],
-    "assembly": "plate_page_union", "page_kind": "plate", "name_hint": "Plate II", "plate": 2, "plate_inferred": false,
-    "caption_hint": "", "label_hints": [], "reasons": [], "locked": false},
-   {"figure_id": "985", "page": 3, "bbox_page_1000": […], "assembly": "single", "page_kind": "body",
-    "name_hint": "Fig. 4", "caption_hint": "Fig. 4. …", "locked": true,
-    "caption": "Fig. 4. A person wrote this.", "entries": [{"label": "a", "description": "…"}]}
- ],
- "hints": {"plate_pages": [12, 40, 41], "explanation_pages": [12], "caption_pages": [3, 7]},
- "prompt": {…}}
+{"client_id": "…", "file_hash": "…", "ocr_digest": "…",
+ "items": [{"key": "<hash12>@<digest12>@<prompt.version>", "page_count": 126,
+   "figures": [
+     {"figure_id": "984", "page": 14, "bbox_page_1000": [71,125,930,880],
+      "assembly": "plate_page_union", "page_kind": "plate", "name_hint": "Plate II", "plate": 2, "plate_inferred": false,
+      "caption_hint": "", "label_hints": [], "reasons": [], "locked": false},
+     {"figure_id": "985", "page": 3, "bbox_page_1000": […], "assembly": "single", "page_kind": "body",
+      "name_hint": "Fig. 4", "caption_hint": "Fig. 4. …", "locked": true,
+      "caption": "Fig. 4. A person wrote this.", "entries": [{"label": "a", "description": "…"}]}
+   ],
+   "hints": {"plate_pages": [12, 40, 41], "explanation_pages": [12], "caption_pages": [3, 7]}}],
+ "prompt": {…}, "options": {"model": "gpt-6-astra", "effort": "high"}}
 ```
 
-- 워커: `-C <작업 폴더>`, **이미지 없음**. Astra가 `text/all.txt`를 grep하고 필요한 쪽을 연다. 세션 상한 20분(초기값).
+- 워커가 읽는 것: `figures[].figure_id/page/bbox_page_1000`. 나머지는 모델용. `-C <작업 폴더>`, **이미지 없음**. 세션 상한 1200 s.
 - `locked` 도판은 답에 포함하지 않는다(들어 있으면 클라이언트가 버린다).
-- item은 하나(논문). dedup 키 `file_hash|ocr_digest|figures digest(id·쪽·상자)|prompt.version`.
 
 응답 `result`(스키마 `figure_prompts/link.schema.json`):
 
@@ -124,15 +129,15 @@ item마다 `{key, status: queued|processing|done|failed|budget_exhausted|pdf_mis
 
 ```json
 {"client_id": "…", "file_hash": "…",
- "items": [{"figure_key": "984@<panel_key>", "page": 14, "bbox_page_1000": [71,125,930,880],
+ "items": [{"key": "984@<panel_key>", "page": 14, "bbox_page_1000": [71,125,930,880],
             "caption": "PLATE II. …", "entries": [{"label": "1", "description": "…"}],
             "piece_boxes_figure_1000": [[0,0,475,543], …], "label_hints": [], "dpi": 216}],
- "prompt": {…}}
+ "prompt": {…}, "options": {"model": "gpt-6-astra", "effort": "high", "dpi": 216}}
 ```
 
-- 워커: `PDF_DIR/{file_hash}.pdf`의 `page`를 `dpi`로 렌더 → `bbox_page_1000`으로 크롭(각 축 독립, 약간의 여백은 두지 않음 — 클라이언트가 상자를 정한다) → PNG 한 장을 `-i`로. **작업 폴더 없음**, "다른 파일을 읽지 말 것". PDF가 없으면 item `pdf_missing`.
-- dedup 키 `figure_key|prompt.version` (`panel_key`에 해시·쪽·상자·dpi가 이미 들어 있다).
-- 응답 item `result`(스키마 `panels.schema.json`) + 서버가 붙이는 `image_size: [w, h]`:
+- 워커가 읽는 것: `page`·`bbox_page_1000`·`caption`·`entries`(fsis 프롬프트 호환 이름 `original_caption`·`existing_subfigures`로도 넣어 준다)와 `options.dpi`.
+  `item.dpi`는 `options.dpi`와 같은 값이어야 한다(클라이언트가 둘 다 216으로 보낸다). 렌더는 `figure.png` 한 장, `-i`, 작업 폴더 없음. 세션 상한 600 s.
+- 응답 `result`(스키마 `panels.schema.json`). 이미지 크기는 워커의 `image` 메타에서 온다:
 
 ```json
 {"is_compound": true, "figure_kind": "fossil_plate", "non_compound_reason": "",
@@ -148,17 +153,19 @@ item마다 `{key, status: queued|processing|done|failed|budget_exhausted|pdf_mis
 
 ```json
 {"client_id": "…", "file_hash": "…", "ocr_digest": "…",
- "items": [{"item_key": "<file_hash>|<page>|<ocr_digest>|<prompt.version>", "page": 27,
+ "items": [{"key": "<hash12>|27|<digest12>|<prompt.version>", "page": 27,
+            "hint_boxes": [[48,70,282,188], [294,70,527,188], …],          // 워커가 그린다 — figures[]와 같은 순서
+            "figure_keys": ["1201", "1202", …],                             // 상자와 같은 순서
             "reasons": ["unmarked_plate_page"],
             "figures": [{"figure_id": "1201", "bbox_page_1000": [48,70,282,188], "assembly": "single",
                          "name_hint": "", "caption_hint": "", "reasons": ["unmarked_plate_page"]}, …],
             "hints": {"plate_pages": [26, 30], "explanation_pages": [26]}}],
- "prompt": {…}}
+ "prompt": {…}, "options": {"model": "gpt-6-astra", "effort": "high"}}
 ```
 
-- `figures`가 **비어 있을 수 있다**(`plate_without_pictures`·`caption_without_figure` — 파서가 상자를 못 만든 쪽).
-- 워커: `-C <작업 폴더>`, `-i pages/pNNN.png`에 **힌트 상자를 빨간 선으로 그린 사본**(대상 쪽) 한 장. Astra가 앞뒤 쪽·전체 텍스트를 스스로 본다(Codex가 세션 중 폴더 PNG를 여는 것은 실측 확인됨, P02 §3.3). 세션 상한 10분.
-- dedup 키 = `item_key`.
+- 워커가 읽는 것: `page`·`hint_boxes`(빨간 선 + 순서 번호로 대상 쪽 150 dpi 렌더에 그림; 쪽 전체 상자는 안 그림)·`figure_keys`. `figures[]`·`reasons`·`hints`는 모델용.
+- `hint_boxes`가 **비어 있을 수 있다**(`plate_without_pictures`·`caption_without_figure` — 파서가 상자를 못 만든 쪽). 그때 `figures`도 비어 있다.
+- `-C <작업 폴더>`, `-i items/<id>/target.png`. Astra가 앞뒤 쪽·전체 텍스트를 스스로 본다(실측 확인, P02 §3.3). 세션 상한 600 s.
 
 응답 item `result`(스키마 `detect.schema.json`):
 
@@ -180,14 +187,17 @@ verdict는 열거형이 아니라 **`from`으로 도출**한다(클라이언트)
 
 | 항목 | 내용 |
 |---|---|
-| 실행 | 호스트 systemd, `codex` 하나. 컨테이너(wrapper)는 SQLite의 유일한 writer; 워커는 내부 API(`/internal/figures/claim`·`…/result`·heartbeat)로만. heartbeat 끊기면 item을 `queued`로 |
-| 환경 | 하위 프로세스 env에서 `OPENAI_API_KEY`·`CODEX_API_KEY`·`ANTHROPIC_API_KEY` 제거(남으면 종량제). `PATH`에 `codex` 명시(nvm 밑이면 "login required"로 잘못 보고됨) |
-| 순서 | 워커 큐 하나, **동시 1**, 호출 사이 `FIGURES_MIN_INTERVAL`초 |
-| 시도 | item 3회. **치명**(`login required`·`usage limit`·`rate limit`·`Codex CLI not found`)은 **시도로 세지 않고** job을 `paused`, 워커 정지. 문구는 **stdout·stderr 양쪽**에서 찾는다. 해제 시각은 문구에서 읽되 박아두지 않는다. 운영자가 `codex login` 뒤 `/resume` |
-| 타임아웃 | 프로세스 그룹째 kill. 세션 상한(detect 10분·link 20분·panels 5분 초기값)에 걸리면 `budget_exhausted` |
-| 기록 | 호출마다 `figure_calls(kind, model, prompt_version, usage, elapsed, pages_consulted)` |
-| 버전 | 워커 코드는 wrapper 이미지와 **같은 git 태그**에서 |
-| `/status` | figures 큐 카드: 대기·처리·오늘 호출·마지막 치명 오류·워커 heartbeat |
+(wrapper 0.3.2 + `scripts/figures_worker.py`가 이미 이렇게 한다 — 클라이언트가 기대는 전제로 적어 둔다)
+
+| 항목 | 내용 |
+|---|---|
+| 실행 | 호스트 systemd 유닛(`ocrserver-figures-worker`, codex 로그인이 있는 사용자), `codex` 하나. wrapper가 SQLite의 유일한 writer; 워커는 내부 API로만. heartbeat 끊기면 항목 재큐(1800 s) |
+| 환경 | 하위 프로세스 env에서 API 키 제거. `PATH`에 `codex` 명시 |
+| 순서 | 한 번에 한 항목, 호출 사이 `min_interval_s`(서버가 claim 응답으로 알려줌, 기본 300) |
+| 시도 | 항목 3회. **치명**(`login required`·`Codex CLI not found`·`usage limit`·`rate limit`)은 시도로 세지 않고 항목을 큐로, 워커 `paused`. 호출 전 `codex login status` + 호출 후 stdout·stderr. 해제는 `/figures/worker/resume` |
+| 타임아웃 | 프로세스 그룹 kill. detect 600 · link 1200 · panels 600 s → `budget_exhausted` |
+| 기록 | `run/a<시도>/`에 prompt·schema·response·events·stderr·run.json; `figure_calls` |
+| 상태 | `/status` 카드 · `GET /api/figures` · `journalctl -u ocrserver-figures-worker -f` |
 
 ---
 
