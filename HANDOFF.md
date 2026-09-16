@@ -253,6 +253,9 @@
     - ✅ **결정(2026-09-16)** — 둘 다 채택. 같은 날 더 정한 것: ②도 Astra(Opus 안 씀, 확정) · 의심 도판은 ①′ 재판정(Astra 가
       작업 폴더에서 앞뒤 쪽·전체 텍스트를 스스로 본다) · 호출은 5분에 1건으로 시작. 정리: [`docs/figure_pipeline_client_plan.md`](./docs/figure_pipeline_client_plan.md)
       (서버 짝 문서 ocrserver `devlog/20260916_P02_…`)
+    - 🔴 **P02 대조에서 나온 명세 구멍** — P02 §3.3은 작업 폴더 텍스트를 **서버 DB**에서 만든다. RunPod 시절 논문은 서버에 job이 없고, 9/8 조각 사고의
+      job은 서버에 그대로 남아 있다 → **텍스트는 클라이언트 캐시가 원천**, `POST /figures/workspace` + `ocr_digest`로 올린다(클라이언트 계획 §10.1). 명세 v2·P02 §3.3에 반영할 것.
+      D8(5분 1건)이면 파일럿 게이트만 ≈ 4일 — 게이트 표본은 ② 30편 · ③ 도판 100으로 자른다(§10.2)
   - [ ] **Windows에서 파일럿 저장**(앱 닫고): `python scripts/assemble_figures.py --pilot "%USERPROFILE%\PaleoBytes\PaperMeister\tmp\p16_pilot.json" --execute`
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,

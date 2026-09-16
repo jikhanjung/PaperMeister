@@ -1,7 +1,16 @@
 # P17 — P16 준비: fsis 9/16 개정분 반영과 ocrserver 착수 전 PaperMeister 쪽 준비 목록
 
 **작성**: 2026-09-16
-**상태**: 계획
+**상태**: 계획 — **같은 날 결정으로 일부가 대체됐다**(아래)
+
+> **2026-09-16 저녁 개정** — 사용자 결정 D1~D8이 [`docs/figure_pipeline_client_plan.md`](../docs/figure_pipeline_client_plan.md)에,
+> 서버 쪽은 ocrserver `devlog/20260916_P02_figure_split_service_design.md`에 기록됐다. 이 문서에서 달라진 것:
+> - §3.2 프롬프트 소재 · §3.5 `panel_key` — **채택됨**(D5·D6). "사용자 확인 필요"는 해소.
+> - ② 모델은 Opus가 아니라 **Astra**(D2·D7). 워커는 `codex` 하나.
+> - **§3.3의 쪽 선정·설명 쪽 우선·배치는 클라이언트가 하지 않는다**(D4) — 서버가 논문 전체를 작업 폴더로 주고 Astra가 스스로 앞뒤 쪽·전체 텍스트를 본다.
+>   남는 것은 도판 목록 + 힌트(`plate_pages`, 정형 설명 규칙 파서의 `explanation_hints`)뿐. §3.1의 "`pages[]`는 클라이언트가 고른 쪽만" 행도 같이 빠진다.
+> - **①′ 재판정 단계 추가**(`POST /figures/detect`) — ①이 의심한 도판만. 의심 사유 판정 `figures.uncertainty()`는 클라이언트(클라이언트 계획 §2).
+> - 나머지(§3.1 명세 v2의 다른 행, §3.4 검증·반영, §3.6~3.10, §4 순서)는 그대로. 순서에 D'(의심 비율 측정)가 끼었다 — 클라이언트 계획 §8.
 **읽은 것**: fsis2026 `docs/figure_edge_cases.md`(9/16 개정, §1-4-1 · §3-1 보강 · §4-3~4-5 · §6-7~6-14 · §7) ·
 `docs/figure_pipeline_design_guide.md`(9/16 개정, §2-2 · §2-3 · §3 · §4-2 · §4-6 · §6-1 · §6-5 · §6-6 · §7 · §8) ·
 devlog 275~277 · `TODOs.md` §4. 이 저장소의 [P16](./20260914_P16_Figure_Panel_Split.md) · [095](./20260915_095_P16_Phase0_Figure_Assembly_Survey.md) ·
