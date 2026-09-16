@@ -667,3 +667,28 @@ def test_the_plate_verdict_stays_strict_about_overlapping_captions():
     labels = div('Caption', (48, 168, 248, 195), 'Fig. 1')   # overlaps the first photo by 12
     page = figures.assemble_page(32, div('Page-Header', (300, 20, 700, 45), 'Plate 4') + photos + labels)
     assert len(page.figures) == 1 and page.figures[0].assembly == figures.PLATE_UNION
+
+
+# ── lettered plate numbers (098) ─────────────────────────────────────
+
+@pytest.mark.unit
+def test_lettered_plates_are_different_plates():
+    """Barrande 1852: "Pl. 2 A" and "Pl. 2.B." are two plates, not one number
+    two pages claim."""
+    def plate_page(mark):
+        return page(div('Page-Header', (760, 30, 830, 50), mark), div('Image', (160, 100, 820, 900)))
+    pages = ['' for _ in range(10)]
+    pages[6], pages[8] = plate_page('Pl. 2 A'), plate_page('Pl. 2.B.')
+    figs = {a.page: a.figures for a in figures.assemble_document(pages)}
+    assert figs[6][0].name_hint == 'Plate 2A' and figs[8][0].name_hint == 'Plate 2B'
+    assert figs[6][0].plate == 2 and figs[6][0].page_kind == figures.PLATE_KIND
+
+
+@pytest.mark.unit
+def test_an_authors_initial_after_the_plate_number_is_not_a_suffix():
+    assert figures._plate_hits([figures.Region('Page-Header', (100, 20, 900, 45), 'PLATE 17 R. FEIST')],
+                               figures.MARK_LABELS) == [(17, '17', 'plate')]
+    assert figures._plate_hits([figures.Region('Caption', (100, 20, 900, 45), 'Plate 3. A, dorsal view')],
+                               figures.MARK_LABELS) == [(3, '3', 'plate')]
+    # a misread "II" with a stray period is plate 2's problem, not plate 1-I
+    assert figures.plate_suffix('II') == '' and figures.plate_suffix('2A') == 'A'

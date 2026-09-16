@@ -144,7 +144,7 @@ _ROMAN = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000}
 # microscopy) read as Plate M in fsis ref 2648.
 _PLATE_NO = re.compile(
     r'(?i:\b(pl\.|pl(?=\s)|plates?|planche|tafel|taf\.|табл(?:ица)?\.?)|(도판|圖版|図版|图版))'
-    r'\s*\.?\s*([IVXLCDM]+|\d{1,3})\b')
+    r'\s*\.?\s*([IVXLCDM]+|\d{1,3})\b(?:\s?\.?\s?([A-HJ-UW-Z])(?=\.?\s*$))?(?![A-Za-z])')
 #: Numbering schemes, so that a journal's "Tafel 13" beside the author's "Plate 2"
 #: reads as one plate numbered twice rather than as two plates.
 _SCHEME = {'pl': 'plate', 'plate': 'plate', 'plates': 'plate', 'planche': 'planche',
@@ -239,9 +239,14 @@ class Region:
 @dataclass(frozen=True)
 class PlateMark:
     number: int
-    token: str                          # the numeral as printed; '' for a bare "PLATE"
+    token: str                          # the numeral as printed, '2A' included; '' for a bare "PLATE"
     name: str                           # 'Plate IV', 'Plate', '도판'
     inferred: bool = False
+
+    @property
+    def key(self) -> tuple[int, str]:
+        """What makes two marks the same plate: "2 A" and "2.B" are not."""
+        return self.number, plate_suffix(self.token)
 
 
 @dataclass
@@ -336,13 +341,24 @@ def _plate_hits(regs: Iterable[Region], labels: frozenset[str],
         if not citing_captions and reg.label == 'Caption' and _CITES_FIGURE.search(reg.text):
             continue
         for m in _PLATE_NO.finditer(reg.text):
-            token = m.group(3)
-            number = _numeral(token)
-            key = (number, _scheme(m))
+            number = _numeral(m.group(3))
+            # "Pl. 2 A" and "Pl. 2.B" (Barrande 1852) are two plates: the
+            # letter is part of the number, and stays in the token.
+            token = m.group(3) + (m.group(4) or '')
+            key = (number, plate_suffix(token), _scheme(m))
             if number and number <= MAX_PLATE and key not in seen:
                 seen.add(key)
-                hits.append((number, token, key[1]))
+                hits.append((number, token, key[2]))
     return hits
+
+
+def plate_suffix(token: str) -> str:
+    """The letter that makes "2A" a different plate from "2" — '' when none.
+
+    Only what the mark regex admits: a capital at the end of the mark, and not
+    I, V or X, which are numerals ("Таблица I.I" is a misread II, not plate 1-I).
+    """
+    return token[-1] if len(token) > 1 and token[-1].isalpha() and token[-1] not in 'IVX' else ''
 
 
 def plate_marks(blocks: list[ocr_layout.Block]) -> dict[int, str]:
@@ -363,7 +379,7 @@ def one_plate(hits: list[tuple[int, str, str]]) -> tuple[int, str] | None:
     """
     if not hits:
         return None
-    if len({number for number, _, _ in hits}) == 1:
+    if len({(number, plate_suffix(token)) for number, token, _ in hits}) == 1:
         return hits[0][0], hits[0][1]
     by_scheme: dict[str, set[int]] = {}
     for number, _, scheme in hits:
@@ -691,21 +707,21 @@ def _decide_plates(pages: list[PageFacts]) -> None:
 
     # A one-photo page's number is weak evidence: an OCR misread can give it the
     # number of another page (fsis ref 3011: Pl. XLI read as Pl. XII).
-    claims: dict[int, list[PageFacts]] = {}
+    claims: dict[tuple[int, str], list[PageFacts]] = {}
     for f in pages:
         if f.verdict == PLATE and f.mark is not None:
-            claims.setdefault(f.mark.number, []).append(f)
+            claims.setdefault(f.mark.key, []).append(f)
     for f in pages:
-        if f.verdict != PLATE or f.mark is None or len(f.pictures) != 1 or len(claims[f.mark.number]) < 2:
+        if f.verdict != PLATE or f.mark is None or len(f.pictures) != 1 or len(claims[f.mark.key]) < 2:
             continue
         if (f.loose_chars <= NEXT_PLATE_MAX_TEXT
-                and all(abs(o.page - f.page) == 1 for o in claims[f.mark.number] if o is not f)):
+                and all(abs(o.page - f.page) == 1 for o in claims[f.mark.key] if o is not f)):
             # One plate over facing pages — "Tafel 16: 1" and "Tafel 16: 2" (Henningsmoen
             # et al., this library). A misread number lands far away; an explanation
             # page beside its plate has text, which this page does not.
             continue
         mine = _area(f.pictures[0].box)
-        others = [_area(_union(p.box for p in o.pictures)) for o in claims[f.mark.number] if o is not f]
+        others = [_area(_union(p.box for p in o.pictures)) for o in claims[f.mark.key] if o is not f]
         if not all(mine >= DOMINANT_AREA_RATIO * area for area in others):
             f.verdict, f.mark = DUP_NUMBER, None
 
