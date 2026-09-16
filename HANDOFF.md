@@ -263,8 +263,13 @@
     - 🔴 **첫 발견**: `tiny` 필터가 번호 캡션 달린 작은 본문 그림을 버린다(Westergård p.27 `Fig. 10`). C 단계에서 "번호 캡션이 바로 아래면 크기 무관"을 전 캐시 dry-run으로 재고 넣을 것
   - ✅ **B-1 파일럿 저장 완료 (2026-09-16, Windows)** — `Figure` **3,750행**(dry run과 동일): body single 2,980 · cut-up 101 · plate union 202 · plate single 467 ·
     plate_inferred 11. 시트도 `#id`로 재생성됨(`$env:USERPROFILE\PaleoBytes\PaperMeister\tmp\p16_review\index.html`)
-  - [ ] **B-2 사람이 본다 (Phase 1 게이트)** — `index.html` 층별. 작은 층(dropped 34 · plate_inferred 11 · dup_number 28 · many_marks 7)은 전부, 나머지는 표본 40.
-    틀린 것은 `python scripts/figure_curate.py <op> --figure-ids … --reason "…" --execute`(앱 닫고). 판정 결과와 발견된 규칙 오류는 devlog로
+  - ✅ **B-2 Phase 1 게이트 통과 (2026-09-16, 사용자 검수, 098 §7)** — 8층 전부 봄. plate_inferred·plate_single·plate_union 전부 맞음(키릴·한글 추론 포함).
+    틀린 것은 규칙 버그 둘(→ 고침: tiny 소형 그림 `c67cb71` · `Pl. 2 A/2.B` 접미사 `b34abff`, 덤으로 번호 캡션 겹침 허용 → 캡션 힌트 +302)과
+    **규칙으로 못 만드는 것**(블록 없는 플레이트 1191 · PDF 안 중복 1080 · 펼침 스캔 562/8833 · 글자를 그림으로 8615 · 빈 영역 #889).
+    **사용자 결정: 규칙은 여기까지, 안 걸리는 건 LLM에 텍스트를 다 주고 찾게 한다**(D4) → 위 다섯이 ①′ detect의 첫 사유 목록
+    - [ ] Windows에서 `assemble_figures.py --pilot … --execute` **다시**(규칙 셋 반영, refresh/new만) · 1334 구분선·#889 빈 영역은 `figure_curate.py dismiss`
+  - [ ] **C 조립 후보 측정** — 이번 검수로 사실상 끝(tiny·접미사 반영, 다음 쪽 설명·전폭 캡션은 detect로). 남은 건 없음
+  - [ ] **D′ `figures.uncertainty()`** — 사유: `plate_without_pictures` · `dup_number` · `spread_two_plates` · `text_as_figure` · `empty_region` + 클라이언트 계획 §2.1 → 파일럿 3,750에 dry-run해 의심 비율
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
     아니면 논문·폴더·전체 우클릭 "Process Figures") · 서버 PDF는 먼저 존재 확인 후 없으면 업로드 · Batches API는 해당 없음
