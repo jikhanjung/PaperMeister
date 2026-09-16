@@ -614,3 +614,56 @@ def test_a_caption_in_the_other_column_does_not_gather_pictures():
 ])
 def test_compound_caption_estimate(caption, expected):
     assert figures.looks_compound(caption) is expected
+
+
+# ── small figures with their own caption (098) ───────────────────────
+
+def _small_page(box, caption='Fig. 10. Protaspis of Paradoxides sp. indet.', cap_box=None):
+    x0, y0, x1, y1 = box
+    cap_box = cap_box or (x0 - 180, y1 + 8, x1 + 180, y1 + 50)
+    return (div('Image', box) + div('Caption', cap_box, caption)
+            + div('Text', (100, 600, 900, 900), 'body ' * 200))
+
+
+@pytest.mark.unit
+def test_a_small_picture_with_its_own_numbered_caption_is_a_figure():
+    # Westergård 1936 Fig. 10: 37 x 56 permille, under TINY_AREA, a 1 mm protaspis
+    page = figures.assemble_page(26, _small_page((711, 396, 748, 452)))
+    assert [f.name_hint for f in page.figures] == ['Fig. 10']
+    assert page.dropped == {}
+
+
+@pytest.mark.unit
+def test_a_speck_under_a_caption_is_still_dropped():
+    # a 22 x 12 scale bar at the foot of a plate, right above the plate's caption
+    page = figures.assemble_page(6, _small_page((891, 784, 913, 796), caption='FIGURE 3—1–25. Borealarges'))
+    assert page.figures == [] and page.dropped == {'tiny': 1}
+
+
+@pytest.mark.unit
+def test_a_small_picture_without_a_numbered_caption_is_still_dropped():
+    page = figures.assemble_page(3, _small_page((711, 396, 748, 452), caption='a short label'))
+    assert page.figures == [] and page.dropped == {'tiny': 1}
+
+
+@pytest.mark.unit
+def test_a_numbered_caption_may_overlap_the_picture_a_little():
+    # the OCR's caption box starts 7 permille above the picture's bottom edge
+    page = figures.assemble_page(26, _small_page((711, 396, 748, 452), cap_box=(527, 445, 927, 493)))
+    assert [f.name_hint for f in page.figures] == ['Fig. 10']
+    big = figures.assemble_page(1, div('Image', (100, 100, 900, 600))
+                        + div('Caption', (100, 590, 900, 640), 'FIG. 594. Morphological features')
+                        + div('Text', (100, 700, 900, 900), 'body ' * 100))
+    assert big.figures[0].caption_hint.startswith('FIG. 594')
+
+
+@pytest.mark.unit
+def test_the_plate_verdict_stays_strict_about_overlapping_captions():
+    """Hughes et al. 1975 p.32: photograph labels overlap the photographs. Read
+    leniently, one of them looks like a body-figure caption and the plate page
+    becomes 23 unnamed figures."""
+    photos = ''.join(div('Image', (x, y, x + 200, y + 110))
+                     for y in (70, 200, 330) for x in (48, 294, 548))
+    labels = div('Caption', (48, 168, 248, 195), 'Fig. 1')   # overlaps the first photo by 12
+    page = figures.assemble_page(32, div('Page-Header', (300, 20, 700, 45), 'Plate 4') + photos + labels)
+    assert len(page.figures) == 1 and page.figures[0].assembly == figures.PLATE_UNION

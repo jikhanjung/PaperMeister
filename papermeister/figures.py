@@ -84,6 +84,14 @@ CHROME = 'chrome'
 #: the 1000 x 1000 page). Plate photographs and the pieces of a cut-up figure are
 #: exempt: they are small by nature, which is exactly what fsis's filter got wrong.
 TINY_AREA = 4_000
+#: A small picture is still a figure when its own numbered caption sits right
+#: under it — Billings 1865's woodcuts, Kobayashi 1935's text-figures, a 1 mm
+#: protaspis (Westergård 1936 Fig. 10) are all under TINY_AREA. But a caption
+#: also sits under specks: scale bars and stray marks at a plate's foot, 22 x 12
+#: permille. The shortest side tells them apart (whole cache: 34 real figures
+#: with a side of 25 or more, 70 specks under it).
+SMALL_FIGURE_MIN_SIDE = 25
+SMALL_FIGURE_MIN_AREA = 1_000
 #: In the running-head and running-foot bands, anything smaller than this is a
 #: journal logo or ornament, on any page — including plate pages, where letting a
 #: header logo into the union would stretch the plate up into the page chrome.
@@ -92,6 +100,9 @@ CHROME_AREA = 30_000
 
 #: How far below a figure its caption may begin, in permille of page height.
 CAPTION_GAP = 150
+#: A caption box may start this far above the picture's bottom edge and still
+#: be under it: the OCR's boxes overlap by a few permille on tight layouts.
+CAPTION_OVERLAP = 20
 #: A figure caption this close above a picture is that picture's own caption.
 CAPTION_ABOVE_GAP = 40
 #: A caption is a picture's own only if it covers this share of the narrower of the two.
@@ -438,11 +449,20 @@ def _owned_elsewhere(box: Box, caption: Region, pictures: list[Region]) -> bool:
                for p in pictures)
 
 
-def _nearest_caption_below(box: Box, captions: list[Region], pictures: list[Region]) -> Region | None:
+def _nearest_caption_below(box: Box, captions: list[Region], pictures: list[Region],
+                           lenient: bool = False) -> Region | None:
+    """`lenient` lets a numbered caption overlap the picture by CAPTION_OVERLAP.
+
+    That is for finding a figure's own caption once the page is judged. The
+    page judgement itself stays strict: on a plate page the photographs' labels
+    overlap the photographs, and a lenient reading turns the plate into a body
+    page of 23 unnamed figures (Hughes et al. 1975 p.32).
+    """
     best: Region | None = None
     for cap in captions:
         top = cap.box[1]
-        if top < box[3] - 5 or top - box[3] >= CAPTION_GAP or _overlap(box, cap.box) <= 0:
+        overlap = CAPTION_OVERLAP if lenient and cap.is_numbered_caption else 5
+        if top < box[3] - overlap or top - box[3] >= CAPTION_GAP or _overlap(box, cap.box) <= 0:
             continue
         if _owned_elsewhere(box, cap, pictures):
             continue
@@ -451,18 +471,27 @@ def _nearest_caption_below(box: Box, captions: list[Region], pictures: list[Regi
     return best
 
 
-def caption_below(box: Box, regs: list[Region]) -> Region | None:
+def caption_below(box: Box, regs: list[Region], lenient: bool = False) -> Region | None:
     """The nearest Caption starting just under this region, in its column."""
     return _nearest_caption_below(box, [r for r in regs if r.label == 'Caption'],
-                                  [r for r in regs if r.is_picture])
+                                  [r for r in regs if r.is_picture], lenient)
 
 
 def _own_numbered_caption(box: Box, regs: list[Region], pictures: list[Region]) -> Region | None:
     """The numbered caption right under this picture, looking past labels like `B. Sketch`."""
     near = [r for r in regs if r.label == 'Caption' and not r.is_label_caption
             and _share(box, r.box) >= MIN_CAPTION_SHARE]
-    cap = _nearest_caption_below(box, near, pictures)
+    cap = _nearest_caption_below(box, near, pictures, lenient=True)
     return cap if cap is not None and cap.is_numbered_caption else None
+
+
+def small_captioned_figure(box: Box, regs: list[Region], pictures: list[Region]) -> bool:
+    """A picture under TINY_AREA that is a figure all the same: its own numbered
+    caption is right under it and it is not a speck."""
+    x0, y0, x1, y1 = box
+    if min(x1 - x0, y1 - y0) < SMALL_FIGURE_MIN_SIDE or (x1 - x0) * (y1 - y0) < SMALL_FIGURE_MIN_AREA:
+        return False
+    return _own_numbered_caption(box, regs, pictures) is not None
 
 
 def _name_from_caption(caption: str) -> str:
@@ -722,7 +751,7 @@ def _build(facts: PageFacts) -> PageAssembly:
                 kept.append(picture)
         if kept:
             union = _union(p.box for p in kept)
-            caption = caption_below(union, facts.regs)
+            caption = caption_below(union, facts.regs, lenient=True)
             result.figures.append(AssembledFigure(
                 page=facts.page, bbox=union, blocks=tuple(p.box for p in kept),
                 assembly=PLATE_UNION if len(kept) > 1 else SINGLE,
@@ -749,10 +778,11 @@ def _build(facts: PageFacts) -> PageAssembly:
                 emitted.add(cap)
                 result.figures.append(_caption_group(facts.page, groups[cap], cap, facts.regs))
             continue
-        if decoration(picture.box, small_ok=False):
+        if decoration(picture.box, small_ok=False) and not small_captioned_figure(
+                picture.box, facts.regs, candidates):
             _drop(result, TINY)
             continue
-        caption = caption_below(picture.box, facts.regs)
+        caption = caption_below(picture.box, facts.regs, lenient=True)
         caption_text = caption.text if caption else ''
         if captioned and picture in captioned[2]:
             number, token, numbers = captioned
