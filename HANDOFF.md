@@ -243,6 +243,13 @@
     번호 추론(앞 쪽 설명 제목·다음 쪽 N-1·번호 없는 PLATE)·도판별 캡션 플레이트(`Plate N, Fig. M`)·조각 그림 틈 제한·옆 단 캡션·
     재 OCR로 좌표만 옮겨진 행 유지. 라이브 렌더 검토에서 둘을 더 고침(마주 보는 두 쪽 플레이트, 인용 캡션). Phase 2·3 요구는 P16 §1.3.
     **파일럿 목록이 새 규칙으로 다시 뽑혔다** — 아래 저장은 이 목록으로
+  - **[P17](./devlog/20260916_P17_P16_Client_Readiness_For_ocrserver.md) (2026-09-16)** — fsis가 9/16에 edge case·설계 가이드를 다시 고쳤다(21건 PDF 직접 검수).
+    새로 온 것은 조립이 아니라 **② 연결 · ③ 분할 · 저장 · 검수** 쪽 = ocrserver 착수 전에 **여기서 정해야 할 것**. 준비 목록 A~G(P17 §4):
+    검수 도구(contact sheet · curate 스크립트 — 게이트에 필요한데 없다) → 파일럿 저장·검수 → 조립 후보 셋 측정 → 스키마 보강(`caption_pages`·`continuation_of`·
+    `*_locked`·`printed_label`) + 보호 판정 한 곳 + `blocks_json`으로 조각 부활 방지 + `store_mode` 예외 격리(지금은 `try`가 없다) →
+    `link_payload`(앞·뒤 쪽 포함, 설명 쪽 우선, 배치) + 검증·반영(skipped ≠ cleared, 이름 정규화 양쪽) → `panel_key`에서 entries 제외 · `split_targets` 제외 사유 출력 →
+    프롬프트·스키마 파일 + **명세 v2** → 서버에 넘긴다
+    - 🔴 **사용자 확인 2건**: 프롬프트·스키마를 PaperMeister가 갖고 요청에 실어 보내기(P17 §3.2, P16 §6.3·6.4 변경) / `panel_key`에서 entries digest 빼고 재연결 규칙(P17 §3.5, P16 §5 변경)
   - [ ] **Windows에서 파일럿 저장**(앱 닫고): `python scripts/assemble_figures.py --pilot "%USERPROFILE%\PaleoBytes\PaperMeister\tmp\p16_pilot.json" --execute`
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
