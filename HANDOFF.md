@@ -258,10 +258,10 @@
       D8(5분 1건)이면 파일럿 게이트만 ≈ 4일 — 게이트 표본은 ② 30편 · ③ 도판 100으로 자른다(§10.2)
   - ✅ **A 검수 도구 (2026-09-16, [098](./devlog/20260916_098_P16_Review_Sheets_And_Curation.md))** — `scripts/figure_contact_sheet.py`(그림 있는 쪽을 9층으로 나눠
     쪽 렌더 위에 상자를 그린 HTML, 저장 전에도 동작) + `scripts/figure_curate.py`(confirm/dismiss/restore/rename/set-bbox/merge, `--reason` 필수,
-    `<DATA_DIR>/tmp/p16_curation/` 기록 + `replay`). 파일럿 시트는 이미 생성돼 있다: `%USERPROFILE%\PaleoBytes\PaperMeister\tmp\p16_review\index.html`
+    `<DATA_DIR>/tmp/p16_curation/` 기록 + `replay`). 파일럿 시트는 이미 생성돼 있다: `$env:USERPROFILE\PaleoBytes\PaperMeister\tmp\p16_review\index.html`
     (그림 있는 쪽 2,857 — dropped 34 · plate_inferred 11 · dup_number 28 · many_marks 7 · plate_single 467 · plate_union 191 · cut_up 94 · body 2,025)
     - 🔴 **첫 발견**: `tiny` 필터가 번호 캡션 달린 작은 본문 그림을 버린다(Westergård p.27 `Fig. 10`). C 단계에서 "번호 캡션이 바로 아래면 크기 무관"을 전 캐시 dry-run으로 재고 넣을 것
-  - [ ] **B. Windows에서 파일럿 저장**(앱 닫고): `python scripts/assemble_figures.py --pilot "%USERPROFILE%\PaleoBytes\PaperMeister\tmp\p16_pilot.json" --execute`
+  - [ ] **B. Windows에서 파일럿 저장**(앱 닫고): `python scripts/assemble_figures.py --pilot "$env:USERPROFILE\PaleoBytes\PaperMeister\tmp\p16_pilot.json" --execute`
     → `python scripts/figure_contact_sheet.py --pilot "…\p16_pilot.json"` 다시(식별자가 `#id`로) → `index.html` 층별 검수 → 틀린 것은 `figure_curate.py … --execute`
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
