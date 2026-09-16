@@ -692,3 +692,102 @@ def test_an_authors_initial_after_the_plate_number_is_not_a_suffix():
                                figures.MARK_LABELS) == [(3, '3', 'plate')]
     # a misread "II" with a stray period is plate 2's problem, not plate 1-I
     assert figures.plate_suffix('II') == '' and figures.plate_suffix('2A') == 'A'
+
+
+# ── what the rule doubts (099: the detect stage's input) ─────────────
+
+def _img(label, bbox):
+    return div(label, bbox, '<img alt="x">')
+
+
+def _photos(n, cols=3, top=70, size=110):
+    return page(*(_img('Image', (48 + 250 * (i % cols), top + 130 * (i // cols),
+                                 248 + 250 * (i % cols), top + size + 130 * (i // cols))) for i in range(n)))
+
+
+@pytest.mark.unit
+def test_a_figure_the_rule_is_sure_of_carries_no_reason():
+    body = page(_img('Image', (100, 100, 900, 600)),
+                div('Caption', (100, 610, 900, 650), 'Fig. 3. A trilobite.'),
+                div('Text', (100, 700, 900, 900), 'body ' * 100))
+    assert figures.assemble_page(1, body).figures[0].reasons == ()
+    plate = page(div('Page-Header', (300, 20, 700, 45), 'PLATE 4'), _photos(6))
+    assert figures.assemble_page(1, plate).figures[0].reasons == ()
+
+
+@pytest.mark.unit
+def test_many_uncaptioned_photographs_without_a_number_are_one_doubt_about_the_page():
+    """Zhou & Zhang 1978 p.28: 26 photographs, no caption, the mark on the
+    explanation page before. The rule cannot name it; a model shown the paper can."""
+    a = figures.assemble_page(28, _photos(9))
+    assert len(a.figures) == 9
+    assert all(f.reasons == (figures.UNMARKED_PLATE_PAGE,) for f in a.figures)
+    # two photographs are not a plate
+    two = figures.assemble_page(3, _photos(2))
+    assert all(figures.UNMARKED_PLATE_PAGE not in f.reasons for f in two.figures)
+
+
+@pytest.mark.unit
+def test_a_body_figure_with_no_caption_anywhere_is_doubted():
+    lone = page(_img('Image', (100, 100, 900, 600)), div('Text', (100, 700, 900, 900), 'body ' * 100))
+    assert figures.assemble_page(1, lone).figures[0].reasons == (figures.NO_CAPTION,)
+    # a numbered caption right above it (caption-on-top layouts) is its caption
+    above = page(div('Caption', (100, 60, 900, 95), 'Fig. 2. Above.'), _img('Image', (100, 100, 900, 600)),
+                 div('Text', (100, 700, 900, 900), 'body ' * 100))
+    assert figures.assemble_page(1, above).figures[0].reasons == ()
+
+
+@pytest.mark.unit
+def test_a_plate_nearby_excuses_a_missing_caption():
+    pages = ['' for _ in range(4)]
+    pages[1] = page(div('Section-Header', (100, 100, 900, 130), 'Explanation of Plate 3'),
+                    div('Text', (100, 150, 900, 900), 'text ' * 300))
+    pages[2] = page(_img('Image', (100, 100, 900, 800)), div('Text', (100, 850, 900, 900), 'some text ' * 30))
+    a = figures.assemble_document(pages)[2]
+    assert a.figures and figures.NO_CAPTION not in a.figures[0].reasons
+
+
+@pytest.mark.unit
+def test_a_picture_block_without_an_image_is_text_the_ocr_mislabelled():
+    table = page(div('Figure', (100, 100, 900, 600), '<table><tr><td>圖版 12</td></tr></table>'),
+                 div('Caption', (100, 610, 900, 650), 'Fig. 1. x'))
+    assert figures.TEXT_AS_FIGURE in figures.assemble_page(1, table).figures[0].reasons
+
+
+@pytest.mark.unit
+def test_pages_with_a_number_but_nothing_to_assemble_are_doubted():
+    # Barrande 1852 Pl. 50: a header and one 35 x 80 diagram; the OCR did not box the chart
+    chart = page(div('Page-Header', (814, 30, 881, 49), 'Pl. 50.'),
+                 div('Section-Header', (253, 62, 776, 85), 'Distribution verticale des Trilobites'),
+                 _img('Diagram', (540, 525, 575, 605)))
+    a = figures.assemble_page(221, chart)
+    assert a.figures == [] and a.suspicions == [figures.PLATE_WITHOUT_PICTURES]
+    # a figure caption on a page with no picture: the figure is text, or elsewhere
+    orphan = page(div('Caption', (100, 800, 900, 850), 'Fig. 7. Continued from the page before.'),
+                  div('Text', (100, 100, 900, 700), 'text ' * 200))
+    assert figures.assemble_page(5, orphan).suspicions == [figures.CAPTION_WITHOUT_FIGURE]
+    # an explanation page is not doubted: lots of text, no picture
+    explanation = page(div('Section-Header', (100, 100, 900, 130), 'Erklärung der Tafel IV.'),
+                       div('Text', (100, 150, 900, 900), 'text ' * 300))
+    assert figures.assemble_page(39, explanation).suspicions == []
+
+
+@pytest.mark.unit
+def test_duplicate_and_double_numbers_are_doubts_not_decisions():
+    def plate_page(mark):
+        return page(div('Page-Header', (760, 30, 830, 50), mark), _img('Image', (160, 100, 820, 900)))
+    pages = ['' for _ in range(10)]
+    pages[3], pages[7] = plate_page('Pl. 4'), plate_page('Pl. 4')
+    figs = {a.page: a.figures for a in figures.assemble_document(pages)}
+    assert figs[3][0].reasons == (figures.DUP_NUMBER_REASON,) and figs[7][0].reasons == (figures.DUP_NUMBER_REASON,)
+    spread = page(div('Page-Header', (100, 30, 300, 50), 'ТАБЛИЦА ХХV'), div('Page-Header', (600, 30, 900, 50), 'ТАБЛИЦА ХХVI'),
+                  _img('Image', (40, 100, 480, 900)), _img('Image', (520, 100, 960, 900)))
+    a = figures.assemble_page(96, spread)
+    assert a.verdict == figures.MANY_MARKS and all(f.reasons == (figures.MANY_MARKS_REASON,) for f in a.figures)
+
+
+@pytest.mark.unit
+def test_plate_marks_in_other_scripts_and_spacings():
+    hits = figures._plate_hits([figures.Region('Page-Header', (100, 20, 900, 45), t) for t in
+                                ('ТАБЛИЦА ХХV', 'Tabl. I', '图 版 IV', 'Plate Ⅻ')], figures.MARK_LABELS)
+    assert [(n, tok) for n, tok, _ in hits] == [(25, 'XXV'), (1, 'I'), (4, 'IV'), (12, 'XII')]

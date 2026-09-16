@@ -115,6 +115,8 @@ def survey(names: list[str], cache: str):
     totals: Counter = Counter()
     verdicts: Counter = Counter()
     dropped: Counter = Counter()
+    reasons: Counter = Counter()
+    suspicions: Counter = Counter()
     papers = []
     many_marks = []
     started = time.time()
@@ -141,8 +143,13 @@ def survey(names: list[str], cache: str):
             dropped.update(assembled.dropped)
             if assembled.verdict == figures.MANY_MARKS:
                 many_marks.append((name, assembled.page))
+            suspicions.update(assembled.suspicions)
             for figure in assembled.figures:
                 record['figures'] += 1
+                reasons.update(figure.reasons)
+                if figure.reasons:
+                    record['suspect'] = record.get('suspect', 0) + 1
+                    totals['figures_suspect'] += 1
                 caption = figure.caption_hint
                 if figure.plate_inferred:
                     totals['plates_inferred'] += 1
@@ -174,7 +181,7 @@ def survey(names: list[str], cache: str):
             elapsed = time.time() - started
             print(f'  {index:,}/{len(names):,} files  ({elapsed:.0f}s)')
 
-    return totals, verdicts, dropped, papers, many_marks
+    return totals, verdicts, dropped, papers, many_marks, reasons, suspicions
 
 
 def _quotas(size: int) -> list[int]:
@@ -244,7 +251,7 @@ def library_years(cache_dir_names: list[str]) -> dict[str, int | None] | None:
         return None
 
 
-def report(totals, verdicts, dropped, papers, many_marks) -> dict:
+def report(totals, verdicts, dropped, papers, many_marks, reasons=None, suspicions=None) -> dict:
     figure_counts = [p['figures'] for p in papers]
     with_figures = [c for c in figure_counts if c]
     candidates = (totals['figures_plate'] + totals['figures_plate_single'] + totals['figures_group']
@@ -279,6 +286,10 @@ def report(totals, verdicts, dropped, papers, many_marks) -> dict:
                                   if len(with_figures) >= 10 else max(with_figures, default=0)),
         'figures_per_paper_max': max(with_figures, default=0),
         'many_marks_pages': len(many_marks),
+        'figures_suspect': totals['figures_suspect'],
+        'reasons': dict(reasons or {}),
+        'page_suspicions': dict(suspicions or {}),
+        'papers_with_suspects': sum(1 for p in papers if p.get('suspect')),
     }
 
     print()
@@ -313,6 +324,17 @@ def report(totals, verdicts, dropped, papers, many_marks) -> dict:
     print(f"Figures per paper        median {summary['figures_per_paper_median']}, "
           f"p90 {summary['figures_per_paper_p90']:.0f}, max {summary['figures_per_paper_max']}")
     print(f"Pages with two plate numbers (left unmerged, worth a look): {len(many_marks):,}")
+    if reasons is not None:
+        total = summary['figures_total'] or 1
+        print()
+        print(f"Suspect figures (for ①′)  {summary['figures_suspect']:>8,}   "
+              f"{100 * summary['figures_suspect'] / total:.1f}% of figures, "
+              f"in {summary['papers_with_suspects']:,} papers")
+        for why, count in reasons.most_common():
+            print(f"  {why:<22} {count:>9,}")
+        print('Suspect pages (no figure to carry it)')
+        for why, count in (suspicions or Counter()).most_common():
+            print(f"  {why:<22} {count:>9,}")
     return summary
 
 
@@ -323,8 +345,8 @@ def survey_mode(args) -> int:
         names = names[:args.sample]
     print(f'Surveying {len(names):,} cached OCR results in {args.cache_dir}')
 
-    totals, verdicts, dropped, papers, many_marks = survey(names, args.cache_dir)
-    summary = report(totals, verdicts, dropped, papers, many_marks)
+    totals, verdicts, dropped, papers, many_marks, reasons, suspicions = survey(names, args.cache_dir)
+    summary = report(totals, verdicts, dropped, papers, many_marks, reasons, suspicions)
 
     years = library_years(names)
     if years is not None:

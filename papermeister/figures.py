@@ -40,9 +40,10 @@ learned not to do.
 """
 import html as html_mod
 import re
+import unicodedata
 from collections import Counter
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from . import ocr_layout
 
@@ -79,6 +80,22 @@ DUP_NUMBER = 'dup_number'          # a one-photo page whose plate number another
 # Why a picture block was left out.
 TINY = 'tiny'
 CHROME = 'chrome'
+
+# Why the rule doubts a figure (or a page). These name the cases the pilot
+# review found that no rule can settle from the OCR blocks alone — the
+# re-judgement stage (P16 ①′) hands them to a model that can open the pages.
+DUP_NUMBER_REASON = 'dup_number'                    # a number two pages claim: misread, or a plate the PDF holds twice
+MANY_MARKS_REASON = 'many_marks'                    # two numbers on one page: two plates, or a scanned spread
+TEXT_AS_FIGURE = 'text_as_figure'                   # the picture block has no image: a table or text (8615 圖版)
+NO_CAPTION = 'no_caption'                           # a body figure with no caption under or over it and no plate anywhere near
+UNMARKED_PLATE_PAGE = 'unmarked_plate_page'         # many photographs, no captions, no number: a plate whose mark the OCR missed
+#: Photographs at which a page without a mark or captions looks like a plate.
+UNMARKED_PLATE_MIN_PICTURES = 3
+FRAGMENTED = 'fragmented'                           # a cut-up figure of many pieces: the join may be wrong
+PLATE_WITHOUT_PICTURES = 'plate_without_pictures'   # page: a plate mark, but nothing to assemble (1191 Pl. 50)
+CAPTION_WITHOUT_FIGURE = 'caption_without_figure'   # page: a figure caption, no picture — the figure is text, or elsewhere
+#: Pieces at which a cut-up figure becomes worth a second look.
+FRAGMENTED_PIECES = 6
 
 #: Stand-alone pictures smaller than this share of the page are dropped (0.4% of
 #: the 1000 x 1000 page). Plate photographs and the pieces of a cut-up figure are
@@ -142,17 +159,23 @@ _ROMAN = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000}
 # capitals, and letting them match lowercase reads "Plate mix" as plate 1009.
 # `pl` needs a period or a space before the numeral — "PLM" (polarized light
 # microscopy) read as Plate M in fsis ref 2648.
+# The numeral may be typeset with Unicode roman numerals (Ⅻ) or, in Cyrillic
+# text, with Cyrillic letters that look like Latin ones ("ТАБЛИЦА ХХV" — Х is
+# U+0425); `_numeral` folds both. CJK plate words are sometimes letter-spaced
+# ("图 版 IV").
+_NUMERAL = r'[IVXLCDMІѴХСМⅠ-Ⅿ]+|\d{1,3}'
 _PLATE_NO = re.compile(
-    r'(?i:\b(pl\.|pl(?=\s)|plates?|planche|tafel|taf\.|табл(?:ица)?\.?)|(도판|圖版|図版|图版))'
-    r'\s*\.?\s*([IVXLCDM]+|\d{1,3})\b(?:\s?\.?\s?([A-HJ-UW-Z])(?=\.?\s*$))?(?![A-Za-z])')
+    r'(?i:\b(pl\.|pl(?=\s)|plates?|planche|tafel|taf\.|tabl\.|табл(?:ица)?\.?)|(도\s?판|圖\s?版|図\s?版|图\s?版))'
+    r'\s*\.?\s*(' + _NUMERAL + r')\b(?:\s?\.?\s?([A-HJ-UW-Z])(?=\.?\s*$))?(?![A-Za-z])')
+_HOMOGLYPHS = str.maketrans('ІѴХСМ', 'IVXCM')
 #: Numbering schemes, so that a journal's "Tafel 13" beside the author's "Plate 2"
 #: reads as one plate numbered twice rather than as two plates.
 _SCHEME = {'pl': 'plate', 'plate': 'plate', 'plates': 'plate', 'planche': 'planche',
-           'tafel': 'tafel', 'taf': 'tafel'}
-_BARE_PLATE = re.compile(r'^\s*(plates?|planche|tafel|도판|圖版|図版|图版)\s*\.?\s*$', re.I)
+           'tafel': 'tafel', 'taf': 'tafel', 'tabl': 'табл'}
+_BARE_PLATE = re.compile(r'^\s*(plates?|planche|tafel|도\s?판|圖\s?版|図\s?版|图\s?版)\s*\.?\s*$', re.I)
 _EXPLANATION_TITLE = re.compile(
-    r'(?i:\bexplanation\s+of\s+(?:the\s+)?plates?)\s*\.?\s*([IVXLCDM]+|\d{1,3})\b'
-    r'|(?:도판|圖版|図版|图版)\s*([IVXLCDM]+|\d{1,3})\s*(?:설명|說明|説明|说明)')
+    r'(?i:\bexplanation\s+of\s+(?:the\s+)?plates?)\s*\.?\s*(' + _NUMERAL + r')\b'
+    r'|(?:도\s?판|圖\s?版|図\s?版|图\s?版)\s*(' + _NUMERAL + r')\s*(?:설명|說明|説明|说明)')
 _CITES_FIGURE = re.compile(r'\bfig|그림', re.I)
 
 _FIG_WORD = (r'(?:text[-\s]?fig(?:ure)?s?|fig(?:ure)?s?|abb(?:ildung)?|рис(?:унок)?'
@@ -194,6 +217,7 @@ class AssembledFigure:
     label_hints: tuple[str, ...] = ()   # labels printed among the pieces of a cut-up figure
     page_kind: str = BODY               # BODY | PLATE_KIND | CAPTIONED_PLATE
     plate_inferred: bool = False        # the plate number is not printed on this page
+    reasons: tuple[str, ...] = ()       # why the rule doubts itself — the detect stage's input
 
 
 @dataclass
@@ -205,6 +229,7 @@ class PageAssembly:
     verdict: str = ''                   # set only when the page has pictures
     figures: list[AssembledFigure] = field(default_factory=list)
     dropped: dict[str, int] = field(default_factory=dict)
+    suspicions: list[str] = field(default_factory=list)   # doubts about the page with no figure to carry them
 
 
 @dataclass(frozen=True, eq=False)
@@ -217,6 +242,7 @@ class Region:
     label: str
     box: Box
     text: str
+    has_image: bool = True              # a picture block with no <img> is text the OCR mislabelled
 
     @property
     def is_picture(self) -> bool:
@@ -292,6 +318,7 @@ def _roman(number: int) -> str:
 
 
 def _numeral(token: str) -> int | None:
+    token = unicodedata.normalize('NFKC', token).translate(_HOMOGLYPHS)
     return int(token) if token.isdigit() else roman_number(token)
 
 
@@ -303,7 +330,8 @@ def block_text(block: ocr_layout.Block | None) -> str:
 
 def regions(blocks: list[ocr_layout.Block]) -> list[Region]:
     """The blocks that can be placed on the page; a block without a box cannot."""
-    return [Region(b.label, b.bbox, block_text(b)) for b in blocks if b.bbox is not None]
+    return [Region(b.label, b.bbox, block_text(b), '<img' in b.html.lower())
+            for b in blocks if b.bbox is not None]
 
 
 # ── plate numbers ────────────────────────────────────────────────────
@@ -341,10 +369,11 @@ def _plate_hits(regs: Iterable[Region], labels: frozenset[str],
         if not citing_captions and reg.label == 'Caption' and _CITES_FIGURE.search(reg.text):
             continue
         for m in _PLATE_NO.finditer(reg.text):
-            number = _numeral(m.group(3))
+            numeral = unicodedata.normalize('NFKC', m.group(3)).translate(_HOMOGLYPHS)
+            number = _numeral(numeral)
             # "Pl. 2 A" and "Pl. 2.B" (Barrande 1852) are two plates: the
             # letter is part of the number, and stays in the token.
-            token = m.group(3) + (m.group(4) or '')
+            token = numeral + (m.group(4) or '')
             key = (number, plate_suffix(token), _scheme(m))
             if number and number <= MAX_PLATE and key not in seen:
                 seen.add(key)
@@ -813,9 +842,67 @@ def _build(facts: PageFacts) -> PageAssembly:
     return result
 
 
+def _plate_nearby(facts: PageFacts, neighbours: list[PageFacts | None]) -> bool:
+    return any(f is not None and (f.printed or f.explained or f.bare_name)
+               for f in [facts, *neighbours])
+
+
+def suspect(facts: list[PageFacts], assemblies: list[PageAssembly]) -> None:
+    """Mark what the rule cannot settle. Fills `AssembledFigure.reasons` and
+    `PageAssembly.suspicions` in place.
+
+    The pilot review (098 §7) found every figure the rule built to be right
+    where it was sure, and wrong only where the OCR blocks do not say enough:
+    a plate the PDF holds twice, a scanned spread of two plates, a table
+    labelled Figure, a plate page the OCR did not box. Those are not for
+    another rule — the user's decision — but for a model shown the paper.
+    """
+    by_page = {f.page: f for f in facts}
+    for f, a in zip(facts, assemblies, strict=True):
+        neighbours = [by_page.get(f.page - 1), by_page.get(f.page + 1)]
+        pictures = {p.box: p for p in f.pictures}
+        numbered = [r for r in f.regs if r.label == 'Caption' and r.is_numbered_caption]
+        # Zhou & Zhang 1978 p.28: 26 photographs, no caption, no number on the
+        # page (the mark is on the explanation page before). Miller & Clarkson
+        # 1980 p.30: five photographs under one "FIGURES 17-21. For description
+        # see page 474" at the foot. One doubt about the page, not 26 about its
+        # photographs — and no photograph has a caption of its own.
+        unmarked_plate = (f.verdict == NO_MARK and len(f.pictures) >= UNMARKED_PLATE_MIN_PICTURES
+                          and not f.fig_captioned and f.loose_chars <= NEXT_PLATE_MAX_TEXT)
+        judged = []
+        for fig in a.figures:
+            reasons = []
+            if f.verdict == DUP_NUMBER:
+                reasons.append(DUP_NUMBER_REASON)
+            if f.verdict == MANY_MARKS:
+                reasons.append(MANY_MARKS_REASON)
+            if all(not pictures[b].has_image for b in fig.blocks if b in pictures):
+                reasons.append(TEXT_AS_FIGURE)
+            if unmarked_plate:
+                reasons.append(UNMARKED_PLATE_PAGE)
+            elif (fig.page_kind == BODY and fig.assembly == SINGLE and not fig.caption_hint
+                    and not _caption_above(fig.bbox, numbered) and not _plate_nearby(f, neighbours)):
+                reasons.append(NO_CAPTION)
+            if fig.assembly == CAPTION_GROUP and len(fig.blocks) >= FRAGMENTED_PIECES:
+                reasons.append(FRAGMENTED)
+            judged.append(replace(fig, reasons=tuple(reasons)))
+        a.figures = judged
+        if not a.figures:
+            if f.pictures and f.verdict == PLATE:
+                a.suspicions.append(PLATE_WITHOUT_PICTURES)
+            elif (not f.pictures and f.loose_chars <= NEXT_PLATE_MAX_TEXT
+                  and _plate_hits(f.regs, HEADER_LABELS)):
+                a.suspicions.append(PLATE_WITHOUT_PICTURES)
+            if not f.pictures and any(r.label == 'Caption' and r.is_figure_caption for r in f.regs):
+                a.suspicions.append(CAPTION_WITHOUT_FIGURE)
+
+
 def assemble_page(page: int, text: str) -> PageAssembly:
     """The figures on one OCR page, judged from that page alone."""
-    return _build(read_page(page, text))
+    facts = read_page(page, text)
+    assembly = _build(facts)
+    suspect([facts], [assembly])
+    return assembly
 
 
 def assemble_document(pages: list[str]) -> list[PageAssembly]:
@@ -826,4 +913,6 @@ def assemble_document(pages: list[str]) -> list[PageAssembly]:
     """
     facts = [read_page(index, text or '') for index, text in enumerate(pages)]
     _decide_plates(facts)
-    return [_build(f) for f in facts]
+    assemblies = [_build(f) for f in facts]
+    suspect(facts, assemblies)
+    return assemblies
