@@ -266,8 +266,10 @@ P02 §3.3은 `text/p013.txt`를 wrapper DB `pages.markdown`에서 만든다(§2.
 ### 10.3 그 밖에 맞춘 것
 
 - `pages_consulted`는 detect·link 결과 **스키마 파일에 들어간다**(클라이언트가 스키마를 보내므로). 없으면 §3의 "빠뜨린 쪽" 검증이 불가능.
-- Codex `-i`는 이미지 여러 장을 받는다(P02 §1 확인) → detect는 Astra가 폴더를 못 열더라도 대상 쪽 ±1을 붙여 보낼 수 있다. P02의 1단계 확인
-  ("세션 중 PNG를 스스로 여는가")이 실패해도 **클라이언트 요청 모양은 안 바뀐다** — 서버가 붙이는 이미지만 달라진다.
+- ✅ **Codex가 세션 중 폴더 PNG를 스스로 연다 — 실측 확인(2026-09-16 06:27 UTC, ocrserver P02 §3.3)**. `-i` 없이 4쪽 폴더를 주고
+  "FIGURE 1 쪽을 찾아 이미지를 보고 묘사·bbox"를 시키니 `rg`로 쪽을 찾고 `view_image`로 열어 시각 묘사 + bbox `[336,590,667,758]`.
+  같은 도판의 chandra `data-bbox`는 `335 588 662 756` — 5‰ 안 일치(좌표계 동일 확인). 약 90초. 절충안은 불필요.
+  `view_image` 호출은 `--json` 이벤트에 안 찍히므로 `pages_consulted`는 **스키마 필드**로 받는다(위 항목과 일치).
 - 서버 dedup 키에 `client_id`가 있다(P16 §6.5) — 같은 논문을 두 PC가 요청하면 두 번 부른다. 구독 한도상 낭비지만 결과가 클라이언트 DB에 있으므로 두 번째 PC는
   Zotero sibling 같은 공유 경로가 생기기 전까진 어쩔 수 없다. 기록만.
 - 서버는 쪽 번호를 0-based로 README에 박는다(P02 §3.3) — DB·OCR JSON·요청 모두 0-based. 일치.
@@ -281,4 +283,4 @@ P02 §3.3은 `text/p013.txt`를 wrapper DB `pages.markdown`에서 만든다(§2.
 | ② 모델 | Astra 확정, 되돌릴 여지 없음 (D7) |
 | 호출 속도 | 5분에 1건으로 시작 (D8). 서버 `FIGURES_MIN_INTERVAL=300` |
 
-남은 것: §10.1(작업 폴더 텍스트는 클라이언트가 올린다)을 명세 v2와 ocrserver P02 §3.3에 반영. 다음은 P17 §4 의 A 부터.
+§10.1은 ocrserver P02 §3.3에 반영됐다(`POST /figures/workspace`, 키 `file_hash|ocr_digest`). 명세 v2에는 G 단계에서 넣는다. 다음은 P17 §4 의 A 부터.
