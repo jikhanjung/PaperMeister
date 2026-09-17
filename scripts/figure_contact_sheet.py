@@ -25,20 +25,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from assemble_figures import _CACHE_HASH, _print_utf8, load_pages, open_database, target_files
 
 from papermeister import figure_sheet, figures, ocr_layout
-from papermeister.paths import DATA_DIR, OCR_JSON_DIR, PDF_CACHE_DIR
+from papermeister.figure_lane import local_pdf
+from papermeister.paths import DATA_DIR, OCR_JSON_DIR
 
 _print_utf8()
-
-
-def local_pdf(pf) -> str | None:
-    """Where this file's PDF is on this machine — the desktop's rule, without Qt."""
-    if pf.path and os.path.isfile(pf.path):
-        return pf.path
-    if pf.zotero_key and pf.path:
-        cached = os.path.join(PDF_CACHE_DIR, pf.zotero_key, pf.path)
-        if os.path.isfile(cached):
-            return cached
-    return None
 
 
 def collect(files, cache_dir: str) -> tuple[list[figure_sheet.Card], Counter, Counter]:

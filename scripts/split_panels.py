@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""P16 ③: the panel lane — for now, only what happens before the server.
+"""P16 ③: the panel lane.
 
 Lists which figures the panel stage is due on and why the others are not
-(a lane that "did nothing, no error" is what fsis EC §6-9 warns about),
-re-attaches panels whose entries changed by label (`--rematch --execute`),
-and with `--dump` writes the request items so the shape can be read.
-Nothing is sent — ocrserver's side (P02) is not built yet.
+(a lane that "did nothing, no error" is what fsis EC §6-9 warns about).
+`--rematch --execute` re-attaches panels whose entries changed, by label.
+`--execute` (without `--rematch`) submits one panels job per paper with the
+figures due, waits, checks each reply and writes the panels. Close the app.
 
     python scripts/split_panels.py --pilot tmp/p16_pilot.json
     python scripts/split_panels.py --paper-ids 664 --dump tmp/p16_panels
+    python scripts/split_panels.py --paper-ids 664 --execute
     python scripts/split_panels.py --pilot … --rematch --execute
     python scripts/split_panels.py --pilot … --include-maps --retry-errors
 """
@@ -23,9 +24,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from assemble_figures import _print_utf8, open_database, target_files
 
-from papermeister import figure_panels, figure_prompts
+from papermeister import figure_lane, figure_panels, figure_prompts
+from papermeister.nettls import install_system_trust
 
 _print_utf8()
+install_system_trust()
 
 PROMPT = figure_prompts.load('panels')
 PROMPT_VERSION = PROMPT['version']
@@ -39,15 +42,25 @@ def main() -> int:
     parser.add_argument('--rematch', action='store_true', help='re-attach panels whose entries changed')
     parser.add_argument('--include-maps', action='store_true')
     parser.add_argument('--retry-errors', action='store_true')
-    parser.add_argument('--execute', action='store_true', help='write (rematch only)')
+    parser.add_argument('--execute', action='store_true', help='submit and write (or, with --rematch, re-attach)')
+    parser.add_argument('--limit', type=int, help='execute: at most this many papers')
+    parser.add_argument('--no-wait', action='store_true')
     args = parser.parse_args()
     if not args.paper_ids and not args.pilot:
         parser.error('give --paper-ids or --pilot')
 
     open_database(write=args.execute)
+    client = None
+    if args.execute and not args.rematch:
+        from papermeister.figure_client import from_preferences
+        from papermeister.preferences import get_client_id
+        client = from_preferences()
+        client_id = get_client_id()
     if args.dump:
         os.makedirs(args.dump, exist_ok=True)
     totals: Counter = Counter()
+    submitted = 0
+    from papermeister.models import Figure
     for pf in target_files(args):
         t = figure_panels.split_targets(pf, PROMPT_VERSION, args.retry_errors, args.include_maps)
         totals['due'] += len(t.due)
@@ -69,12 +82,44 @@ def main() -> int:
                     print(f'    #{row.id} {"ok " if done else "?? "} {note}')
                 else:
                     print(f'    #{row.id} would re-attach')
+            continue
+        if not (args.execute and t.due):
+            continue
+        if args.limit and submitted >= args.limit:
+            break
+        submitted += 1
+        items = [figure_panels.panel_item(r, PROMPT_VERSION) for r in t.due]
+        body = {'client_id': client_id, 'file_hash': pf.hash, 'items': items, 'prompt': PROMPT,
+                'options': {'model': 'gpt-6-astra', 'effort': 'high', 'dpi': figure_panels.RENDER_DPI}}
+        try:
+            figure_lane.ensure_pdf(client, pf, print)
+            job = figure_lane.run_job(client, 'panels', body, print, wait=not args.no_wait)
+        except Exception as exc:
+            print(f'  FAILED: {type(exc).__name__}: {exc}')
+            totals['server error'] += 1
+            continue
+        if job is None:
+            continue
+        results = figure_lane.results_by_key(job)
+        for row, item in zip(t.due, items, strict=True):
+            reply = results.get(item['key'], {})
+            result = reply.get('result') if reply.get('status') == 'done' else None
+            siblings = Figure.select().where((Figure.paper_file == pf.id) & (Figure.page == row.page)
+                                             & (Figure.id != row.id) & (Figure.dismissed == False)).count()  # noqa: E712
+            check = figure_panels.validate_panel_result(item, result, siblings) if result else None
+            applied = figure_panels.apply_panels(row, item, result, check, PROMPT_VERSION,
+                                                 reply.get('model') or 'gpt-6-astra')
+            for name in ('written', 'unchanged', 'protected', 'failed', 'reviewed'):
+                totals[name] += getattr(applied, name)
+            print(f'    #{row.id:<6} {reply.get("status", "missing"):<16} '
+                  + (f'panels {len(check.panels)}  {check.why or ", ".join(check.review) or "ok"}' if check
+                     else str(reply.get('error', ''))[:80])
+                  + f'  {reply.get("elapsed_s", 0):.0f}s')
     print()
     for key, n in sorted(totals.items()):
         print(f'  {key:<28} {n:>6}')
-    if args.rematch and not args.execute:
-        print('Dry run — nothing written. Add --execute to re-attach.')
-    print('Nothing sent: the server side of ③ is not built yet.')
+    if not args.execute:
+        print('Dry run — nothing sent or written. Add --execute.')
     return 0
 
 
