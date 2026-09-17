@@ -292,7 +292,8 @@
   - 🟡 **Phase 2 게이트 진행 중** — 파일럿 `--limit 30 --execute --no-wait`로 **30잡(726 도판) 제출**(09-17). 워커 직렬 + 5분 간격이라 5~10시간.
     거두기: `python scripts/link_figures.py --collect --execute`(앱 닫고) → `figure_review.py --pilot …`. 볼 것: `budget_exhausted` 비율(969 s/46쪽이라 200쪽급은 1200 s 상한에 걸릴 수 있음 → 서버 상한↑ vs 클라이언트 플레이트 묶음 분할) · 검수 사유 분포 · `pages_consulted`
   - **결정(2026-09-17, 사용자)**: link·detect는 논문의 **OCR 텍스트 전체**가 ocrserver 작업 폴더에 올라가고, Astra가 여는 만큼(664는 46/46쪽) **OpenAI로 간다**.
-    PDF를 보내 도판을 찾게 하는 것과 정보량이 같으므로 **받아들인다**. PDF 파일 자체는 OpenAI로 가지 않는다(detect 쪽 이미지·panels 크롭만)
+    PDF를 보내 도판을 찾게 하는 것과 정보량이 같으므로 **받아들인다**. PDF 파일 자체는 OpenAI로 가지 않는다(detect 쪽 이미지·panels 크롭만).
+    워커가 로그인한 ChatGPT 계정의 **"Improve the model for everyone" 토글을 껐다**(2026-09-17) — 학습 데이터 사용 제외. 그 전에 나간 것은 664 + 파일럿 앞 몇 편
   - [ ] **같은 PDF가 Zotero 부모 여럿에 걸린 경우**(9832/9841 · 1189/1190 · 7467/7468) 잡이 따로 나간다 — 해시는 같은데 `figure_id`가 달라 서버 dedup 밖. 같은 (해시·쪽·상자) 행끼리 결과 복사로 호출을 아낄 것
   - [ ] 그다음 detect 표본(8803 Zhou & Zhang 4쪽 · 1191 5쪽 · 674 1쪽부터) → panels 100장 (104 §5)
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
