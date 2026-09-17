@@ -172,6 +172,10 @@ def test_an_invented_description_is_flagged_not_stored_silently(stored):
     check = fl.validate_link_result(p, r, PAGES)
     assert check.review[str(rows[2].id)] == [fl.DESCRIPTION_NOT_PRINTED]
     assert check.review[str(rows[3].id)] == [fl.CAPTION_NOT_PRINTED]
+    # one word the OCR misread and the model corrected is not an invention
+    r2 = reply(str(rows[2].id), str(rows[3].id))
+    r2['figures'][1]['caption'] = 'Fig. 4. Stratigraphic column of the Dumugol Formatiön.'
+    assert str(rows[3].id) not in fl.validate_link_result(p, r2, PAGES).review
     fl.apply_link(t, check, r, DIGEST, PROMPT, 'm')
     # written — the model may be right — but the doubt is on the row for a person
     assert fl.DESCRIPTION_NOT_PRINTED in json.loads(Figure.get_by_id(rows[2].id).uncertain_reasons_json)

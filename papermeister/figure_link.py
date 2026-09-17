@@ -44,8 +44,10 @@ MAX_ATTEMPTS = 3
 SHARED_CAPTION_CHARS = 80
 #: Share of an entry description's words that must be in the caption's pages.
 PRINTED_WORD_SHARE = 0.7
-#: Share of the caption's words that must be on the pages it claims.
+#: Share of the caption's words that must be on the pages it claims — and at
+#: least this many words missing before it is flagged.
 CAPTION_WORD_SHARE = 0.8
+MIN_MISSING_WORDS = 2
 
 # Review reasons the stage raises (P17 §3.10). They go on the row; a person reads them.
 CAPTION_NOT_PRINTED = 'caption_not_printed'
@@ -266,7 +268,12 @@ def validate_link_result(payload: dict, result: dict, pages: list[str],
         # Printed, not invented: the caption's words are on the pages it names,
         # and the entries are made of the caption's (and those pages') words.
         printed = _page_words(pages, caption_pages)
-        if _share(_words(caption), printed) < CAPTION_WORD_SHARE:
+        caption_words = _words(caption)
+        # One word the page lacks is usually the OCR's error, corrected by the
+        # model ("Œlandicus" for "'Glandicus'", Westergård 1936); a short
+        # caption should not be flagged for that alone.
+        if (_share(caption_words, printed) < CAPTION_WORD_SHARE
+                and len(caption_words - printed) >= MIN_MISSING_WORDS):
             check.flag(fid, CAPTION_NOT_PRINTED)
         allowed = printed | _words(caption)
         for e in entries:
