@@ -276,7 +276,8 @@
   - ✅ **D (2026-09-16, [100](./devlog/20260916_100_P16_Schema_Protection_Placeholders.md))** — 스키마(`uncertain_reasons_json`·`bbox_source`·detect_*·`caption_pages_json`·`continuation_of`·
     `panel_entries_digest`·`*_locked` / entry `printed_label`·`label_status`·`specimen_number` / panel `annotation`, `_migrate` 표 하나) · **`figure_store.protection()` 한 곳** ·
     사람의 행이 `blocks_json`으로 조각을 대변(absorbed/contested) · 쪽 의심 자리표시 행(`assembly='page'`) · `store_mode` 파일 단위 격리. 라이브 사본 dry run: new 66(자리표시 37 + 키릴/Tabl. 플레이트 10) · refreshed 909 · failed 0
-    - [ ] **Windows에서 `assemble_figures.py --pilot … --execute`**(스스로 마이그레이션 — **102 §4 수정 이후 버전으로**) → `figure_contact_sheet.py` 재생성 → `figure_review.py --pilot …`
+    - ✅ **Windows 재저장 완료 (2026-09-17)** — 라이브 DB 마이그레이션(D 컬럼 + REINDEX) + 파일럿: 3,790 도판(의심 969) · new 66 · refreshed 909 · folded 30 · failed 0 — 사본 dry run과 동일.
+      시트 재생성(dropped 32 · plate_inferred 8 · dup_number 24 · many_marks 15 …), `figure_review.py`: link 대기 3,732 · detect 대기 510 · 검수 사유별(no_caption 468 …) · 보존 2
   - ✅ **E (2026-09-16, [101](./devlog/20260916_101_P16_Link_Stage_Client_Side.md))** — `papermeister/figure_link.py`: `link_targets`(due/context/excluded 사유) · `link_payload`(도판+힌트, 텍스트 없음) ·
     `workspace_payload`(캐시 그대로 + `ocr_digest`) · `validate_link_result`(밖의 id/쪽 거절, 지어낸 캡션·설명/공유 캡션/빈 플레이트는 검수 사유, 항목 감소는 덮지 않음, skipped는 기존 값 유지) ·
     `apply_link`(보호 판정·내용 해시 unchanged). `scripts/link_figures.py --dump`: 파일럿 due 3,752 · 요청 중앙값 6 KB · 작업 폴더 텍스트 중앙값 147 KB, 합 36 MB. 이름 정규화는 불필요(결과가 figure_id로 온다)
