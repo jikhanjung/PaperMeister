@@ -59,32 +59,39 @@ def pages_of(pf, cache_dir: str, index: dict):
     return pages
 
 
-def apply_reply(pf, pages, targets, request, job_item: dict, totals: Counter) -> None:
-    """Validate one paper's reply and write it; say what happened."""
-    status = job_item.get('status')
-    if status != 'done' or not isinstance(job_item.get('result'), dict):
-        # No usable reply: every figure that was due counts an attempt.
-        applied = figure_link.apply_link(targets, figure_link.LinkCheck(), {}, request['ocr_digest'],
-                                         PROMPT_VERSION, 'gpt-6-astra')
-        totals[f'item {status}'] += 1
-        print(f'  paper {pf.paper_id:>6}  {status}: {job_item.get("error", "")[:120]}  '
-              f'(attempt counted on {applied.failed})')
-        return
-    result = job_item['result']
-    check = figure_link.validate_link_result(request, result, pages, {str(r.id): r for r in targets.due})
-    applied = figure_link.apply_link(targets, check, result, request['ocr_digest'], PROMPT_VERSION,
-                                     job_item.get('model') or 'gpt-6-astra')
+def apply_reply(pf, pages, targets, request, replies: dict, totals: Counter) -> None:
+    """Validate a paper's replies (one per request item) and write them; say what happened."""
+    existing = {str(r.id): r for r in targets.due}
+    check = figure_link.LinkCheck()
+    consulted: set[int] = set()
+    elapsed = 0.0
+    model = 'gpt-6-astra'
+    for item in request['items']:
+        reply = replies.get(item['key'], {'status': 'missing'})
+        status = reply.get('status')
+        if status != 'done' or not isinstance(reply.get('result'), dict):
+            totals[f'item {status}'] += 1
+            print(f'  paper {pf.paper_id:>6}  item {item.get("part", [1, 1])[0]}/{item.get("part", [1, 1])[1]} '
+                  f'{status}: {str(reply.get("error", ""))[:120]}')
+            continue
+        result = reply['result']
+        check.merge(figure_link.validate_link_result(item, result, pages, existing))
+        consulted |= set(result.get('pages_consulted') or [])
+        elapsed += float(reply.get('elapsed_s') or 0)
+        model = reply.get('model') or model
+    # Figures no item answered for count an attempt (apply_link does that).
+    applied = figure_link.apply_link(targets, check, {}, request['ocr_digest'], PROMPT_VERSION, model)
     totals['written'] += applied.written
     totals['unchanged'] += applied.unchanged
-    totals['failed (skipped/rejected)'] += applied.failed
+    totals['failed (skipped/rejected/no reply)'] += applied.failed
     totals['reviewed'] += applied.reviewed
     copied = figure_link.propagate_link(pf)
     if copied:
         totals['copied to same-PDF entries'] += copied
     print(f'  paper {pf.paper_id:>6}  written {applied.written}  unchanged {applied.unchanged}  '
           f'skipped {len(check.skipped)}  rejected {len(check.rejected)}  review {len(check.review)}  '
-          f'pages consulted {len(result.get("pages_consulted") or [])}  '
-          f'{job_item.get("elapsed_s", 0):.0f}s')
+          f'no reply {applied.failed - len(check.skipped) - len(check.rejected)}  '
+          f'pages consulted {len(consulted)}  {elapsed:.0f}s over {len(request["items"])} item(s)')
     for fid, why in check.rejected:
         print(f'      rejected #{fid}: {why}')
     for fid, reasons in check.review.items():
@@ -99,8 +106,9 @@ def collect(client, args, index) -> int:
         if job.get('status') not in ('done', 'done_with_errors'):
             continue
         full = client.job('link', job['job_id'])
-        for key, item in figure_lane.results_by_key(full).items():
-            prefix = key.split('@')[0]
+        replies = figure_lane.results_by_key(full)
+        prefixes = {key.split('@')[0] for key in replies}
+        for prefix in sorted(prefixes):
             pf = PaperFile.select().where(PaperFile.hash.startswith(prefix) & ~PaperFile.path.endswith('.json')).first()
             if pf is None:
                 totals['no such file'] += 1
@@ -114,13 +122,15 @@ def collect(client, args, index) -> int:
                 totals['nothing due (already applied?)'] += 1
                 continue
             request = figure_link.link_payload(pf, pages, targets, digest, client.client_id, PROMPT)
-            if request['items'][0]['key'] != key:
-                totals['stale key (text or prompt changed)'] += 1
+            keys = [it['key'] for it in request['items']]
+            if not any(k in replies for k in keys):
+                totals['stale key (text, prompt or item split changed)'] += 1
                 continue
             if args.execute:
-                apply_reply(pf, pages, targets, request, item, totals)
+                apply_reply(pf, pages, targets, request, replies, totals)
             else:
-                print(f'  paper {pf.paper_id:>6}  would apply job {job["job_id"]} ({item.get("status")})')
+                print(f'  paper {pf.paper_id:>6}  would apply job {job["job_id"]} '
+                      f'({sum(1 for k in keys if replies.get(k, {}).get("status") == "done")}/{len(keys)} items done)')
                 totals['would apply'] += 1
     for k, n in sorted(totals.items()):
         print(f'  {k:<32} {n:>6}')
@@ -186,7 +196,8 @@ def main() -> int:
             if args.limit and submitted >= args.limit:
                 break
             submitted += 1
-            print(f'paper {pf.paper_id}  {os.path.basename(pf.path)[:60]}  due {len(targets.due)}')
+            print(f'paper {pf.paper_id}  {os.path.basename(pf.path)[:60]}  due {len(targets.due)} '
+                  f'in {len(request["items"])} item(s)')
             try:
                 figure_lane.ensure_workspace(client, pf, workspace, print)
                 job = figure_lane.run_job(client, 'link', request, print, wait=not args.no_wait)
@@ -195,8 +206,7 @@ def main() -> int:
                 totals['server error'] += 1
                 continue
             if job is not None:
-                item = figure_lane.results_by_key(job).get(request['items'][0]['key'], {'status': 'missing'})
-                apply_reply(pf, pages, targets, request, item, totals)
+                apply_reply(pf, pages, targets, request, figure_lane.results_by_key(job), totals)
             continue
         req_bytes = len(json.dumps(request, ensure_ascii=False).encode('utf-8'))
         ws_bytes = len(json.dumps(workspace, ensure_ascii=False).encode('utf-8'))

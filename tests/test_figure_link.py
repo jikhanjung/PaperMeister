@@ -291,3 +291,39 @@ def test_one_pdf_under_three_library_entries_is_linked_once_and_copied(stored):
     plate.caption, plate.caption_locked, plate.link_key = 'mine', True, ''
     plate.save()
     assert fl.propagate_link(pf) == 0 and Figure.get_by_id(plate.id).caption == 'mine'
+
+
+@pytest.mark.unit
+def test_a_paper_with_many_figures_is_sent_as_several_items(stored):
+    """Balašova 1976, 91 plates: one session could not deliver the answer
+    (three attempts, two hours). Split by page into items of at most N; the
+    locked context rides in every item; the checks merge back into one."""
+    from papermeister import figure_link as fl
+    from papermeister.models import Figure
+    pf, rows = stored
+    for page in range(10, 20):
+        Figure.create(paper=pf.paper_id, paper_file=pf.id, file_hash=HASH, page=page,
+                      bbox_page_1000=json.dumps([100, 100, 900, 900]), blocks_json='[[100, 100, 900, 900]]')
+    rows[3].caption_locked = True
+    rows[3].save()
+    t = fl.link_targets(pf, DIGEST, PROMPT)
+    assert len(t.due) == 11 and len(t.context) == 1
+    p = fl.link_payload(pf, PAGES, t, DIGEST, 'c', {'version': 'v'}, per_item=4)
+    items = p['items']
+    assert [it['part'] for it in items] == [[1, 3], [2, 3], [3, 3]]
+    assert [it['key'][-4:] for it in items] == ['#1/3', '#2/3', '#3/3']
+    assert [len([f for f in it['figures'] if not f['locked']]) for it in items] == [4, 4, 3]
+    assert all(any(f['locked'] for f in it['figures']) for it in items)
+    # pages ascend across items
+    pages_sent = [f['page'] for it in items for f in it['figures'] if not f['locked']]
+    assert pages_sent == sorted(pages_sent)
+    # one item answered, one not: the answered figures are written, the rest count an attempt
+    r = {'figures': [{'figure_id': f['figure_id'], 'name': '', 'caption': 'Fig. 4. Stratigraphic column of the Dumugol Formation.',
+                      'caption_source': 'same_page', 'caption_pages': [3], 'entries': []}
+                     for f in items[0]['figures'] if not f['locked']],
+         'skipped': [], 'pages_consulted': [3]}
+    check = fl.LinkCheck().merge(fl.validate_link_result(items[0], r, PAGES))
+    applied = fl.apply_link(t, check, {}, DIGEST, PROMPT, 'm')
+    assert applied.written == 4 and applied.failed == 7
+    # a single-figure paper keeps the plain key
+    assert fl.link_items(pf, PAGES, fl.LinkTargets(due=t.due[:1]), DIGEST, 'v')[0]['key'].endswith('@v')

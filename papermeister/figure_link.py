@@ -40,6 +40,11 @@ from .models import Figure, FigureEntry, PaperFile, db
 
 #: How many times the stage may fail on a figure before it needs `--retry-errors`.
 MAX_ATTEMPTS = 3
+#: Figures per request item. One item is one model session, and a session
+#: that has to write ninety plates' worth of entries does not survive a
+#: dropped connection (Balašova 1976: three attempts, two hours, nothing —
+#: ocrserver, 2026-09-17). Smaller answers, more sessions.
+MAX_FIGURES_PER_ITEM = 40
 #: A caption prefix this long that two figures on one page share is the same caption.
 SHARED_CAPTION_CHARS = 80
 #: Share of an entry description's words that must be in the caption's pages.
@@ -138,40 +143,59 @@ def _figure_item(row: Figure, locked: bool) -> dict:
     return item
 
 
-def link_item(paper_file: PaperFile, pages: list[str], targets: LinkTargets, digest: str,
-              prompt_version: str) -> dict:
-    """The one item of a paper's link job (wrapper API: `POST /figures/link`).
+def link_items(paper_file: PaperFile, pages: list[str], targets: LinkTargets, digest: str,
+               prompt_version: str, per_item: int = MAX_FIGURES_PER_ITEM) -> list[dict]:
+    """A paper's link job as items (wrapper API: `POST /figures/link`).
 
     Page texts are not in here: the server holds them as the paper's
     workspace, keyed by the same `ocr_digest` (client plan §10.1). What is
     here is every figure the model must consider and the pages the rule
     thinks talk about plates — hints, not instructions. `key` comes back on
     the result unchanged.
+
+    The figures due are split, in page order, into items of at most
+    `per_item`; every item also carries the locked context rows. Each item is
+    its own model session on the server.
     """
     facts = [figures.read_page(i, t or '') for i, t in enumerate(pages)]
-    return {
-        'key': f'{paper_file.hash[:12]}@{digest[:12]}@{prompt_version}',
-        'page_count': len(pages),
-        'figures': ([_figure_item(r, locked=False) for r in targets.due]
-                    + [_figure_item(r, locked=True) for r in targets.context]),
-        'hints': {
-            'plate_pages': [f.page for f in facts if f.printed],
-            'explanation_pages': [f.page for f in facts if f.explained],
-            'caption_pages': [f.page for f in facts
-                              if any(r.label == 'Caption' and r.is_numbered_caption for r in f.regs)],
-        },
+    hints = {
+        'plate_pages': [f.page for f in facts if f.printed],
+        'explanation_pages': [f.page for f in facts if f.explained],
+        'caption_pages': [f.page for f in facts
+                          if any(r.label == 'Caption' and r.is_numbered_caption for r in f.regs)],
     }
+    context = [_figure_item(r, locked=True) for r in targets.context]
+    due = sorted(targets.due, key=lambda r: (r.page, r.id))
+    chunks = [due[i:i + per_item] for i in range(0, len(due), per_item)] or [[]]
+    base = f'{paper_file.hash[:12]}@{digest[:12]}@{prompt_version}'
+    items = []
+    for index, chunk in enumerate(chunks):
+        items.append({
+            'key': base if len(chunks) == 1 else f'{base}#{index + 1}/{len(chunks)}',
+            'page_count': len(pages),
+            'part': [index + 1, len(chunks)],
+            'figures': [_figure_item(r, locked=False) for r in chunk] + context,
+            'hints': hints,
+        })
+    return items
+
+
+def link_item(paper_file: PaperFile, pages: list[str], targets: LinkTargets, digest: str,
+              prompt_version: str) -> dict:
+    """The first (often only) item — kept for callers that expect one."""
+    return link_items(paper_file, pages, targets, digest, prompt_version)[0]
 
 
 def link_payload(paper_file: PaperFile, pages: list[str], targets: LinkTargets,
-                 digest: str, client_id: str, prompt: dict | None = None) -> dict:
-    """The request body of `POST /figures/link`: one item, plus the prompt block."""
+                 digest: str, client_id: str, prompt: dict | None = None,
+                 per_item: int = MAX_FIGURES_PER_ITEM) -> dict:
+    """The request body of `POST /figures/link`: the items, plus the prompt block."""
     version = (prompt or {}).get('version', '')
     body = {
         'client_id': client_id,
         'file_hash': paper_file.hash,
         'ocr_digest': digest,
-        'items': [link_item(paper_file, pages, targets, digest, version)],
+        'items': link_items(paper_file, pages, targets, digest, version, per_item),
         'options': {'model': 'gpt-6-astra', 'effort': 'high'},
     }
     if prompt:
@@ -200,6 +224,17 @@ class LinkCheck:
         if reason not in self.review[figure_id]:
             self.review[figure_id].append(reason)
 
+    def merge(self, other: LinkCheck) -> LinkCheck:
+        """The checks of a job's items, as one."""
+        self.accepted.update(other.accepted)
+        self.rejected += other.rejected
+        for fid, reasons in other.review.items():
+            for r in reasons:
+                self.flag(fid, r)
+        self.skipped += other.skipped
+        self.unknown += other.unknown
+        return self
+
 
 def _words(text: str) -> set[str]:
     return {w.lower() for w in _WORD.findall(text or '')}
@@ -226,6 +261,7 @@ def validate_link_result(payload: dict, result: dict, pages: list[str],
     person: the reply may be right, and the rule cannot tell.
     """
     check = LinkCheck()
+    # `payload` is one request item, or a whole one-item body.
     item = payload['items'][0] if 'items' in payload else payload
     sent = {f['figure_id']: f for f in item['figures']}
     page_count = item.get('page_count', len(pages))
