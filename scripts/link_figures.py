@@ -78,6 +78,9 @@ def apply_reply(pf, pages, targets, request, job_item: dict, totals: Counter) ->
     totals['unchanged'] += applied.unchanged
     totals['failed (skipped/rejected)'] += applied.failed
     totals['reviewed'] += applied.reviewed
+    copied = figure_link.propagate_link(pf)
+    if copied:
+        totals['copied to same-PDF entries'] += copied
     print(f'  paper {pf.paper_id:>6}  written {applied.written}  unchanged {applied.unchanged}  '
           f'skipped {len(check.skipped)}  rejected {len(check.rejected)}  review {len(check.review)}  '
           f'pages consulted {len(result.get("pages_consulted") or [])}  '
@@ -155,7 +158,14 @@ def main() -> int:
     totals: Counter = Counter()
     sizes: list[tuple[int, int, int]] = []
     submitted = 0
+    seen_hashes: set[str] = set()
     for pf in target_files(args):
+        if pf.hash in seen_hashes:
+            # The same PDF under another library entry: one paper, one call.
+            # Its rows get the reply by propagation when the first entry is applied.
+            totals['same PDF as an earlier entry (propagated)'] += 1
+            continue
+        seen_hashes.add(pf.hash)
         pages = pages_of(pf, args.cache_dir, index)
         if pages is None:
             totals['no cache'] += 1

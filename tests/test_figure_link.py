@@ -254,3 +254,40 @@ def test_a_locked_caption_is_context_and_never_written(stored):
     assert (str(rows[3].id), 'locked') in check.rejected
     fl.apply_link(t, check, r, DIGEST, PROMPT, 'm')
     assert Figure.get_by_id(rows[3].id).caption == 'Fig. 4. A person wrote this.'
+
+
+@pytest.mark.unit
+def test_one_pdf_under_three_library_entries_is_linked_once_and_copied(stored):
+    """The thesis filed under three Zotero parents went to the server three
+    times (2026-09-17). The reply is applied to one entry and copied to the
+    rows of the others that share the page and box."""
+    from papermeister import figure_link as fl
+    from papermeister import figure_store
+    from papermeister.models import Figure, FigureEntry, Paper, PaperFile
+    pf, rows = stored
+    twins = []
+    for title in ('이창숙 2004', 'Lee 2004 (again)'):
+        other = PaperFile.create(paper=Paper.create(title=title), path='lee2.pdf', hash=HASH, status='processed')
+        figs = [AssembledFigure(page=2, bbox=(100, 100, 900, 480), blocks=((100, 100, 480, 480), (520, 100, 900, 480)),
+                                assembly=PLATE_UNION, plate=2, name_hint='Plate 2', page_kind=PLATE_KIND),
+                AssembledFigure(page=3, bbox=(100, 100, 900, 600), blocks=((100, 100, 900, 600),), assembly=SINGLE)]
+        figure_store.apply_plan(figure_store.plan_store(other, figs))
+        twins.append(other)
+    assert [o.id for o in fl.siblings(pf)] == [o.id for o in twins]
+
+    t = fl.link_targets(pf, DIGEST, PROMPT)
+    p = fl.link_payload(pf, PAGES, t, DIGEST, 'c')
+    r = reply(str(rows[2].id), str(rows[3].id))
+    fl.apply_link(t, fl.validate_link_result(p, r, PAGES), r, DIGEST, PROMPT, 'm')
+    assert fl.propagate_link(pf) == 4
+    for other in twins:
+        plate = Figure.get((Figure.paper_file == other.id) & (Figure.page == 2))
+        assert plate.caption.startswith('PLATE 2.') and plate.link_key == fl.link_key(plate, DIGEST, PROMPT)
+        assert FigureEntry.select().where(FigureEntry.figure == plate.id).count() == 3
+        assert fl.link_targets(other, DIGEST, PROMPT).due == []      # nothing left to send for the twin
+    assert fl.propagate_link(pf) == 0                                 # idempotent
+    # a person's caption on a twin is not overwritten by the copy
+    plate = Figure.get((Figure.paper_file == twins[0].id) & (Figure.page == 2))
+    plate.caption, plate.caption_locked, plate.link_key = 'mine', True, ''
+    plate.save()
+    assert fl.propagate_link(pf) == 0 and Figure.get_by_id(plate.id).caption == 'mine'

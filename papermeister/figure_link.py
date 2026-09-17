@@ -384,6 +384,57 @@ def apply_link(targets: LinkTargets, check: LinkCheck, result: dict, digest: str
     return out
 
 
+# ── the same PDF under several library entries ───────────────────────
+
+def siblings(paper_file: PaperFile) -> list[PaperFile]:
+    """Other library entries holding the very same PDF (one file, several Zotero parents)."""
+    return list(PaperFile.select().where((PaperFile.hash == paper_file.hash) & (PaperFile.id != paper_file.id)
+                                         & PaperFile.trashed_at.is_null() & ~PaperFile.path.endswith('.json')))
+
+
+def propagate_link(paper_file: PaperFile) -> int:
+    """Copy this file's linked captions to its siblings' rows of the same page
+    and box. One paper is one model call: the thesis filed under three Zotero
+    parents went to the server three times before this (2026-09-17). Returns
+    the rows written. Protected or already-linked sibling rows are left alone."""
+    others = siblings(paper_file)
+    if not others:
+        return 0
+    source_rows = {(r.page, r.bbox_page_1000): r for r in Figure.select().where(
+        (Figure.paper_file == paper_file.id) & (Figure.linked_at.is_null(False)) & (Figure.dismissed == False))}  # noqa: E712
+    if not source_rows:
+        return 0
+    written = 0
+    with db.atomic():
+        for other in others:
+            targets = {(r.page, r.bbox_page_1000): r for r in Figure.select().where(
+                (Figure.paper_file == other.id) & (Figure.dismissed == False))}  # noqa: E712
+            for key, src in source_rows.items():
+                dst = targets.get(key)
+                if dst is None or protection(dst).caption:
+                    continue
+                if dst.link_key == src.link_key and dst.link_result_digest == src.link_result_digest:
+                    continue
+                for name in ('caption', 'caption_source', 'caption_page', 'caption_pages_json', 'link_key',
+                             'link_result_digest', 'link_model', 'link_prompt_version', 'linked_at'):
+                    setattr(dst, name, getattr(src, name))
+                if dst.linked_at is None or not dst.name:
+                    dst.name = src.name
+                dst.link_attempts = 0
+                if src.continuation_of_id is not None:
+                    first = Figure.get_or_none(Figure.id == src.continuation_of_id)
+                    twin = targets.get((first.page, first.bbox_page_1000)) if first else None
+                    dst.continuation_of = twin.id if twin else None
+                dst.save()
+                FigureEntry.delete().where(FigureEntry.figure == dst.id).execute()
+                for e in src.entries.order_by(FigureEntry.order):
+                    FigureEntry.create(figure=dst.id, order=e.order, label=e.label, printed_label=e.printed_label,
+                                       label_status=e.label_status, specimen_number=e.specimen_number,
+                                       description=e.description)
+                written += 1
+    return written
+
+
 def _store_reasons(row: Figure, reasons: list[str]) -> None:
     """Keep the rule's own doubts; add the stage's, without repeating."""
     have = json.loads(row.uncertain_reasons_json or '[]')
