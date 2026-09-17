@@ -287,7 +287,12 @@
     **[`docs/figure_server_spec_v2.md`](./docs/figure_server_spec_v2.md)** = 서버 명세 원본(workspace·detect 쪽 단위·`from`/`dismiss`·워커 요구·규모). **→ ocrserver P02 0단계 해제, 서버 착수 가능**
   - ✅ **H 코드 (2026-09-17, [104](./devlog/20260917_104_P16_Lanes_And_Detect.md))** — `figure_client.py`(HTTP, paused 워커는 기다림) · `figure_detect.py`(쪽 단위 항목, `from`/`dismiss`→kept/adjusted/merge/split/new/dismiss, 사람 행 불가침) ·
     `figure_lane.py` · `link_figures.py --execute/--collect` · `detect_figures.py` · `split_panels.py --execute`. 라이브 dry run 통과. 서버(0.3.3 + 워커 systemd)는 대기 중
-  - [ ] 🔴 **첫 실제 호출 — 사용자 확인 뒤 Windows에서**: `link_figures.py --paper-ids 664 --execute` 1편 → 파일럿 `--limit 30` → `figure_review.py`. 그다음 detect 표본 → panels 100장 (104 §5)
+  - ✅ **첫 실제 호출 (2026-09-17)** — `link_figures.py --paper-ids 664 --execute`: Westergård 1936, **24/24 반영, 거절 0, 지어낸 설명 0**, 46쪽 훑음, **969 s**.
+    범위 펼침(`Fig. 2 a/b` → 2a·2b)·분류군 병합·펼침 스캔 facing-page 설명 모두 프롬프트대로. 검수 1건은 모델이 OCR 오독(`'Glandicus'` → `Œlandicus`)을 고친 것 → 검사기 완화(`00cd4bb`)
+  - 🟡 **Phase 2 게이트 진행 중** — 파일럿 `--limit 30 --execute --no-wait`로 **30잡(726 도판) 제출**(09-17). 워커 직렬 + 5분 간격이라 5~10시간.
+    거두기: `python scripts/link_figures.py --collect --execute`(앱 닫고) → `figure_review.py --pilot …`. 볼 것: `budget_exhausted` 비율(969 s/46쪽이라 200쪽급은 1200 s 상한에 걸릴 수 있음 → 서버 상한↑ vs 클라이언트 플레이트 묶음 분할) · 검수 사유 분포 · `pages_consulted`
+  - [ ] **같은 PDF가 Zotero 부모 여럿에 걸린 경우**(9832/9841 · 1189/1190 · 7467/7468) 잡이 따로 나간다 — 해시는 같은데 `figure_id`가 달라 서버 dedup 밖. 같은 (해시·쪽·상자) 행끼리 결과 복사로 호출을 아낄 것
+  - [ ] 그다음 detect 표본(8803 Zhou & Zhang 4쪽 · 1191 5쪽 · 674 1쪽부터) → panels 100장 (104 §5)
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
     아니면 논문·폴더·전체 우클릭 "Process Figures") · 서버 PDF는 먼저 존재 확인 후 없으면 업로드 · Batches API는 해당 없음
