@@ -316,7 +316,11 @@
       분할 기준을 **도판 수 → 예상 답 무게**(플레이트 8 · 본문 1, 항목당 80)로 바꿈: 1191 6항목 · 3853 2항목 · 664 1항목. `--per-item`도 무게. 서버는 HTTPS 전송 테스트 중(웹소켓 끊김 완화, 완치는 아님)
     - **서버 결정(09-18 09:35 UTC, ocrserver devlog 047)**: HTTPS(SSE) 실험도 40도판 항목에서 3회 끊김·60분 타임아웃 → **워커 전송 유지, 해법은 클라이언트 무게 분할**. 잡 상태에 `cancelled` 추가(클라이언트 `TERMINAL`에 반영).
       호출 간격 **`FIGURES_MIN_INTERVAL=120`**(사용자 결정 06:02; D8의 300에서 하향). panels 111장 진행 중(끊김 0, 70–90 s/장)
-    - [ ] 1191·3853 재제출: `link_figures.py --paper-ids 1191,3853 --execute --no-wait`(6 + 2 항목) → 나중에 `--collect --execute`. 80이 Barrande에서 걸리면 그 논문만 `--per-item 40`
+    - 🟡 1191·3853 재제출됨(6 + 2 항목, 09-18) → `--collect --execute`. 80이 Barrande에서 걸리면 그 논문만 `--per-item 40`
+  - **Windows 명령은 WSL에서 직접 실행 가능**: `"/mnt/c/Users/Jikhan Jung/anaconda3/envs/PaperMeister/python.exe" scripts/…`(Windows 설정·client_id·DB writer 그대로). `--execute` 전엔 앱이 닫혀 있는지 확인
+  - [ ] **Phase 4 (앱 통합)**: 우클릭 "Process Figures"(①→①′→②→③, 끝난 단계는 키로 건너뜀) + 진행창(구독 한도 대기 표시) + 서버 없으면 **비활성 + 이유**(기관망 밖 사용자는 처리 불가, 보기만).
+    **도판 결과를 캐시 JSON `figures` 키에 쓰고 Zotero sibling 재업로드 / 받을 때 JSON → 행 복원**(사용자 제안 09-18) — biblio `papermeister_meta`와 같은 공유 경로, `ocr_digest`는 `pages[].markdown`만 해시하므로 안전. 사람 결정(`user_confirmed`·잠금)도 실린다
+  - [ ] 릴리스는 **pre-release beta**(`v0.2.0-beta.1`, `release.yml`이 `-beta`를 prerelease로) — CHANGELOG + ko 카탈로그 + `version.py`(지금 0.1.9) + 태그
     - **프롬프트 손볼 것(모아서 한 번에 — 버전이 바뀌면 linked 444행이 전부 다시 due)**: `name`은 인쇄된 단어 포함(`Text-fig. 15`, 맨 `15` 금지; 8803 p.29만 `Plate II`로 영어화) → 합쳐진 행은 link가 새 키로 다시 돈다(`link_figures.py --pilot … --execute --no-wait` 재실행) → panels 100장 (104 §5)
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
