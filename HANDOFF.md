@@ -316,7 +316,8 @@
       분할 기준을 **도판 수 → 예상 답 무게**(플레이트 8 · 본문 1, 항목당 80)로 바꿈: 1191 6항목 · 3853 2항목 · 664 1항목. `--per-item`도 무게. 서버는 HTTPS 전송 테스트 중(웹소켓 끊김 완화, 완치는 아님)
     - **서버 결정(09-18 09:35 UTC, ocrserver devlog 047)**: HTTPS(SSE) 실험도 40도판 항목에서 3회 끊김·60분 타임아웃 → **워커 전송 유지, 해법은 클라이언트 무게 분할**. 잡 상태에 `cancelled` 추가(클라이언트 `TERMINAL`에 반영).
       호출 간격 **`FIGURES_MIN_INTERVAL=120`**(사용자 결정 06:02; D8의 300에서 하향). panels 111장 진행 중(끊김 0, 70–90 s/장)
-    - 🟡 1191·3853 재제출됨(6 + 2 항목, 09-18) → `--collect --execute`. 80이 Barrande에서 걸리면 그 논문만 `--per-item 40`
+    - ✅ 09-18 저녁 `link_figures.py --collect --execute` ×3(멱등 확인): detect 뒤 7편 답 → **written 175 + 형제 복사 17**, rejected 0. 1191(6항목)·3853(2항목)은 panels 뒤 큐에서 대기 중 → 나중에 `--collect`. 80이 Barrande에서 걸리면 그 논문만 `--per-item 40`
+    - ✅ **③ panels 첫 답(664)**: `split_panels.py --collect --execute` → 15장 중 **14 반영**, 1 실패(`duplicate_caption_index` #1360). 플레이트당 6–33패널, a/b 부패널까지 상자가 표본에 딱 맞음(Plate I 33/33). 눈으로 볼 시트: **`scripts/panel_sheet.py --paper-ids 664`** → `<data>\tmp\p16_panels\664\index.html`(도판 crop + 패널 상자 + 매칭 항목). 7450(68)·8833(29)은 서버 진행 중(70–90 s/장) → `--collect --execute` 뒤 같은 시트로
   - **Windows 명령은 WSL에서 직접 실행 가능**: `"/mnt/c/Users/Jikhan Jung/anaconda3/envs/PaperMeister/python.exe" scripts/…`(Windows 설정·client_id·DB writer 그대로). `--execute` 전엔 앱이 닫혀 있는지 확인
   - ✅ **Phase 4a — 도판 결과 ↔ 캐시 JSON ↔ Zotero sibling** (2026-09-18, [105](./devlog/20260918_105_P16_Figures_Ride_In_The_OCR_JSON.md)): `figure_share.py`(정체로 직렬화, `ocr_digest`·`file_hash` 가드, 새 결과만 갱신, 사람 행 불가침).
     DB→JSON은 레인·curate 반영 뒤 자동, JSON→DB는 sibling 다운로드·Text 탭 첫 로드·assemble 저장 때. 파일럿 108편 JSON 백필(`--no-push`). Zotero 푸시는 pref `zotero_upload_ocr_json`이 켜져 있을 때 다음 반영부터

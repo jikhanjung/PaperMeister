@@ -103,7 +103,7 @@ def apply_reply(pf, pages, targets, request, replies: dict, totals: Counter) -> 
     share(pf, totals)
     print(f'  paper {pf.paper_id:>6}  written {applied.written}  unchanged {applied.unchanged}  '
           f'skipped {len(check.skipped)}  rejected {len(check.rejected)}  review {len(check.review)}  '
-          f'no reply {applied.failed - len(check.skipped) - len(check.rejected)}  '
+          f'no reply {max(0, applied.failed - len(check.skipped) - len(check.rejected))}  '
           f'pages consulted {len(consulted)}  {elapsed:.0f}s over {len(request["items"])} item(s)')
     for fid, why in check.rejected:
         print(f'      rejected #{fid}: {why}')

@@ -183,6 +183,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 | `export_citation_graph.py` | (P14 L1) nodes/edges CSV + GEXF(Gephi), `--with-external` |
 | `audit_matches.py` | (P14 A2) 참조 매칭 감사 (의심 FP / 미연결 FN 탐지) |
 | `assemble_figures.py` | (P16) 대상 없으면 조사(전 캐시 도판·플레이트·조각 도판·분할 후보 수 + `--pilot-out`/`--pilot-size`, 파일럿은 층별 몫 안에서 연도·길이 구간을 고르게), `--paper-ids`/`--pilot`이면 `Figure` 저장(`--execute`). 판정은 `figures.py` 한 곳, 저장 규칙은 `figure_store.py`(안 나오면 접고 지우지 않음). **dry run은 DB를 읽기 전용으로 연다** |
+| `panel_sheet.py` | (P16 ③) 패널 결과 시각 검수 시트 — 도판 crop에 패널 상자·라벨, 옆에 매칭된 항목. `--paper-ids`, read-only |
 | `verify_image.py` | OCR 이미지 경로(Pillow) 1-커맨드 검증 |
 | `migrate_data_dir.py` | 데이터 디렉터리 `~/.papermeister` → `~/PaleoBytes/PaperMeister` 이동 (`--execute`, `--copy`). **앱을 닫고 실행** |
 
