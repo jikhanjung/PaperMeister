@@ -310,21 +310,23 @@ def test_a_paper_with_many_figures_is_sent_as_several_items(stored):
     assert len(t.due) == 11 and len(t.context) == 1
     p = fl.link_payload(pf, PAGES, t, DIGEST, 'c', {'version': 'v'}, per_item=4)
     items = p['items']
-    assert [it['part'] for it in items] == [[1, 3], [2, 3], [3, 3]]
-    assert [it['key'][-4:] for it in items] == ['#1/3', '#2/3', '#3/3']
-    assert [len([f for f in it['figures'] if not f['locked']]) for it in items] == [4, 4, 3]
+    # the plate (weight 8) fills an item by itself; the ten body figures go four to an item
+    assert [it['part'] for it in items] == [[1, 4], [2, 4], [3, 4], [4, 4]]
+    assert [it['key'][-4:] for it in items] == ['#1/4', '#2/4', '#3/4', '#4/4']
+    assert [len([f for f in it['figures'] if not f['locked']]) for it in items] == [1, 4, 4, 2]
+    assert items[0]['figures'][0]['page_kind'] == 'plate'
     assert all(any(f['locked'] for f in it['figures']) for it in items)
     # pages ascend across items
     pages_sent = [f['page'] for it in items for f in it['figures'] if not f['locked']]
     assert pages_sent == sorted(pages_sent)
     # one item answered, one not: the answered figures are written, the rest count an attempt
-    r = {'figures': [{'figure_id': f['figure_id'], 'name': '', 'caption': 'Fig. 4. Stratigraphic column of the Dumugol Formation.',
-                      'caption_source': 'same_page', 'caption_pages': [3], 'entries': []}
+    r = {'figures': [{'figure_id': f['figure_id'], 'name': '', 'caption': 'PLATE 2. Oistodus aff. breviconus.',
+                      'caption_source': 'explanation_page', 'caption_pages': [1], 'entries': []}
                      for f in items[0]['figures'] if not f['locked']],
          'skipped': [], 'pages_consulted': [3]}
     check = fl.LinkCheck().merge(fl.validate_link_result(items[0], r, PAGES))
     applied = fl.apply_link(t, check, {}, DIGEST, PROMPT, 'm')
-    assert applied.written == 4 and applied.failed == 7
+    assert applied.written == 1 and applied.failed == 10
     # a single-figure paper keeps the plain key
     assert fl.link_items(pf, PAGES, fl.LinkTargets(due=t.due[:1]), DIGEST, 'v')[0]['key'].endswith('@v')
 

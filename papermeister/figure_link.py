@@ -40,11 +40,18 @@ from .models import Figure, FigureEntry, PaperFile, db
 
 #: How many times the stage may fail on a figure before it needs `--retry-errors`.
 MAX_ATTEMPTS = 3
-#: Figures per request item. One item is one model session, and a session
-#: that has to write ninety plates' worth of entries does not survive a
-#: dropped connection (Balašova 1976: three attempts, two hours, nothing —
-#: ocrserver, 2026-09-17). Smaller answers, more sessions.
-MAX_FIGURES_PER_ITEM = 40
+#: How much answer one request item may ask for. One item is one model
+#: session, and what breaks a session is the size of the answer it has to
+#: write: ocrserver's log of 52 link runs shows no drops under 5k output
+#: tokens and drops in 5 of 18 runs over 15k (2026-09-18). Output tracks
+#: entries, not figures — Barrande 1852's 18 plates failed where Westergård's
+#: 24 figures passed — so figures are weighted: a plate's explanation runs to
+#: dozens of entries, a body figure's caption to a few.
+MAX_ITEM_WEIGHT = 80
+PLATE_WEIGHT = 8
+BODY_WEIGHT = 1
+#: Kept for callers that think in figures: the weight of that many body figures.
+MAX_FIGURES_PER_ITEM = MAX_ITEM_WEIGHT
 #: A caption prefix this long that two figures on one page share is the same caption.
 SHARED_CAPTION_CHARS = 80
 #: Share of an entry description's words that must be in the caption's pages.
@@ -149,7 +156,7 @@ def _figure_item(row: Figure, locked: bool) -> dict:
 
 
 def link_items(paper_file: PaperFile, pages: list[str], targets: LinkTargets, digest: str,
-               prompt_version: str, per_item: int = MAX_FIGURES_PER_ITEM) -> list[dict]:
+               prompt_version: str, per_item: int = MAX_ITEM_WEIGHT) -> list[dict]:
     """A paper's link job as items (wrapper API: `POST /figures/link`).
 
     Page texts are not in here: the server holds them as the paper's
@@ -158,9 +165,10 @@ def link_items(paper_file: PaperFile, pages: list[str], targets: LinkTargets, di
     thinks talk about plates — hints, not instructions. `key` comes back on
     the result unchanged.
 
-    The figures due are split, in page order, into items of at most
-    `per_item`; every item also carries the locked context rows. Each item is
-    its own model session on the server.
+    The figures due are split, in page order, into items whose weight (plates
+    PLATE_WEIGHT, others BODY_WEIGHT) stays within `per_item`; every item also
+    carries the locked context rows. Each item is its own model session on
+    the server, and its answer is what must fit through the connection.
     """
     facts = [figures.read_page(i, t or '') for i, t in enumerate(pages)]
     hints = {
@@ -171,7 +179,15 @@ def link_items(paper_file: PaperFile, pages: list[str], targets: LinkTargets, di
     }
     context = [_figure_item(r, locked=True) for r in targets.context]
     due = sorted(targets.due, key=lambda r: (r.page, r.id))
-    chunks = [due[i:i + per_item] for i in range(0, len(due), per_item)] or [[]]
+    chunks: list[list[Figure]] = [[]]
+    weight = 0
+    for row in due:
+        w = figure_weight(row)
+        if chunks[-1] and weight + w > per_item:
+            chunks.append([])
+            weight = 0
+        chunks[-1].append(row)
+        weight += w
     base = f'{paper_file.hash[:12]}@{digest[:12]}@{prompt_version}'
     items = []
     for index, chunk in enumerate(chunks):
@@ -185,6 +201,11 @@ def link_items(paper_file: PaperFile, pages: list[str], targets: LinkTargets, di
     return items
 
 
+def figure_weight(row: Figure) -> int:
+    """How much answer a figure is likely to need — a plate's explanation is long."""
+    return PLATE_WEIGHT if row.page_kind == figures.PLATE_KIND or row.plate is not None else BODY_WEIGHT
+
+
 def link_item(paper_file: PaperFile, pages: list[str], targets: LinkTargets, digest: str,
               prompt_version: str) -> dict:
     """The first (often only) item — kept for callers that expect one."""
@@ -193,7 +214,7 @@ def link_item(paper_file: PaperFile, pages: list[str], targets: LinkTargets, dig
 
 def link_payload(paper_file: PaperFile, pages: list[str], targets: LinkTargets,
                  digest: str, client_id: str, prompt: dict | None = None,
-                 per_item: int = MAX_FIGURES_PER_ITEM) -> dict:
+                 per_item: int = MAX_ITEM_WEIGHT) -> dict:
     """The request body of `POST /figures/link`: the items, plus the prompt block."""
     version = (prompt or {}).get('version', '')
     body = {

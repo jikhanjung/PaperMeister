@@ -171,7 +171,7 @@ def collect(client, args, index) -> int:
             request = None
             # Jobs submitted before the 40-figure split carry the unsplit key:
             # try that shape too (10**6 = everything in one item).
-            for per_item in sorted({args.per_item, figure_link.MAX_FIGURES_PER_ITEM, 20, 10, 10 ** 6}, reverse=True):
+            for per_item in sorted({args.per_item, figure_link.MAX_ITEM_WEIGHT, 40, 20, 10, 10 ** 6}, reverse=True):
                 candidate = figure_link.link_payload(pf, pages, targets, digest, client.client_id, PROMPT, per_item)
                 if any(it['key'] in replies for it in candidate['items']):
                     request = candidate
@@ -204,8 +204,9 @@ def main() -> int:
     parser.add_argument('--collect', action='store_true', help='apply finished jobs from earlier runs')
     parser.add_argument('--recheck', action='store_true',
                         help='re-run the printed-text checks on already linked figures (after the checks changed)')
-    parser.add_argument('--per-item', type=int, default=figure_link.MAX_FIGURES_PER_ITEM,
-                        help=f'figures per request item (default {figure_link.MAX_FIGURES_PER_ITEM}; smaller for a paper whose sessions drop)')
+    parser.add_argument('--per-item', type=int, default=figure_link.MAX_ITEM_WEIGHT,
+                        help=f'answer weight per request item — a plate counts {figure_link.PLATE_WEIGHT}, a body figure 1 '
+                             f'(default {figure_link.MAX_ITEM_WEIGHT}; smaller for a paper whose sessions drop)')
     args = parser.parse_args()
     if not args.paper_ids and not args.pilot and not args.collect:
         parser.error('give --paper-ids or --pilot (or --collect)')
