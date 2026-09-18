@@ -84,6 +84,13 @@ def main() -> int:
     if args.execute:
         cur.apply(plan, record)
         print(f'Written. Recorded in {record}')
+        from papermeister.figure_share import write_to_cache
+        for pf in {c.row.paper_file for c in plan.changes}:
+            try:
+                outcome = write_to_cache(pf)
+                print(f'  cache JSON updated for file {pf.id}' + (f', sibling {outcome}' if outcome else ''))
+            except Exception as exc:
+                print(f'  (cache JSON not updated for file {pf.id}: {exc})')
     else:
         print('Dry run — nothing written. Add --execute to apply.')
     return 0

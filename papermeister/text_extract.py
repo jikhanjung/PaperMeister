@@ -1,10 +1,13 @@
 import json
+import logging
 import os
 import tempfile
 
 from . import pdfdoc
 from .models import Author, PaperFile, Passage, db
 from .paths import OCR_JSON_DIR, PDF_CACHE_DIR  # noqa: F401  (re-exported)
+
+logger = logging.getLogger(__name__)
 
 
 def ocr_json_filename(paper_file):
@@ -213,9 +216,14 @@ def _record_biblio_applied_impl(biblio):
     meta['biblio_source'] = biblio.source or ''
     meta['biblio_applied_at'] = datetime.datetime.now(datetime.UTC).isoformat()
     data['papermeister_meta'] = meta
+    write_ocr_json(json_path, data)
+    push_sibling_json(biblio.paper, json_filename, json_path)
 
+
+def write_ocr_json(json_path: str, data: dict) -> None:
+    """Replace a cache JSON atomically."""
     tmp = tempfile.NamedTemporaryFile(
-        mode='w', dir=OCR_JSON_DIR, suffix='.tmp', delete=False, encoding='utf-8',
+        mode='w', dir=os.path.dirname(json_path), suffix='.tmp', delete=False, encoding='utf-8',
     )
     try:
         json.dump(data, tmp, ensure_ascii=False, indent=2)
@@ -227,27 +235,32 @@ def _record_biblio_applied_impl(biblio):
             os.unlink(tmp.name)
         raise
 
-    # Push to Zotero if user opted in and a sibling JSON attachment exists
+
+def push_sibling_json(paper, json_filename: str, json_path: str) -> str | None:
+    """Push a changed cache JSON back to its Zotero sibling attachment, in
+    place (key preserved), when the user opted in and a sibling exists.
+    Returns the client's outcome ('updated' | 'unchanged' | …) or None when
+    nothing was pushed. Shared by the biblio marker and the figure results."""
     from .preferences import get_pref
     if not get_pref('zotero_upload_ocr_json', False):
-        return
+        return None
 
     sibling = (
         PaperFile.select()
         .where(
-            (PaperFile.paper == biblio.paper)
+            (PaperFile.paper == paper)
             & (PaperFile.path == json_filename)
             & (PaperFile.zotero_key.is_null(False))
         )
         .first()
     )
     if sibling is None:
-        return
+        return None
 
     user_id = get_pref('zotero_user_id', '')
     api_key = get_pref('zotero_api_key', '')
     if not user_id or not api_key:
-        return
+        return None
 
     from .ingestion import hash_file
     from .zotero_client import ZoteroClient
@@ -261,6 +274,7 @@ def _record_biblio_applied_impl(biblio):
         if new_hash and new_hash != (sibling.hash or ''):
             sibling.hash = new_hash
             sibling.save()
+    return outcome
 
 
 def _try_fetch_sibling_json(paper_file, status_callback=None):
@@ -324,6 +338,18 @@ def _try_fetch_sibling_json(paper_file, status_callback=None):
     except Exception:
         # Failed to persist — still return the in-memory result so this run succeeds.
         pass
+
+    # Figure results another machine found ride in the JSON (figure_share).
+    # Landing them here is what lets a library without the wrapper server
+    # see figures at all; a failure must not cost the OCR text.
+    if raw_result.get('figures'):
+        try:
+            from .figure_share import import_figures
+            pages = [(p.get('markdown') or '') for p in sorted(raw_result.get('pages') or [],
+                                                               key=lambda p: p.get('page', 0))]
+            import_figures(paper_file, raw_result, pages)
+        except Exception as exc:
+            logger.warning('figures in the sibling JSON not imported for %s: %s', expected_name, exc)
 
     return raw_result
 

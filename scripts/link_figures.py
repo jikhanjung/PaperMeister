@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from assemble_figures import _CACHE_HASH, _print_utf8, load_pages, open_database, target_files
 
-from papermeister import figure_lane, figure_link, figure_prompts, ocr_layout
+from papermeister import figure_lane, figure_link, figure_prompts, figure_share, ocr_layout
 from papermeister.nettls import install_system_trust
 from papermeister.paths import OCR_JSON_DIR
 
@@ -57,6 +57,18 @@ def pages_of(pf, cache_dir: str, index: dict):
     if not pages or not any(ocr_layout.is_structured(t) for t in pages):
         return None
     return pages
+
+
+def share(pf, totals: Counter) -> None:
+    """DB → cache JSON (and the Zotero sibling when opted in), after a paper changed."""
+    try:
+        outcome = figure_share.write_to_cache(pf)
+        totals['json updated'] += 1
+        if outcome:
+            totals[f'sibling {outcome}'] += 1
+    except Exception as exc:  # sharing is best-effort; the DB already has the result
+        totals['json not updated'] += 1
+        print(f'  (cache JSON not updated: {type(exc).__name__}: {exc})')
 
 
 def apply_reply(pf, pages, targets, request, replies: dict, totals: Counter) -> None:
@@ -88,6 +100,7 @@ def apply_reply(pf, pages, targets, request, replies: dict, totals: Counter) -> 
     copied = figure_link.propagate_link(pf)
     if copied:
         totals['copied to same-PDF entries'] += copied
+    share(pf, totals)
     print(f'  paper {pf.paper_id:>6}  written {applied.written}  unchanged {applied.unchanged}  '
           f'skipped {len(check.skipped)}  rejected {len(check.rejected)}  review {len(check.review)}  '
           f'no reply {applied.failed - len(check.skipped) - len(check.rejected)}  '

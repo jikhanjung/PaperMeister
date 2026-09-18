@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from assemble_figures import _print_utf8, open_database, target_files
-from link_figures import cache_index, pages_of
+from link_figures import cache_index, pages_of, share
 
 from papermeister import figure_detect, figure_lane, figure_link, figure_prompts
 from papermeister.nettls import install_system_trust
@@ -39,6 +39,11 @@ PROMPT_VERSION = PROMPT['version']
 
 
 def apply_items(pf, targets, results: dict, digest: str, totals: Counter) -> None:
+    _apply_items(pf, targets, results, digest, totals)
+    share(pf, totals)
+
+
+def _apply_items(pf, targets, results: dict, digest: str, totals: Counter) -> None:
     for item in targets.items:
         reply = results.get(item['key'], {})
         result = reply.get('result') if reply.get('status') == 'done' else None

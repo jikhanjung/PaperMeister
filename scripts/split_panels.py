@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from assemble_figures import _print_utf8, open_database, target_files
+from link_figures import share
 
 from papermeister import figure_lane, figure_panels, figure_prompts
 from papermeister.nettls import install_system_trust
@@ -36,6 +37,11 @@ PROMPT_VERSION = PROMPT['version']
 
 
 def apply_replies(pf, rows, items, results: dict, totals: Counter) -> None:
+    _apply_replies(pf, rows, items, results, totals)
+    share(pf, totals)
+
+
+def _apply_replies(pf, rows, items, results: dict, totals: Counter) -> None:
     from papermeister.models import Figure
     for row, item in zip(rows, items, strict=True):
         reply = results.get(item['key'], {})
@@ -143,6 +149,7 @@ def main() -> int:
                     done, note = figure_panels.rematch(row)
                     totals['rematched' if done else 'rematch: unmapped'] += 1
                     print(f'    #{row.id} {"ok " if done else "?? "} {note}')
+                    share(pf, totals)
                 else:
                     print(f'    #{row.id} would re-attach')
             continue

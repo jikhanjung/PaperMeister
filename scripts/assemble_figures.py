@@ -455,6 +455,13 @@ def store_mode(args) -> int:
             totals['skipped'] += 1
             continue
         try:
+            if args.execute and not figure_store.Figure.select().where(figure_store.Figure.paper_file == pf.id).exists():
+                # Figures another machine found ride in the cache JSON: land
+                # them before the rule stores its own, so they match by identity.
+                from papermeister.figure_share import import_from_cache
+                report = import_from_cache(pf)
+                if report.created:
+                    print(f'  paper {pf.paper_id:>6}  figures from the cache JSON: {report}')
             assemblies = figures.assemble_document(pages)
             assembled = figure_store.with_placeholders(assemblies)
             plan = figure_store.plan_store(pf, assembled)

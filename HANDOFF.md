@@ -318,8 +318,9 @@
       호출 간격 **`FIGURES_MIN_INTERVAL=120`**(사용자 결정 06:02; D8의 300에서 하향). panels 111장 진행 중(끊김 0, 70–90 s/장)
     - 🟡 1191·3853 재제출됨(6 + 2 항목, 09-18) → `--collect --execute`. 80이 Barrande에서 걸리면 그 논문만 `--per-item 40`
   - **Windows 명령은 WSL에서 직접 실행 가능**: `"/mnt/c/Users/Jikhan Jung/anaconda3/envs/PaperMeister/python.exe" scripts/…`(Windows 설정·client_id·DB writer 그대로). `--execute` 전엔 앱이 닫혀 있는지 확인
-  - [ ] **Phase 4 (앱 통합)**: 우클릭 "Process Figures"(①→①′→②→③, 끝난 단계는 키로 건너뜀) + 진행창(구독 한도 대기 표시) + 서버 없으면 **비활성 + 이유**(기관망 밖 사용자는 처리 불가, 보기만).
-    **도판 결과를 캐시 JSON `figures` 키에 쓰고 Zotero sibling 재업로드 / 받을 때 JSON → 행 복원**(사용자 제안 09-18) — biblio `papermeister_meta`와 같은 공유 경로, `ocr_digest`는 `pages[].markdown`만 해시하므로 안전. 사람 결정(`user_confirmed`·잠금)도 실린다
+  - ✅ **Phase 4a — 도판 결과 ↔ 캐시 JSON ↔ Zotero sibling** (2026-09-18, [105](./devlog/20260918_105_P16_Figures_Ride_In_The_OCR_JSON.md)): `figure_share.py`(정체로 직렬화, `ocr_digest`·`file_hash` 가드, 새 결과만 갱신, 사람 행 불가침).
+    DB→JSON은 레인·curate 반영 뒤 자동, JSON→DB는 sibling 다운로드·Text 탭 첫 로드·assemble 저장 때. 파일럿 108편 JSON 백필(`--no-push`). Zotero 푸시는 pref `zotero_upload_ocr_json`이 켜져 있을 때 다음 반영부터
+  - [ ] **Phase 4b (앱)**: 우클릭 "Process Figures"(①→①′→②→③, 끝난 단계는 키로 건너뜀) + 진행창(구독 한도 대기 표시) + 서버 없으면 **비활성 + 이유**(기관망 밖 사용자는 처리 불가, 보기만)
   - [ ] 릴리스는 **pre-release beta**(`v0.2.0-beta.1`, `release.yml`이 `-beta`를 prerelease로) — CHANGELOG + ko 카탈로그 + `version.py`(지금 0.1.9) + 태그
     - **프롬프트 손볼 것(모아서 한 번에 — 버전이 바뀌면 linked 444행이 전부 다시 due)**: `name`은 인쇄된 단어 포함(`Text-fig. 15`, 맨 `15` 금지; 8803 p.29만 `Plate II`로 영어화) → 합쳐진 행은 link가 새 키로 다시 돈다(`link_figures.py --pilot … --execute --no-wait` 재실행) → panels 100장 (104 §5)
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)

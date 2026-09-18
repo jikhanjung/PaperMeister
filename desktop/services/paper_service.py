@@ -776,10 +776,27 @@ class FigureRow:
     plate_inferred: bool = False   # plate number not printed on its page
 
 
+def _import_shared_figures(paper_id: int) -> None:
+    """A paper whose cache JSON carries figures another machine found, and
+    whose rows this library does not have yet: land them (figure_share)."""
+    try:
+        from papermeister.figure_share import import_from_cache
+        from papermeister.models import Figure, PaperFile
+        for pf in PaperFile.select().where((PaperFile.paper == paper_id) & (PaperFile.hash != '')
+                                           & ~PaperFile.path.endswith('.json')):
+            if Figure.select().where(Figure.paper_file == pf.id).exists():
+                continue
+            import_from_cache(pf)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).debug('shared figures not imported for paper %s', paper_id, exc_info=True)
+
+
 def load_figures(paper_id: int) -> list[FigureRow]:
     import json
 
     from papermeister.figure_store import figures_for_paper
+    _import_shared_figures(paper_id)
     return [
         FigureRow(id=f.id, page=f.page, name=f.name, assembly=f.assembly,
                   pieces=len(json.loads(f.blocks_json or '[]')),
