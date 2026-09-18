@@ -12,7 +12,8 @@ would is recorded as `detect_conflicts_user`). Close the app first.
 
     python scripts/detect_figures.py --pilot tmp/p16_pilot.json
     python scripts/detect_figures.py --paper-ids 8803 --execute
-    python scripts/detect_figures.py --pilot … --limit 10 --execute
+    python scripts/detect_figures.py --pilot … --limit 10 --execute --no-wait
+    python scripts/detect_figures.py --collect --execute          # apply finished jobs from earlier runs
 """
 import argparse
 import json
@@ -37,6 +38,59 @@ PROMPT = figure_prompts.load('detect')
 PROMPT_VERSION = PROMPT['version']
 
 
+def apply_items(pf, targets, results: dict, digest: str, totals: Counter) -> None:
+    for item in targets.items:
+        reply = results.get(item['key'], {})
+        result = reply.get('result') if reply.get('status') == 'done' else None
+        applied = figure_detect.apply_detect(pf, item, targets.rows_by_item[item['key']], result,
+                                             digest, PROMPT_VERSION, reply.get('model') or 'gpt-6-astra')
+        for name in ('kept', 'adjusted', 'merged', 'split', 'new', 'dismissed', 'conflicts', 'invalid', 'failed'):
+            totals[name] += getattr(applied, name)
+        print(f'    page {item["page"]:>4}  {reply.get("status", "missing"):<16} '
+              f'kept {applied.kept} adjusted {applied.adjusted} merged {applied.merged} split {applied.split} '
+              f'new {applied.new} dismissed {applied.dismissed} conflicts {applied.conflicts}'
+              + (f'  consulted {len(result.get("pages_consulted") or [])}p' if result else '')
+              + f'  {reply.get("elapsed_s", 0):.0f}s')
+
+
+def collect(client, args, index) -> int:
+    """Apply finished detect jobs from earlier runs. The item key names the
+    file (hash prefix), the page, the text digest and the prompt."""
+    from papermeister.models import PaperFile
+    totals: Counter = Counter()
+    jobs = client.jobs(kind='detect')
+    print(f'{len(jobs)} detect job(s) on the server for this client: '
+          + ', '.join(f'{k} {n}' for k, n in sorted(Counter(j.get("status") for j in jobs).items())))
+    for job in jobs:
+        if job.get('status') not in ('done', 'done_with_errors'):
+            continue
+        replies = figure_lane.results_by_key(client.job('detect', job['job_id']))
+        prefixes = {k.split('|')[0] for k in replies}
+        for prefix in sorted(prefixes):
+            pf = PaperFile.select().where(PaperFile.hash.startswith(prefix) & ~PaperFile.path.endswith('.json')).first()
+            pages = pages_of(pf, args.cache_dir, index) if pf else None
+            if pages is None:
+                totals['no such file / cache'] += 1
+                continue
+            digest = figure_link.ocr_digest(pages)
+            targets = figure_detect.detect_items(pf, pages, digest, PROMPT_VERSION)
+            targets.items = [it for it in targets.items if it['key'] in replies]
+            if not targets.items:
+                totals['nothing due (applied, or key stale)'] += 1
+                continue
+            print(f'paper {pf.paper_id:>6}  job {job["job_id"][:8]}  {len(targets.items)} page(s)')
+            if args.execute:
+                apply_items(pf, targets, replies, digest, totals)
+            else:
+                totals['would apply pages'] += len(targets.items)
+    print()
+    for k, n in sorted(totals.items()):
+        print(f'  {k:<28} {n:>6}')
+    if not args.execute:
+        print('Dry run — nothing written. Add --execute to apply.')
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--paper-ids')
@@ -47,18 +101,21 @@ def main() -> int:
     parser.add_argument('--execute', action='store_true')
     parser.add_argument('--limit', type=int, help='execute: at most this many papers')
     parser.add_argument('--no-wait', action='store_true')
+    parser.add_argument('--collect', action='store_true', help='apply finished jobs from earlier runs')
     args = parser.parse_args()
-    if not args.paper_ids and not args.pilot:
-        parser.error('give --paper-ids or --pilot')
+    if not args.paper_ids and not args.pilot and not args.collect:
+        parser.error('give --paper-ids or --pilot (or --collect)')
 
     open_database(write=args.execute)
     from papermeister.preferences import get_client_id
     client_id = get_client_id()
     client = None
-    if args.execute:
+    if args.execute or args.collect:
         from papermeister.figure_client import from_preferences
         client = from_preferences()
     index = cache_index(args.cache_dir)
+    if args.collect:
+        return collect(client, args, index)
     if args.dump:
         os.makedirs(args.dump, exist_ok=True)
 
@@ -98,19 +155,7 @@ def main() -> int:
             continue
         if job is None:
             continue
-        results = figure_lane.results_by_key(job)
-        for item in targets.items:
-            reply = results.get(item['key'], {})
-            result = reply.get('result') if reply.get('status') == 'done' else None
-            applied = figure_detect.apply_detect(pf, item, targets.rows_by_item[item['key']], result,
-                                                 digest, PROMPT_VERSION, reply.get('model') or 'gpt-6-astra')
-            for name in ('kept', 'adjusted', 'merged', 'split', 'new', 'dismissed', 'conflicts', 'invalid', 'failed'):
-                totals[name] += getattr(applied, name)
-            print(f'    page {item["page"]:>4}  {reply.get("status", "missing"):<16} '
-                  f'kept {applied.kept} adjusted {applied.adjusted} merged {applied.merged} split {applied.split} '
-                  f'new {applied.new} dismissed {applied.dismissed} conflicts {applied.conflicts}'
-                  + (f'  consulted {len(result.get("pages_consulted") or [])}p' if result else '')
-                  + f'  {reply.get("elapsed_s", 0):.0f}s')
+        apply_items(pf, targets, figure_lane.results_by_key(job), digest, totals)
     print()
     for k, n in sorted(totals.items()):
         print(f'  {k:<28} {n:>6}')

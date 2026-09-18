@@ -363,3 +363,26 @@ def test_a_skipped_figure_carries_the_models_reason(stored):
     check = fl.validate_link_result(p, r, PAGES)
     fl.apply_link(t, check, r, DIGEST, PROMPT, 'm')
     assert 'link_skipped:explanation_not_found' in json.loads(Figure.get_by_id(rows[3].id).uncertain_reasons_json)
+
+
+@pytest.mark.unit
+def test_the_same_reply_collected_twice_is_not_a_second_attempt(stored):
+    """collect re-reads old jobs; a figure the reply skipped must not lose an
+    attempt every time (three collects would retire it)."""
+    from papermeister import figure_link as fl
+    from papermeister.models import Figure
+    pf, rows = stored
+    t = fl.link_targets(pf, DIGEST, PROMPT)
+    p = fl.link_payload(pf, PAGES, t, DIGEST, 'c')
+    r = reply(str(rows[2].id), str(rows[3].id))
+    r['figures'] = r['figures'][:1]
+    r['skipped'] = [{'figure_id': str(rows[3].id), 'reason': 'not_a_figure'}]
+    for _ in range(3):
+        t = fl.link_targets(pf, DIGEST, PROMPT)
+        fl.apply_link(t, fl.validate_link_result(p, r, PAGES), r, DIGEST, PROMPT, 'm')
+    assert Figure.get_by_id(rows[3].id).link_attempts == 1
+    # a different reply is a new attempt
+    r['skipped'][0]['reason'] = 'ambiguous'
+    t = fl.link_targets(pf, DIGEST, PROMPT)
+    fl.apply_link(t, fl.validate_link_result(p, r, PAGES), r, DIGEST, PROMPT, 'm')
+    assert Figure.get_by_id(rows[3].id).link_attempts == 2

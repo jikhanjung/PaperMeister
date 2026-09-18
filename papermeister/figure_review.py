@@ -30,6 +30,9 @@ DETECT_TRIGGERS = frozenset({
     # 1988 p.9, Kayser 1884 Tafel IV). Merging is the re-judgement's job;
     # the caption stage then runs again on the merged row.
     figure_link.CAPTION_SHARED,
+    # The caption stage said the parser's box is not a figure at all (a seal,
+    # a table, a divider): the re-judgement, shown the page, settles it.
+    f'{figure_link.LINK_SKIPPED}:not_a_figure',
 })
 #: Reasons a person reads — everything a stage or the rule left on a row.
 HUMAN_REASONS = DETECT_TRIGGERS | {figures.NO_CAPTION} | figure_link._LINK_REASONS | figure_panels._PANEL_REASONS

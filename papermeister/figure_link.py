@@ -223,6 +223,7 @@ class LinkCheck:
     review: dict[str, list[str]] = field(default_factory=dict)  # figure_id -> reasons for a person
     skipped: list[str] = field(default_factory=list)
     unknown: list[str] = field(default_factory=list)            # ids the reply names that we never sent
+    reply_digest: dict[str, str] = field(default_factory=dict)  # figure_id -> digest of the reply that covered it
 
     def flag(self, figure_id: str, reason: str) -> None:
         self.review.setdefault(figure_id, [])
@@ -238,6 +239,7 @@ class LinkCheck:
                 self.flag(fid, r)
         self.skipped += other.skipped
         self.unknown += other.unknown
+        self.reply_digest.update(other.reply_digest)
         return self
 
 
@@ -272,6 +274,9 @@ def validate_link_result(payload: dict, result: dict, pages: list[str],
     item = payload['items'][0] if 'items' in payload else payload
     sent = {f['figure_id']: f for f in item['figures']}
     page_count = item.get('page_count', len(pages))
+    digest = result_digest(result)
+    for fid in sent:
+        check.reply_digest[fid] = digest
     seen_captions: dict[tuple[int, str], str] = {}
     existing = existing or {}
 
@@ -387,7 +392,16 @@ def apply_link(targets: LinkTargets, check: LinkCheck, result: dict, digest: str
             reasons = check.review.get(fid, [])
             item = check.accepted.get(fid)
             if item is None:
+                # The same reply seen again (a collect that re-reads an old job)
+                # is not another attempt: the digest of the reply that skipped
+                # or rejected the figure is kept on the row.
+                seen = check.reply_digest.get(fid)
+                if seen and row.link_result_digest == seen:
+                    out.unchanged += 1
+                    continue
                 row.link_attempts += 1
+                if seen:
+                    row.link_result_digest = seen
                 if reasons:
                     _store_reasons(row, reasons)
                     out.reviewed += 1
