@@ -51,6 +51,10 @@ class MainWindow(QMainWindow):
         self._refs_index = None       # held-paper resolution index (per-batch cache)
         self._refs_work_index = None  # external CitedWork dedup index (per-batch cache)
         self._refs_guard = self._make_refs_guard()  # server-down pause/resume
+        self._figures_queue = []      # [(paper_id, file_id), ...] for Process Figures (serial)
+        self._figures_task = None     # the one in flight
+        self._figures_window = None   # progress window (lazy)
+        self._figures_cancel = False
         self._cited_works_window = None  # Cited Works browser (lazy)
         self._network_window = None  # citation-network ego view (lazy)
         self._sync_worker = None  # ZoteroSyncWorker
@@ -425,6 +429,9 @@ class MainWindow(QMainWindow):
             self.detail_panel._tabs.setCurrentIndex(0)  # Metadata tab (includes biblio)
         elif action == 'network':
             self._open_network(paper_id)
+        elif action == 'process_figures':
+            if file_id:
+                self._run_figures([(paper_id, file_id)], 'this paper')
 
     def _open_network(self, paper_id: int):
         """Open the citation-network ego view centered on this paper."""
@@ -448,6 +455,10 @@ class MainWindow(QMainWindow):
                 None, 'previously failed papers', only_exhausted=True)
         elif action == 'upload_ocr_json':
             self._upload_ocr_json(folder_id)
+        elif action == 'process_figures_folder':
+            self._run_figures(self._figures_targets(self._collect_folder_ids(folder_id)), 'this folder')
+        elif action == 'process_figures_source':
+            self._run_figures(self._figures_targets(None), 'My Library (all)')
 
     # ── Source (tab) actions ─────────────────────────────────
 
@@ -816,6 +827,111 @@ class MainWindow(QMainWindow):
             self._biblio_window.raise_()
         self.status_bar.set_task(f'Queued biblio extraction for paper {paper_id}…')
         self._drain_biblio_queue()
+
+    # ── Process Figures (P16 Phase 4) ─────────────────────────
+
+    def _figures_targets(self, folder_ids):
+        """Processed PDFs in scope. Which stages each still needs is decided by
+        the pipeline from the rows' keys, so every processed file is a target;
+        a paper with nothing due costs one quick pass and no server call."""
+        from papermeister.models import Paper, PaperFile, PaperFolder
+        if folder_ids is None:
+            pdfs = (PaperFile.select(PaperFile.id, PaperFile.paper)
+                    .where(PaperFile.status == 'processed', PaperFile.path.endswith('.pdf'))
+                    .order_by(PaperFile.paper.desc()))
+        else:
+            pdfs = (PaperFile.select(PaperFile.id, PaperFile.paper)
+                    .join(Paper).join(PaperFolder, on=(PaperFolder.paper == Paper.id))
+                    .where(PaperFolder.folder << folder_ids, PaperFile.status == 'processed',
+                           PaperFile.path.endswith('.pdf'))
+                    .order_by(Paper.id.desc()))
+        seen, out = {fid for _, fid in self._figures_queue}, []
+        for pf in pdfs:
+            if pf.id in seen:
+                continue
+            seen.add(pf.id)
+            out.append((pf.paper_id, pf.id))
+        return out
+
+    def _run_figures(self, targets, scope_label: str):
+        from papermeister.figure_pipeline import server_hint
+        hint = server_hint()
+        if hint:
+            QMessageBox.information(self, 'Process Figures', hint)
+            return
+        if not targets:
+            self.status_bar.set_task(f'Nothing to do — no processed PDF in {scope_label}')
+            return
+        if len(targets) > 1:
+            resp = QMessageBox.question(
+                self, 'Process Figures',
+                f'Find figures, captions and panels for {len(targets)} paper(s) in {scope_label}?\n\n'
+                'Each paper is a few model calls on the wrapper server (minutes each, one at a time). '
+                'Stages already done are skipped.',
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
+            if resp != QMessageBox.StandardButton.Yes:
+                return
+        rank = {pid: i for i, pid in enumerate(self.paper_list.visible_paper_ids())}
+        targets = sorted(targets, key=lambda t: rank.get(t[0], len(rank)))
+        if self._figures_window is None:
+            from desktop.windows.figures_window import FiguresWindow
+            self._figures_window = FiguresWindow(self)
+            self._figures_window.cancel_requested.connect(self._cancel_figures)
+        self._figures_cancel = False
+        self._figures_window.begin(len(targets))
+        self._figures_queue.extend(targets)
+        self.status_bar.set_task(f'Figures: {len(targets)} paper(s)…')
+        self._drain_figures_queue()
+
+    def _cancel_figures(self):
+        dropped = len(self._figures_queue)
+        self._figures_queue.clear()
+        self._figures_cancel = True
+        self._figures_window.mark_cancelling(dropped)
+        if self._figures_task is None or not self._figures_task.isRunning():
+            self._figures_window.finish()
+            self.status_bar.set_task('Figures cancelled')
+
+    def _drain_figures_queue(self):
+        """One paper at a time: the server is serial, and the pipeline writes the
+        DB from its own thread, which must not overlap another writer."""
+        if self._figures_task is not None and self._figures_task.isRunning():
+            return
+        if not self._figures_queue:
+            if self._figures_window and self._figures_window.isVisible():
+                self._figures_window.finish()
+            self.status_bar.set_task('Figures done')
+            return
+        paper_id, file_id = self._figures_queue.pop(0)
+        title = self._biblio_title(paper_id)
+        self._figures_window.set_current(title)
+        self.status_bar.set_task(f'Figures: {title}…')
+
+        from desktop.workers.background import BackgroundTask
+
+        def _do():
+            from papermeister.figure_client import from_preferences
+            from papermeister.figure_pipeline import process_file
+            from papermeister.models import PaperFile
+            pf = PaperFile.get_by_id(file_id)
+            return process_file(pf, from_preferences(), notify=task.notice.emit,
+                                progress=task.progress.emit, should_stop=lambda: self._figures_cancel)
+
+        task = BackgroundTask(_do)
+        task.notice.connect(self._figures_window.note)
+        task.done.connect(lambda report: self._on_figures_done(paper_id, title, report))
+        task.failed.connect(lambda msg: self._on_figures_done(paper_id, title, None, msg))
+        self._figures_task = task
+        task.start()
+
+    def _on_figures_done(self, paper_id: int, title: str, report, error: str = ''):
+        ok = report is not None and not report.error
+        detail = error or (report.error if report and report.error else report.summary() if report else '')
+        self._figures_window.record(title, ok, detail)
+        # The Text tab's figure list reads the DB: repaint if this paper is open.
+        if self.detail_panel._current_paper_id == paper_id:
+            self.detail_panel.show_paper(paper_id)
+        self._drain_figures_queue()
 
     def _biblio_title(self, paper_id: int) -> str:
         from papermeister.models import Paper

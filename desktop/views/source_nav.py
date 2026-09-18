@@ -320,17 +320,29 @@ class SourceNav(QWidget):
             # so they need a way back in that is deliberate rather than automatic.
             menu.addAction('Retry Failed References…',
                             lambda: self.folder_action.emit('retry_failed_references', value))
+            self._add_figures_action(menu, 'Process Figures (all)', 'process_figures_source', value)
         else:
             menu.addAction('Process Folder (OCR → Biblio)',
                             lambda: self.folder_action.emit('process_folder', value))
             menu.addAction('Extract References (folder)',
                             lambda: self.folder_action.emit('extract_references_folder', value))
+            self._add_figures_action(menu, 'Process Figures (folder)', 'process_figures_folder', value)
             # "Upload OCR JSON to Zotero" only makes sense for Zotero-backed
             # folders — local-directory PDFs have no Zotero attachment.
             if self._source_type_for_tree(tree) == 'zotero':
                 menu.addAction('Upload OCR JSON to Zotero',
                                 lambda: self.folder_action.emit('upload_ocr_json', value))
         menu.exec(tree.viewport().mapToGlobal(pos))
+
+    def _add_figures_action(self, menu: QMenu, label: str, action: str, value):
+        """Process Figures needs the wrapper server; without it the action is
+        shown disabled with the reason, not hidden."""
+        from papermeister.figure_pipeline import server_hint
+        act = menu.addAction(label, lambda: self.folder_action.emit(action, value))
+        hint = server_hint()
+        if hint:
+            act.setEnabled(False)
+            act.setToolTip(hint)
 
     def _source_type_for_tree(self, tree: QTreeWidget):
         """'zotero' | 'directory' | None for the source a tree belongs to."""

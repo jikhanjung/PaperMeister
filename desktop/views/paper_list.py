@@ -355,6 +355,19 @@ class PaperListView(QTreeWidget):
             menu.addAction('Open PDF', lambda: self.context_action.emit('open_pdf', paper_id, file_id or 0))
         # pending/failed/none have no further actions beyond the OCR action above.
 
+        # Figures (P16): assemble → re-judge → captions → panels on the wrapper
+        # server. Only a processed PDF has the OCR layout this starts from.
+        if status in ('processed', 'review', 'done') and file_id:
+            from papermeister.figure_pipeline import server_hint
+            fig_act = menu.addAction(
+                'Process Figures',
+                lambda: self.context_action.emit('process_figures', paper_id, file_id or 0),
+            )
+            hint = server_hint()
+            if hint:
+                fig_act.setEnabled(False)
+                fig_act.setToolTip(hint)
+
         # Citation network — available for any paper (independent of OCR status).
         if not menu.isEmpty():
             menu.addSeparator()

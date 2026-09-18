@@ -320,7 +320,8 @@
   - **Windows 명령은 WSL에서 직접 실행 가능**: `"/mnt/c/Users/Jikhan Jung/anaconda3/envs/PaperMeister/python.exe" scripts/…`(Windows 설정·client_id·DB writer 그대로). `--execute` 전엔 앱이 닫혀 있는지 확인
   - ✅ **Phase 4a — 도판 결과 ↔ 캐시 JSON ↔ Zotero sibling** (2026-09-18, [105](./devlog/20260918_105_P16_Figures_Ride_In_The_OCR_JSON.md)): `figure_share.py`(정체로 직렬화, `ocr_digest`·`file_hash` 가드, 새 결과만 갱신, 사람 행 불가침).
     DB→JSON은 레인·curate 반영 뒤 자동, JSON→DB는 sibling 다운로드·Text 탭 첫 로드·assemble 저장 때. 파일럿 108편 JSON 백필(`--no-push`). Zotero 푸시는 pref `zotero_upload_ocr_json`이 켜져 있을 때 다음 반영부터
-  - [ ] **Phase 4b (앱)**: 우클릭 "Process Figures"(①→①′→②→③, 끝난 단계는 키로 건너뜀) + 진행창(구독 한도 대기 표시) + 서버 없으면 **비활성 + 이유**(기관망 밖 사용자는 처리 불가, 보기만)
+  - ✅ **Phase 4b (앱)** (2026-09-18, [106](./devlog/20260918_106_P16_Process_Figures_In_The_App.md)): 우클릭 "Process Figures"(논문/폴더/전체) → `figure_pipeline.process_file`이 ①→①′→②→③을 **한 논문씩** 직렬 큐로(끝난 단계는 키로 건너뜀, 단계마다 JSON 갱신) + `FiguresWindow`(워커 paused = "Waiting", 취소는 다음 단계에서) + 서버 미설정이면 **비활성 + 이유 툴팁**. 537 passed.
+    - 🟡 **앱에서 실전 미실행** — 먼저 다 끝난 논문(서버 호출 0, "nothing to do")으로, 다음 새 논문 하나로 확인. 파일럿의 미수거 잡(link 7편+1191/3853, panels 112장)은 레인 `--collect --execute`로 거둔 뒤
   - [ ] 릴리스는 **pre-release beta**(`v0.2.0-beta.1`, `release.yml`이 `-beta`를 prerelease로) — CHANGELOG + ko 카탈로그 + `version.py`(지금 0.1.9) + 태그
     - **프롬프트 손볼 것(모아서 한 번에 — 버전이 바뀌면 linked 444행이 전부 다시 due)**: `name`은 인쇄된 단어 포함(`Text-fig. 15`, 맨 `15` 금지; 8803 p.29만 `Plate II`로 영어화) → 합쳐진 행은 link가 새 키로 다시 돈다(`link_figures.py --pilot … --execute --no-wait` 재실행) → panels 100장 (104 §5)
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)

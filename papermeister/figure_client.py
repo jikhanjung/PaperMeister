@@ -105,13 +105,17 @@ class FigureClient:
         return _json(r, 'resume')
 
     def wait(self, kind: str, job_id: str, poll_seconds: float = 20.0, timeout_seconds: float | None = None,
-             on_progress: Callable[[dict], None] | None = None) -> dict:
+             on_progress: Callable[[dict], None] | None = None,
+             should_stop: Callable[[], None] | None = None) -> dict:
         """Poll until the job is terminal. A paused worker (login, usage limit)
         is reported through `on_progress` and waited out — it is not a failure
-        of this job, and the queue keeps its place."""
+        of this job, and the queue keeps its place. `should_stop` is called
+        before each poll and may raise to abandon the wait (the job goes on)."""
         started = time.monotonic()
         last_signature = None
         while True:
+            if should_stop:
+                should_stop()
             job = self.job(kind, job_id)
             signature = (job.get('status'), job.get('done'), job.get('failed'),
                          (job.get('worker') or {}).get('state'), (job.get('worker') or {}).get('paused_reason'))
@@ -122,7 +126,12 @@ class FigureClient:
                 return job
             if timeout_seconds is not None and time.monotonic() - started > timeout_seconds:
                 raise FigureServerError(f'{kind} job {job_id}: still {job.get("status")} after {timeout_seconds:.0f}s')
-            time.sleep(poll_seconds)
+            # Sleep in short steps so a cancel is felt within a second.
+            deadline = time.monotonic() + poll_seconds
+            while time.monotonic() < deadline:
+                if should_stop:
+                    should_stop()
+                time.sleep(min(1.0, max(0.0, deadline - time.monotonic())))
 
 
 def from_preferences() -> FigureClient:
