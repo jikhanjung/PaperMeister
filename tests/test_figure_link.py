@@ -388,3 +388,49 @@ def test_the_same_reply_collected_twice_is_not_a_second_attempt(stored):
     t = fl.link_targets(pf, DIGEST, PROMPT)
     fl.apply_link(t, fl.validate_link_result(p, r, PAGES), r, DIGEST, PROMPT, 'm')
     assert Figure.get_by_id(rows[3].id).link_attempts == 2
+
+
+@pytest.mark.unit
+def test_a_job_whose_split_moved_is_rebuilt_from_its_replies(stored):
+    """Barrande (1191), 2026-09-19: submitted as six items at weight 80; by
+    collect time three rows had left the due set, the same weight now cut
+    five items, no key matched, and forty answered figures were stranded.
+    The reply names its figures — rebuild the items from that."""
+    from papermeister import figure_link as fl
+    from papermeister.models import Figure
+    pf, rows = stored
+    for page in range(10, 20):
+        Figure.create(paper=pf.paper_id, paper_file=pf.id, file_hash=HASH, page=page,
+                      bbox_page_1000=json.dumps([100, 100, 900, 900]), blocks_json='[[100, 100, 900, 900]]')
+    rows[3].caption_locked = True
+    rows[3].save()
+    t = fl.link_targets(pf, DIGEST, PROMPT)
+    items = fl.link_items(pf, PAGES, t, DIGEST, PROMPT, per_item=4)
+    assert len(items) == 4
+    replies = {}
+    for it in items:
+        figs = [f for f in it['figures'] if not f['locked']]
+        replies[it['key']] = {'status': 'done', 'result': {
+            'figures': [{'figure_id': f['figure_id'], 'name': '', 'caption': 'PLATE 2. Oistodus aff. breviconus.',
+                         'caption_source': 'explanation_page', 'caption_pages': [1], 'entries': []}
+                        for f in (figs[:-1] if len(figs) > 1 else figs)],
+            'skipped': [{'figure_id': figs[-1]['figure_id'], 'reason': 'other'}] if len(figs) > 1 else [],
+            'pages_consulted': [1]}}
+    # a row folds after submission: the split now gives a different item count
+    gone = t.due[-1]
+    gone.dismissed = True
+    gone.save()
+    t2 = fl.link_targets(pf, DIGEST, PROMPT)
+    rebuilt = fl.items_from_replies(pf, PAGES, t2, DIGEST, PROMPT, replies)
+    assert [it['key'] for it in rebuilt] == [it['key'] for it in items]
+    asked = {f['figure_id'] for it in rebuilt for f in it['figures'] if not f['locked']}
+    assert str(gone.id) not in asked and len(asked) == len(t2.due)
+    assert all(any(f['locked'] for f in it['figures']) for it in rebuilt)
+    # another job's key (other digest) is not ours
+    assert fl.items_from_replies(pf, PAGES, t2, 'ff' * 6, PROMPT, replies) == []
+    check = fl.LinkCheck()
+    for it in rebuilt:
+        check.merge(fl.validate_link_result(it, replies[it['key']]['result'], PAGES))
+    applied = fl.apply_link(t2, check, {}, DIGEST, PROMPT, 'm')
+    assert applied.written == 8 and applied.failed == 2
+    assert check.unknown == [str(gone.id)]          # the folded row: named by the reply, no longer ours

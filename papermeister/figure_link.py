@@ -201,6 +201,39 @@ def link_items(paper_file: PaperFile, pages: list[str], targets: LinkTargets, di
     return items
 
 
+def items_from_replies(paper_file: PaperFile, pages: list[str], targets: LinkTargets, digest: str,
+                       prompt_version: str, replies: dict) -> list[dict]:
+    """Rebuild a job's request items from its replies, for a job whose split no
+    longer reproduces: the due set moved since submission (a row folded, a
+    row exhausted, a twin's answer copied in), so the same weight now cuts
+    into a different number of items and no key matches. The reply itself
+    says which figures each item asked about (`figures[].figure_id` and
+    `skipped[].figure_id`); those still due are the item's figures, and the
+    locked rows go along as context, as on the way out. Items whose reply
+    names nothing still due are dropped."""
+    base = f'{paper_file.hash[:12]}@{digest[:12]}@{prompt_version}'
+    due = {str(r.id): r for r in targets.due}
+    context = [_figure_item(r, locked=True) for r in targets.context]
+    items = []
+    for key, reply in replies.items():
+        if key.split('#')[0] != base:
+            continue
+        result = reply.get('result') if isinstance(reply.get('result'), dict) else {}
+        named = [str(f.get('figure_id')) for f in (result.get('figures') or []) + (result.get('skipped') or [])]
+        rows = [due[fid] for fid in dict.fromkeys(named) if fid in due]
+        if not rows:
+            continue
+        part = key.split('#')[1].split('/') if '#' in key else ['1', '1']
+        items.append({
+            'key': key,
+            'page_count': len(pages),
+            'part': [int(part[0]), int(part[1])],
+            'figures': [_figure_item(r, locked=False) for r in sorted(rows, key=lambda r: (r.page, r.id))] + context,
+            'hints': {},
+        })
+    return sorted(items, key=lambda it: it['part'])
+
+
 def figure_weight(row: Figure) -> int:
     """How much answer a figure is likely to need — a plate's explanation is long."""
     return PLATE_WEIGHT if row.page_kind == figures.PLATE_KIND or row.plate is not None else BODY_WEIGHT

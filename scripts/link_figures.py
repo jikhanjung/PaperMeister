@@ -190,6 +190,14 @@ def collect(client, args, index) -> int:
                     request = candidate
                     break
             if request is None:
+                # The split moved (a row folded or exhausted since submission):
+                # the reply names its figures, so rebuild the items from it.
+                items = figure_link.items_from_replies(pf, pages, targets, digest, PROMPT_VERSION, replies)
+                if items:
+                    request = dict(figure_link.link_payload(pf, pages, targets, digest, client.client_id, PROMPT),
+                                   items=items)
+                    totals['items rebuilt from the reply (split moved)'] += 1
+            if request is None:
                 totals['stale key (text, prompt or item split changed)'] += 1
                 continue
             keys = [it['key'] for it in request['items']]
