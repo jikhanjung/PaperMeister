@@ -314,7 +314,9 @@
     - 파일럿 link 진행: 108편 중 첫 30편만(461 linked / 3,633). 나머지 ~70편(3,143 도판)은 `--pilot --execute --no-wait`로 낼 수 있음(하루 이상)
     - 🔴 **끊김은 답 크기(항목 수)를 따른다**(ocrserver 실측 09-18: 5k 토큰 미만 0건 · 15k 초과 5/18; 1191 Barrande는 18도판 묶음도 실패 — 플레이트당 항목 수십 개).
       분할 기준을 **도판 수 → 예상 답 무게**(플레이트 8 · 본문 1, 항목당 80)로 바꿈: 1191 6항목 · 3853 2항목 · 664 1항목. `--per-item`도 무게. 서버는 HTTPS 전송 테스트 중(웹소켓 끊김 완화, 완치는 아님)
-    - [ ] 1191·3853 재제출(`link_figures.py --paper-ids 1191,3853 --execute --no-wait`) — 서버 전송 결정 뒤
+    - **서버 결정(09-18 09:35 UTC, ocrserver devlog 047)**: HTTPS(SSE) 실험도 40도판 항목에서 3회 끊김·60분 타임아웃 → **워커 전송 유지, 해법은 클라이언트 무게 분할**. 잡 상태에 `cancelled` 추가(클라이언트 `TERMINAL`에 반영).
+      호출 간격 **`FIGURES_MIN_INTERVAL=120`**(사용자 결정 06:02; D8의 300에서 하향). panels 111장 진행 중(끊김 0, 70–90 s/장)
+    - [ ] 1191·3853 재제출: `link_figures.py --paper-ids 1191,3853 --execute --no-wait`(6 + 2 항목) → 나중에 `--collect --execute`. 80이 Barrande에서 걸리면 그 논문만 `--per-item 40`
     - **프롬프트 손볼 것(모아서 한 번에 — 버전이 바뀌면 linked 444행이 전부 다시 due)**: `name`은 인쇄된 단어 포함(`Text-fig. 15`, 맨 `15` 금지; 8803 p.29만 `Plate II`로 영어화) → 합쳐진 행은 link가 새 키로 다시 돈다(`link_figures.py --pilot … --execute --no-wait` 재실행) → panels 100장 (104 §5)
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,

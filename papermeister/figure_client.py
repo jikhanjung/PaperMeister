@@ -20,7 +20,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-TERMINAL = frozenset({'done', 'done_with_errors', 'failed'})
+TERMINAL = frozenset({'done', 'done_with_errors', 'failed', 'cancelled'})   # wrapper 0.3.4: cancel endpoint
 
 
 class FigureServerError(RuntimeError):
