@@ -306,7 +306,11 @@
     - 버그 셋 고침: `/figures/jobs` 응답 `items` 키 · collect가 형제 파일(같은 해시)의 잡을 첫 파일에 매핑해 헛시도 계산 → 답의 `figure_id`로 파일 식별 · skipped 사유를 행에 기록(`link_skipped:<reason>`)
     - ✅ Windows(2026-09-18): `--recheck --execute`(사유 재계산) · 7450 1/4을 `--per-item 20`으로 재제출(큐에서 처리 중, 나중에 `--collect --execute`)
   - ✅ 7450 2×20 재제출 → **39/40 반영**. 파일럿 27편 link 완주. `--collect`가 옛 잡을 다시 읽으며 skipped 행 시도를 또 세던 것 고침(같은 답 digest면 unchanged) · `link_skipped:not_a_figure`(26, Walcott 인장·표)를 detect 트리거에
-  - 🟡 **detect 표본 제출 (2026-09-18)** — 7편(8803·1147·8422·1191·1080·674·8615, ≈25쪽; 파일럿 전체는 55편·190쪽). 거두기: `detect_figures.py --collect --execute` → 합쳐진 행은 link가 새 키로 다시 돈다(`link_figures.py --pilot … --execute --no-wait` 재실행) → panels 100장 (104 §5)
+  - ✅ **①′ detect 표본 통과 (2026-09-18)** — 7편 27쪽 전부 답, conflicts 0, failed 0, 쪽당 72–170 s. merged 107 · new 13 · adjusted 16 · dismissed 6.
+    8803 사진 85장 → 图版 I–IV 넷 · 1191 p.221 자리표시 → `Pl. 50.` · 1147 Tafel IV 조각 6 → 1 · 8422 조각 → Text-fig. 8–15 · 1080 `Taf. IV` p.40/60/61 = 중복 스캔으로 판정(오독 아님) · 8615 `圖版` 글자 접힘.
+    파일럿 전체 detect 대상은 55편·190쪽(아직 안 돌림)
+    - [ ] 합쳐진·보정된 행 캡션: `link_figures.py --paper-ids 8803,1147,8422,1191,1080,674,8615 --execute --no-wait` → `--collect --execute`
+    - **프롬프트 손볼 것(모아서 한 번에 — 버전이 바뀌면 linked 444행이 전부 다시 due)**: `name`은 인쇄된 단어 포함(`Text-fig. 15`, 맨 `15` 금지; 8803 p.29만 `Plate II`로 영어화) → 합쳐진 행은 link가 새 키로 다시 돈다(`link_figures.py --pilot … --execute --no-wait` 재실행) → panels 100장 (104 §5)
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
     아니면 논문·폴더·전체 우클릭 "Process Figures") · 서버 PDF는 먼저 존재 확인 후 없으면 업로드 · Batches API는 해당 없음
