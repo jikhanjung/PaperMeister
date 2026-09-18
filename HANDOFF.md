@@ -304,7 +304,7 @@
     - 검수 사유 대조: `caption_not_printed` 32는 전부 키릴 논문에서 모델이 OCR 오독·격변화를 고친 것 → 검사기를 **어간(5자)+동형문자 접기** 비교로 → 4건(진짜 대조 대상). `caption_shared` 75는
       **파서가 사진별로 나눈 한 그림/플레이트**(8422 p9 `Text-figs. 8–11`, 1147 `Tafel IV`) — 모델은 사진마다 맞는 항목을 붙였고, 합치는 건 detect 몫 → `caption_shared`를 **detect 트리거에 추가**. 순서는 ①′→②가 맞다
     - 버그 셋 고침: `/figures/jobs` 응답 `items` 키 · collect가 형제 파일(같은 해시)의 잡을 첫 파일에 매핑해 헛시도 계산 → 답의 `figure_id`로 파일 식별 · skipped 사유를 행에 기록(`link_skipped:<reason>`)
-    - [ ] Windows: `git pull` → `link_figures.py --recheck --pilot … --execute`(낡은 사유 재계산) → `link_figures.py --paper-ids 7450 --per-item 20 --execute --no-wait`(1/4 재제출)
+    - ✅ Windows(2026-09-18): `--recheck --execute`(사유 재계산) · 7450 1/4을 `--per-item 20`으로 재제출(큐에서 처리 중, 나중에 `--collect --execute`)
   - [ ] **detect 표본** — `detect_figures.py --pilot … --limit 10 --execute --no-wait`(8803·1191·674·8422·1147 포함되게) → collect는 detect 레인 자체가 `--wait`… (detect는 아직 collect 없음: 잡이 끝날 때까지 기다리거나 `--no-wait` 뒤 다시 실행) → 합쳐진 행은 link가 새 키로 다시 돈다 → panels 100장 (104 §5)
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
