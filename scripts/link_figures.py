@@ -102,7 +102,10 @@ def collect(client, args, index) -> int:
     """Apply finished link jobs from earlier runs (review category 2)."""
     from papermeister.models import PaperFile
     totals: Counter = Counter()
-    for job in client.jobs(kind='link'):
+    jobs = client.jobs(kind='link')
+    print(f'{len(jobs)} link job(s) on the server for this client: '
+          + ', '.join(f'{k} {n}' for k, n in sorted(Counter(j.get("status") for j in jobs).items())))
+    for job in jobs:
         if job.get('status') not in ('done', 'done_with_errors'):
             continue
         full = client.job('link', job['job_id'])

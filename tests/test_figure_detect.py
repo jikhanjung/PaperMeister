@@ -208,6 +208,8 @@ class FakeSession:
                                           'worker': {'state': 'paused', 'paused_reason': 'usage limit'}})
             return FakeResponse(200, {'status': 'done', 'done': 1, 'total': 1, 'worker': {'state': 'idle'},
                                       'items': [{'key': 'k', 'status': 'done', 'result': {'figures': []}}]})
+        if url.endswith('/figures/jobs'):
+            return FakeResponse(200, {'items': [{'job_id': 'j1', 'kind': 'link', 'status': 'done'}], 'worker': {}})
         return FakeResponse(200, [])
 
 
@@ -224,6 +226,7 @@ def test_the_client_sends_the_id_polls_and_reports_a_paused_worker(monkeypatch):
     seen = []
     job = c.wait('link', 'j1', poll_seconds=0, on_progress=lambda j: seen.append(j['worker']['state']))
     assert job['status'] == 'done' and seen == ['paused', 'idle']
+    assert [j['job_id'] for j in c.jobs(kind='link')] == ['j1']      # wrapper wraps the list in {"items": …}
     with pytest.raises(fc.FigureServerError, match='not JSON'):
         c.upload_workspace({'file_hash': 'x', 'ocr_digest': 'y', 'pages': []}) if False else fc._json(
             FakeResponse(200, None, '<html>'), 'x')

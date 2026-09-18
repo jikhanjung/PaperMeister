@@ -95,7 +95,9 @@ class FigureClient:
         if r.status_code != 200:
             raise FigureServerError(f'GET /figures/jobs: HTTP {r.status_code}')
         data = _json(r, 'GET /figures/jobs')
-        return data if isinstance(data, list) else data.get('jobs', [])
+        if isinstance(data, list):
+            return data
+        return data.get('items') or data.get('jobs') or []     # wrapper 0.3.x: {"items": [...], "worker": {...}}
 
     def resume(self, kind: str, job_id: str, retry_errors: bool = False) -> dict:
         r = self.http.post(f'{self.base}/figures/{kind}/{job_id}/resume',
