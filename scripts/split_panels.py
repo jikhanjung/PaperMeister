@@ -12,6 +12,7 @@ figures due, waits, checks each reply and writes the panels. Close the app.
     python scripts/split_panels.py --paper-ids 664 --execute
     python scripts/split_panels.py --pilot … --rematch --execute
     python scripts/split_panels.py --pilot … --include-maps --retry-errors
+    python scripts/split_panels.py --collect --execute        # apply finished jobs from earlier runs
 """
 import argparse
 import json
@@ -34,6 +35,66 @@ PROMPT = figure_prompts.load('panels')
 PROMPT_VERSION = PROMPT['version']
 
 
+def apply_replies(pf, rows, items, results: dict, totals: Counter) -> None:
+    from papermeister.models import Figure
+    for row, item in zip(rows, items, strict=True):
+        reply = results.get(item['key'], {})
+        result = reply.get('result') if reply.get('status') == 'done' else None
+        siblings = Figure.select().where((Figure.paper_file == pf.id) & (Figure.page == row.page)
+                                         & (Figure.id != row.id) & (Figure.dismissed == False)).count()  # noqa: E712
+        check = figure_panels.validate_panel_result(item, result, siblings) if result else None
+        applied = figure_panels.apply_panels(row, item, result, check, PROMPT_VERSION,
+                                             reply.get('model') or 'gpt-6-astra')
+        for name in ('written', 'unchanged', 'protected', 'failed', 'reviewed'):
+            totals[name] += getattr(applied, name)
+        print(f'    #{row.id:<6} {reply.get("status", "missing"):<16} '
+              + (f'panels {len(check.panels)}  {check.why or ", ".join(check.review) or "ok"}' if check
+                 else str(reply.get('error', ''))[:80])
+              + f'  {reply.get("elapsed_s", 0):.0f}s')
+
+
+def collect(client, args) -> int:
+    """Apply finished panels jobs from earlier runs. The item key is `<figure id>@<panel_key>`."""
+    from papermeister.models import Figure
+    totals: Counter = Counter()
+    jobs = client.jobs(kind='panels')
+    print(f'{len(jobs)} panels job(s) on the server for this client: '
+          + ', '.join(f'{k} {n}' for k, n in sorted(Counter(j.get("status") for j in jobs).items())))
+    for job in jobs:
+        if job.get('status') not in ('done', 'done_with_errors'):
+            continue
+        replies = figure_lane.results_by_key(client.job('panels', job['job_id']))
+        rows, items = [], []
+        for key in replies:
+            fid = key.split('@')[0]
+            row = Figure.get_or_none(Figure.id == int(fid)) if fid.isdigit() else None
+            if row is None or row.dismissed:
+                totals['no such figure'] += 1
+                continue
+            item = figure_panels.panel_item(row, PROMPT_VERSION)
+            if item['key'] != key:
+                totals['stale key (box, prompt or dpi changed)'] += 1
+                continue
+            if row.panel_key == item['key'].split('@', 1)[1] and row.panel_result_digest:
+                totals['already applied'] += 1
+                continue
+            rows.append(row)
+            items.append(item)
+        if not rows:
+            continue
+        print(f'job {job["job_id"][:8]}  {len(rows)} figure(s)')
+        if args.execute:
+            apply_replies(rows[0].paper_file, rows, items, replies, totals)
+        else:
+            totals['would apply'] += len(rows)
+    print()
+    for k, n in sorted(totals.items()):
+        print(f'  {k:<32} {n:>6}')
+    if not args.execute:
+        print('Dry run — nothing written. Add --execute to apply.')
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--paper-ids')
@@ -45,22 +106,24 @@ def main() -> int:
     parser.add_argument('--execute', action='store_true', help='submit and write (or, with --rematch, re-attach)')
     parser.add_argument('--limit', type=int, help='execute: at most this many papers')
     parser.add_argument('--no-wait', action='store_true')
+    parser.add_argument('--collect', action='store_true', help='apply finished jobs from earlier runs')
     args = parser.parse_args()
-    if not args.paper_ids and not args.pilot:
-        parser.error('give --paper-ids or --pilot')
+    if not args.paper_ids and not args.pilot and not args.collect:
+        parser.error('give --paper-ids or --pilot (or --collect)')
 
     open_database(write=args.execute)
     client = None
-    if args.execute and not args.rematch:
+    if (args.execute and not args.rematch) or args.collect:
         from papermeister.figure_client import from_preferences
         from papermeister.preferences import get_client_id
         client = from_preferences()
         client_id = get_client_id()
+    if args.collect:
+        return collect(client, args)
     if args.dump:
         os.makedirs(args.dump, exist_ok=True)
     totals: Counter = Counter()
     submitted = 0
-    from papermeister.models import Figure
     for pf in target_files(args):
         t = figure_panels.split_targets(pf, PROMPT_VERSION, args.retry_errors, args.include_maps)
         totals['due'] += len(t.due)
@@ -100,21 +163,7 @@ def main() -> int:
             continue
         if job is None:
             continue
-        results = figure_lane.results_by_key(job)
-        for row, item in zip(t.due, items, strict=True):
-            reply = results.get(item['key'], {})
-            result = reply.get('result') if reply.get('status') == 'done' else None
-            siblings = Figure.select().where((Figure.paper_file == pf.id) & (Figure.page == row.page)
-                                             & (Figure.id != row.id) & (Figure.dismissed == False)).count()  # noqa: E712
-            check = figure_panels.validate_panel_result(item, result, siblings) if result else None
-            applied = figure_panels.apply_panels(row, item, result, check, PROMPT_VERSION,
-                                                 reply.get('model') or 'gpt-6-astra')
-            for name in ('written', 'unchanged', 'protected', 'failed', 'reviewed'):
-                totals[name] += getattr(applied, name)
-            print(f'    #{row.id:<6} {reply.get("status", "missing"):<16} '
-                  + (f'panels {len(check.panels)}  {check.why or ", ".join(check.review) or "ok"}' if check
-                     else str(reply.get('error', ''))[:80])
-                  + f'  {reply.get("elapsed_s", 0):.0f}s')
+        apply_replies(pf, t.due, items, figure_lane.results_by_key(job), totals)
     print()
     for key, n in sorted(totals.items()):
         print(f'  {key:<28} {n:>6}')

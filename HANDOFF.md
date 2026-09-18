@@ -309,7 +309,9 @@
   - ✅ **①′ detect 표본 통과 (2026-09-18)** — 7편 27쪽 전부 답, conflicts 0, failed 0, 쪽당 72–170 s. merged 107 · new 13 · adjusted 16 · dismissed 6.
     8803 사진 85장 → 图版 I–IV 넷 · 1191 p.221 자리표시 → `Pl. 50.` · 1147 Tafel IV 조각 6 → 1 · 8422 조각 → Text-fig. 8–15 · 1080 `Taf. IV` p.40/60/61 = 중복 스캔으로 판정(오독 아님) · 8615 `圖版` 글자 접힘.
     파일럿 전체 detect 대상은 55편·190쪽(아직 안 돌림)
-    - [ ] 합쳐진·보정된 행 캡션: `link_figures.py --paper-ids 8803,1147,8422,1191,1080,674,8615 --execute --no-wait` → `--collect --execute`
+    - 🟡 합쳐진·보정된 행 캡션 제출(7잡, 152 도판) · **③ panels 표본 제출**(664 15 · 7450 68 · 8833 29 = 112장) → 각각 `--collect --execute`
+    - 🔴 **collect 회귀 잡음**: 40개 분할 뒤 옛 단일 항목 잡(1189·1190·3853, 48~79 도판)이 `stale key`로 안 거둬짐 → 후보 키에 비분할 모양 추가. `--collect --execute` 다시 → 되찾힘
+    - 파일럿 link 진행: 108편 중 첫 30편만(461 linked / 3,633). 나머지 ~70편(3,143 도판)은 `--pilot --execute --no-wait`로 낼 수 있음(하루 이상)
     - **프롬프트 손볼 것(모아서 한 번에 — 버전이 바뀌면 linked 444행이 전부 다시 due)**: `name`은 인쇄된 단어 포함(`Text-fig. 15`, 맨 `15` 금지; 8803 p.29만 `Plate II`로 영어화) → 합쳐진 행은 link가 새 키로 다시 돈다(`link_figures.py --pilot … --execute --no-wait` 재실행) → panels 100장 (104 §5)
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,

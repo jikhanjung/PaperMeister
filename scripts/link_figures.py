@@ -169,7 +169,9 @@ def collect(client, args, index) -> int:
                 totals['nothing due (already applied?)'] += 1
                 continue
             request = None
-            for per_item in sorted({args.per_item, figure_link.MAX_FIGURES_PER_ITEM, 20, 10}, reverse=True):
+            # Jobs submitted before the 40-figure split carry the unsplit key:
+            # try that shape too (10**6 = everything in one item).
+            for per_item in sorted({args.per_item, figure_link.MAX_FIGURES_PER_ITEM, 20, 10, 10 ** 6}, reverse=True):
                 candidate = figure_link.link_payload(pf, pages, targets, digest, client.client_id, PROMPT, per_item)
                 if any(it['key'] in replies for it in candidate['items']):
                     request = candidate
