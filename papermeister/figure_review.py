@@ -25,6 +25,11 @@ DETECT_TRIGGERS = frozenset({
     figures.DUP_NUMBER_REASON, figures.MANY_MARKS_REASON, figures.UNMARKED_PLATE_PAGE,
     figures.TEXT_AS_FIGURE, figures.FRAGMENTED,
     figures.PLATE_WITHOUT_PICTURES, figures.CAPTION_WITHOUT_FIGURE,
+    # The caption stage gave several figures on one page the same caption:
+    # photographs of one printed figure the parser listed apart (Hahn & Hahn
+    # 1988 p.9, Kayser 1884 Tafel IV). Merging is the re-judgement's job;
+    # the caption stage then runs again on the merged row.
+    figure_link.CAPTION_SHARED,
 })
 #: Reasons a person reads — everything a stage or the rule left on a row.
 HUMAN_REASONS = DETECT_TRIGGERS | {figures.NO_CAPTION} | figure_link._LINK_REASONS | figure_panels._PANEL_REASONS

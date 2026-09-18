@@ -64,6 +64,11 @@ ENTRIES_SHRANK = 'entries_shrank'
 _WORD = re.compile(r'\w{4,}', re.UNICODE)
 _TAG = re.compile(r'<[^>]+>')
 _SPACE = re.compile(r'\s+')
+#: Cyrillic letters that look like Latin ones, folded before words are compared:
+#: the OCR reads "Micatheca" with a Cyrillic М and the model writes it in Latin.
+_HOMOGLYPHS = str.maketrans('АВЕКМНОРСТХаеорсух', 'ABEKMHOPCTXaeopcyx')
+STEM_CHARS = 5
+LINK_SKIPPED = 'link_skipped'
 
 
 def ocr_digest(pages: list[str]) -> str:
@@ -237,7 +242,9 @@ class LinkCheck:
 
 
 def _words(text: str) -> set[str]:
-    return {w.lower() for w in _WORD.findall(text or '')}
+    """Word stems, folded: inflection ("спинной"/"спинная") and a misread
+    letter or two in a Latin name should not read as an invented caption."""
+    return {w.lower().translate(_HOMOGLYPHS)[:STEM_CHARS] for w in _WORD.findall(text or '')}
 
 
 def _page_words(pages: list[str], page_numbers) -> set[str]:
@@ -271,6 +278,8 @@ def validate_link_result(payload: dict, result: dict, pages: list[str],
     for item in result.get('skipped', []) or []:
         fid = str(item.get('figure_id', ''))
         (check.skipped if fid in sent else check.unknown).append(fid)
+        if fid in sent:
+            check.flag(fid, f'{LINK_SKIPPED}:{item.get("reason") or "other"}')
 
     for item in result.get('figures', []) or []:
         fid = str(item.get('figure_id', ''))
@@ -420,6 +429,38 @@ def apply_link(targets: LinkTargets, check: LinkCheck, result: dict, digest: str
     return out
 
 
+def recheck_printed(row: Figure, pages: list[str]) -> list[str]:
+    """Re-run the printed-text checks on a stored caption and its entries —
+    for when the checks change after the reply was applied. Returns the
+    reasons that hold now; the caller replaces the old ones."""
+    caption_pages = json.loads(row.caption_pages_json or '[]') or ([row.caption_page] if row.caption_page is not None else [])
+    printed = _page_words(pages, caption_pages)
+    reasons = []
+    caption_words = _words(row.caption)
+    if row.caption and _share(caption_words, printed) < CAPTION_WORD_SHARE \
+            and len(caption_words - printed) >= MIN_MISSING_WORDS:
+        reasons.append(CAPTION_NOT_PRINTED)
+    allowed = printed | caption_words
+    for e in row.entries:
+        if _share(_words(e.description), allowed) < PRINTED_WORD_SHARE:
+            reasons.append(DESCRIPTION_NOT_PRINTED)
+            break
+    return reasons
+
+
+def apply_recheck(row: Figure, pages: list[str]) -> bool:
+    """Replace the printed-text reasons on a row with what holds now. True when changed."""
+    now = set(recheck_printed(row, pages))
+    have = json.loads(row.uncertain_reasons_json or '[]')
+    kept = [r for r in have if r not in (CAPTION_NOT_PRINTED, DESCRIPTION_NOT_PRINTED)]
+    new = kept + sorted(now)
+    if new == have:
+        return False
+    row.uncertain_reasons_json = json.dumps(new)
+    row.save()
+    return True
+
+
 # ── the same PDF under several library entries ───────────────────────
 
 def siblings(paper_file: PaperFile) -> list[PaperFile]:
@@ -479,4 +520,6 @@ def _store_reasons(row: Figure, reasons: list[str]) -> None:
 
 
 _LINK_REASONS = frozenset({CAPTION_NOT_PRINTED, DESCRIPTION_NOT_PRINTED, CAPTION_SHARED,
-                           PLATE_NO_ENTRIES, ENTRIES_SHRANK})
+                           PLATE_NO_ENTRIES, ENTRIES_SHRANK,
+                           f'{LINK_SKIPPED}:explanation_not_found', f'{LINK_SKIPPED}:not_a_figure',
+                           f'{LINK_SKIPPED}:ambiguous', f'{LINK_SKIPPED}:other'})

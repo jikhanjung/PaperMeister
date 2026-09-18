@@ -299,7 +299,13 @@
   - 🔴 **8833 Bala 1976(109쪽·도판 91) 3회 실패 → `budget_exhausted`** (ocrserver 보고, 10:49 UTC: 완료 31 · 대기 7 · 상한 초과 1). 세 번 다 설명을 다 읽고 **답(도판 91개)을 쓰는 단계에서 웹소켓이 끊김** —
     답 크기 문제. 고침: 레인이 due 도판을 **40개 이하 항목으로 분할**(`link_items`, 키 `…#i/n`, context는 모든 항목에), 답은 항목별 검증 후 병합(`LinkCheck.merge`).
     8833은 `--collect`가 옛 키(단일 항목)를 stale로 건너뛰므로 **`link_figures.py --paper-ids 8833 --execute`로 다시 제출**(3 항목). 대기 중인 291쪽(7450)·218쪽(8176)도 같은 위험 — 큐에 이미 단일 항목으로 들어가 있음
-  - [ ] 그다음 detect 표본(8803 Zhou & Zhang 4쪽 · 1191 5쪽 · 674 1쪽부터) → panels 100장 (104 §5)
+  - ✅ **Phase 2 게이트 1차 거둠 (2026-09-18)** — 서버: 27편·항목 36(단일 27 + 분할 9) 완료, 도판 707 요청 → 답 542, 항목 3,898, 실패 0, 세션 합 7.4 h, 입력 12.6M 토큰(대부분 캐시).
+    분할 효과: 8833 39/40+39/40+11/11, 8176 38/40+25/25, 7450 40/40+40/40+1/1 + **1/4만 3600 s 초과**. `--collect`: **written 397 + 형제 복사 23**, rejected 0, `description_not_printed` 0.
+    - 검수 사유 대조: `caption_not_printed` 32는 전부 키릴 논문에서 모델이 OCR 오독·격변화를 고친 것 → 검사기를 **어간(5자)+동형문자 접기** 비교로 → 4건(진짜 대조 대상). `caption_shared` 75는
+      **파서가 사진별로 나눈 한 그림/플레이트**(8422 p9 `Text-figs. 8–11`, 1147 `Tafel IV`) — 모델은 사진마다 맞는 항목을 붙였고, 합치는 건 detect 몫 → `caption_shared`를 **detect 트리거에 추가**. 순서는 ①′→②가 맞다
+    - 버그 셋 고침: `/figures/jobs` 응답 `items` 키 · collect가 형제 파일(같은 해시)의 잡을 첫 파일에 매핑해 헛시도 계산 → 답의 `figure_id`로 파일 식별 · skipped 사유를 행에 기록(`link_skipped:<reason>`)
+    - [ ] Windows: `git pull` → `link_figures.py --recheck --pilot … --execute`(낡은 사유 재계산) → `link_figures.py --paper-ids 7450 --per-item 20 --execute --no-wait`(1/4 재제출)
+  - [ ] **detect 표본** — `detect_figures.py --pilot … --limit 10 --execute --no-wait`(8803·1191·674·8422·1147 포함되게) → collect는 detect 레인 자체가 `--wait`… (detect는 아직 collect 없음: 잡이 끝날 때까지 기다리거나 `--no-wait` 뒤 다시 실행) → 합쳐진 행은 link가 새 키로 다시 돈다 → panels 100장 (104 §5)
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
     아니면 논문·폴더·전체 우클릭 "Process Figures") · 서버 PDF는 먼저 존재 확인 후 없으면 업로드 · Batches API는 해당 없음

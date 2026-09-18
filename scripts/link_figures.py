@@ -98,6 +98,48 @@ def apply_reply(pf, pages, targets, request, replies: dict, totals: Counter) -> 
         print(f'      review   #{fid}: {", ".join(reasons)}')
 
 
+def _file_of(replies: dict):
+    """The PaperFile the reply's figure ids belong to, or None."""
+    from papermeister.models import Figure
+    for item in replies.values():
+        result = item.get('result') or {}
+        for f in (result.get('figures') or []) + (result.get('skipped') or []):
+            fid = str(f.get('figure_id', ''))
+            if fid.isdigit():
+                row = Figure.get_or_none(Figure.id == int(fid))
+                if row is not None:
+                    return row.paper_file
+    return None
+
+
+def recheck(args, index) -> int:
+    """Re-run the printed-text checks on linked rows; rewrite their reasons."""
+    from papermeister.models import Figure
+    totals: Counter = Counter()
+    for pf in target_files(args):
+        pages = pages_of(pf, args.cache_dir, index)
+        if pages is None:
+            continue
+        rows = list(Figure.select().where((Figure.paper_file == pf.id) & Figure.linked_at.is_null(False)))
+        for row in rows:
+            before = json.loads(row.uncertain_reasons_json or '[]')
+            now = figure_link.recheck_printed(row, pages)
+            changed = ({r for r in before if r in (figure_link.CAPTION_NOT_PRINTED, figure_link.DESCRIPTION_NOT_PRINTED)}
+                       != set(now))
+            totals['linked rows'] += 1
+            if changed:
+                totals['would change' if not args.execute else 'changed'] += 1
+                if args.execute:
+                    figure_link.apply_recheck(row, pages)
+            for r in now:
+                totals[f'now: {r}'] += 1
+    for k, n in sorted(totals.items()):
+        print(f'  {k:<32} {n:>6}')
+    if not args.execute:
+        print('Dry run — nothing written. Add --execute to rewrite the reasons.')
+    return 0
+
+
 def collect(client, args, index) -> int:
     """Apply finished link jobs from earlier runs (review category 2)."""
     from papermeister.models import PaperFile
@@ -110,12 +152,14 @@ def collect(client, args, index) -> int:
             continue
         full = client.job('link', job['job_id'])
         replies = figure_lane.results_by_key(full)
-        prefixes = {key.split('@')[0] for key in replies}
-        for prefix in sorted(prefixes):
-            pf = PaperFile.select().where(PaperFile.hash.startswith(prefix) & ~PaperFile.path.endswith('.json')).first()
-            if pf is None:
-                totals['no such file'] += 1
-                continue
+        # The file is the one whose rows the reply names — twins of one PDF
+        # share the hash prefix, and a twin's reply applied to the wrong entry
+        # counts attempts on figures it never mentioned (2026-09-18).
+        found = _file_of(replies)
+        if found is None:
+            prefix = next(iter(replies), '').split('@')[0]
+            found = PaperFile.select().where(PaperFile.hash.startswith(prefix) & ~PaperFile.path.endswith('.json')).first()
+        for pf in ([found] if found else []):
             pages = pages_of(pf, args.cache_dir, index)
             if pages is None:
                 continue
@@ -124,11 +168,16 @@ def collect(client, args, index) -> int:
             if not targets.due:
                 totals['nothing due (already applied?)'] += 1
                 continue
-            request = figure_link.link_payload(pf, pages, targets, digest, client.client_id, PROMPT)
-            keys = [it['key'] for it in request['items']]
-            if not any(k in replies for k in keys):
+            request = None
+            for per_item in sorted({args.per_item, figure_link.MAX_FIGURES_PER_ITEM, 20, 10}, reverse=True):
+                candidate = figure_link.link_payload(pf, pages, targets, digest, client.client_id, PROMPT, per_item)
+                if any(it['key'] in replies for it in candidate['items']):
+                    request = candidate
+                    break
+            if request is None:
                 totals['stale key (text, prompt or item split changed)'] += 1
                 continue
+            keys = [it['key'] for it in request['items']]
             if args.execute:
                 apply_reply(pf, pages, targets, request, replies, totals)
             else:
@@ -151,9 +200,15 @@ def main() -> int:
     parser.add_argument('--limit', type=int, help='execute: at most this many papers')
     parser.add_argument('--no-wait', action='store_true', help='execute: submit only; apply later with --collect')
     parser.add_argument('--collect', action='store_true', help='apply finished jobs from earlier runs')
+    parser.add_argument('--recheck', action='store_true',
+                        help='re-run the printed-text checks on already linked figures (after the checks changed)')
+    parser.add_argument('--per-item', type=int, default=figure_link.MAX_FIGURES_PER_ITEM,
+                        help=f'figures per request item (default {figure_link.MAX_FIGURES_PER_ITEM}; smaller for a paper whose sessions drop)')
     args = parser.parse_args()
     if not args.paper_ids and not args.pilot and not args.collect:
         parser.error('give --paper-ids or --pilot (or --collect)')
+    if args.recheck and not (args.paper_ids or args.pilot):
+        parser.error('--recheck needs --paper-ids or --pilot')
 
     open_database(write=args.execute)
     from papermeister.preferences import get_client_id
@@ -167,6 +222,8 @@ def main() -> int:
         client = from_preferences()
     if args.collect:
         return collect(client, args, index)
+    if args.recheck:
+        return recheck(args, index)
 
     totals: Counter = Counter()
     sizes: list[tuple[int, int, int]] = []
@@ -193,7 +250,7 @@ def main() -> int:
             totals['papers with nothing due'] += 1
             continue
         totals['papers due'] += 1
-        request = figure_link.link_payload(pf, pages, targets, digest, client_id, PROMPT)
+        request = figure_link.link_payload(pf, pages, targets, digest, client_id, PROMPT, args.per_item)
         workspace = figure_link.workspace_payload(pf, pages)
         if args.execute:
             if args.limit and submitted >= args.limit:

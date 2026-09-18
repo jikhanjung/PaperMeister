@@ -327,3 +327,39 @@ def test_a_paper_with_many_figures_is_sent_as_several_items(stored):
     assert applied.written == 4 and applied.failed == 7
     # a single-figure paper keeps the plain key
     assert fl.link_items(pf, PAGES, fl.LinkTargets(due=t.due[:1]), DIGEST, 'v')[0]['key'].endswith('@v')
+
+
+@pytest.mark.unit
+def test_inflection_and_misread_letters_do_not_read_as_invention(stored):
+    """Sokolov 1983, Balašova 1976: the model's captions matched the Cyrillic
+    pages except for case endings and Latin names the OCR had garbled — and
+    were flagged as not printed. Words compare by stem, homoglyphs folded."""
+    from papermeister import figure_link as fl
+    pages = ['<div data-label="Text" data-bbox="0 0 1 1">Таблица XXV. 3. Мicatheca stupenda Sysoiev, 1972; с. 74. '
+             'а — раковина с брюшной стороны, спинная сторона, приустьевая часть</div>']
+    caption = 'Таблица XXV. 3. Micatheca stupenda Sysoiev, 1972; с. 74. а — раковина с брюшной стороны, спинной стороны, приустьевое'
+    assert fl._share(fl._words(caption), fl._page_words(pages, [0])) >= fl.CAPTION_WORD_SHARE
+    # a stored row is re-checked in place
+    from papermeister.models import Figure
+    pf, rows = stored
+    row = rows[3]
+    row.caption, row.caption_pages_json, row.linked_at = caption, '[0]', __import__('datetime').datetime.now()
+    row.uncertain_reasons_json = json.dumps(['no_caption', fl.CAPTION_NOT_PRINTED])
+    row.save()
+    assert fl.apply_recheck(row, pages) is True
+    assert json.loads(Figure.get_by_id(row.id).uncertain_reasons_json) == ['no_caption']
+
+
+@pytest.mark.unit
+def test_a_skipped_figure_carries_the_models_reason(stored):
+    from papermeister import figure_link as fl
+    from papermeister.models import Figure
+    pf, rows = stored
+    t = fl.link_targets(pf, DIGEST, PROMPT)
+    p = fl.link_payload(pf, PAGES, t, DIGEST, 'c')
+    r = reply(str(rows[2].id), str(rows[3].id))
+    r['figures'] = r['figures'][:1]
+    r['skipped'] = [{'figure_id': str(rows[3].id), 'reason': 'explanation_not_found'}]
+    check = fl.validate_link_result(p, r, PAGES)
+    fl.apply_link(t, check, r, DIGEST, PROMPT, 'm')
+    assert 'link_skipped:explanation_not_found' in json.loads(Figure.get_by_id(rows[3].id).uncertain_reasons_json)
