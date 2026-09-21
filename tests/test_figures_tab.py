@@ -80,6 +80,10 @@ def test_blocks_carry_boxes_entries_or_caption_and_the_cursor_ties_them(qapp, pa
     assert [split.entries.item(i).text().split('  ')[0] for i in range(3)] == ['1', '2', '3']
     assert plain.entries.count() == 1 and plain.panel_set is None
     assert bare.entries.count() == 0
+    # the caption two ways where there are entries and a caption; one way otherwise
+    assert [split.caption_tabs.tabText(i) for i in range(2)] == ['Entries (3)', 'Caption']
+    assert split.caption_tabs.widget(1).text() == 'PLATE 1.'
+    assert plain.caption_tabs is not None and bare.caption_tabs is None
     # the first block's crop arrives with its two boxes
     assert _settle(qapp, lambda: split.canvas._image is not None)
     assert len(split.canvas._boxes) == 2 and split.canvas._boxes[1][1] == '2'

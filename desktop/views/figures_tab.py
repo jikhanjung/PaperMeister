@@ -24,11 +24,12 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QScrollArea,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
-from desktop.components.panel_tiles import HIGHLIGHT, FigureCanvas, _CropWorker
+from desktop.components.panel_tiles import HIGHLIGHT, FigureCanvas, _CropWorker, entry_text
 from desktop.services import paper_service
 from desktop.theme.tokens import COLORS_DARK, FONT, SPACING
 
@@ -112,19 +113,37 @@ class FigureBlock(QFrame):
         self.entries.row_hovered.connect(self._entry_hovered)
         self.entries.currentRowChanged.connect(self._entry_chosen)
         self._fill_entries()
-        if self.entries.count():
+        # The caption two ways: cut into entries (what the boxes tie to) and
+        # as printed (what to check them against). Both, on small tabs, when
+        # there are entries; the printed one alone otherwise.
+        self.caption_tabs: QTabWidget | None = None
+        if self.entries.count() and row.caption:
+            self.caption_tabs = QTabWidget()
+            self.caption_tabs.setObjectName('CaptionTabs')
+            self.caption_tabs.setDocumentMode(True)
+            self.caption_tabs.addTab(self.entries, f'Entries ({self.entries.count()})')
+            self.caption_tabs.addTab(self._caption_label(row.caption), 'Caption')
+            self.caption_tabs.currentChanged.connect(lambda _i: self.caption_tabs.adjustSize())
+            layout.addWidget(self.caption_tabs)
+        elif self.entries.count():
             layout.addWidget(self.entries)
         elif row.caption:
-            caption = QLabel(row.caption)
-            caption.setWordWrap(True)
-            caption.setStyleSheet(f"color: {COLORS_DARK['text.secondary']};")
-            layout.addWidget(caption)
+            layout.addWidget(self._caption_label(row.caption))
         else:
             note = QLabel('No caption linked yet.')
             note.setStyleSheet(f"color: {COLORS_DARK['text.secondary']};")
             layout.addWidget(note)
 
     # ── content ───────────────────────────────────────────────
+
+    @staticmethod
+    def _caption_label(text: str) -> QLabel:
+        label = QLabel(text)
+        label.setWordWrap(True)
+        label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        label.setStyleSheet(f"color: {COLORS_DARK['text.secondary']}; padding: {SPACING['xs']}px 0;")
+        label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        return label
 
     def _title(self) -> str:
         r = self.row
@@ -202,7 +221,8 @@ class FigureBlock(QFrame):
                                  (x1 - x0) * page_w / 1000 * sx, (y1 - y0) * page_h / 1000 * sy),
                           p.label, p.colour))
         lit = self.canvas.lit()
-        self.canvas.set_figure(image, boxes, image.width() / max(1, image.height()))
+        self.canvas.set_figure(image, boxes, image.width() / max(1, image.height()),
+                               [entry_text(p) for p in (self.panel_set.panels if self.panel_set else [])])
         self.canvas.light(lit)
 
     def release(self) -> None:

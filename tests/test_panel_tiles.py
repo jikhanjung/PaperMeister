@@ -250,3 +250,47 @@ def test_load_entries_reads_the_figures_entries_in_order(db):
     FigureEntry.create(figure=fig, order=0, label='1', description='Cranidium', specimen_number='S1')
     assert load_entries(fig.id) == ('Plate 1', [('1', 'Cranidium', 'S1'), ('2', 'Pygidium', '')])
     assert load_entries(999) == ('', [])
+
+
+@pytest.mark.ui
+def test_hovering_a_box_shows_its_entry_as_a_tooltip(qapp, monkeypatch):
+    from PyQt6.QtCore import QPointF, QRectF
+    from PyQt6.QtGui import QImage
+
+    from desktop.components import panel_tiles as mod
+    shown = []
+    monkeypatch.setattr(mod.QToolTip, 'showText', lambda pos, text, w=None: shown.append(text))
+    monkeypatch.setattr(mod.QToolTip, 'hideText', lambda: shown.append(None))
+    canvas = mod.FigureCanvas()
+    image = QImage(400, 400, QImage.Format.Format_RGB888)
+    canvas.set_figure(image, [(QRectF(0, 0, 200, 200), '1', '#e11d48'), (QRectF(200, 0, 200, 200), '2', '#2563eb')], 1.0,
+                      tips=['1 — Cranidium (S1)', ''])
+    target = canvas._drawn_rect()
+    sx = target.width() / 400
+
+    class Ev:
+        def __init__(self, x, y):
+            self._p = QPointF(x, y)
+
+        def position(self):
+            return self._p
+
+        def globalPosition(self):
+            return self._p
+
+    canvas.mouseMoveEvent(Ev(target.x() + 50 * sx, target.y() + 50 * sx))
+    canvas.mouseMoveEvent(Ev(target.x() + 250 * sx, target.y() + 50 * sx))    # a panel with no tip text
+    canvas.mouseMoveEvent(Ev(target.x() + 250 * sx, target.y() + 350 * sx))   # off every box
+    assert shown == ['1 — Cranidium (S1)', None, None]
+
+
+@pytest.mark.unit
+def test_entry_text_names_specimen_confidence_and_annotation():
+    from desktop.components.panel_tiles import entry_text
+    from desktop.services.paper_service import PanelInfo
+    p = PanelInfo(label='1', bbox_page_1000=[0, 0, 1, 1], entries=[('1', 'Cranidium, dorsal view', 'S1')])
+    assert entry_text(p) == '1 — Cranidium, dorsal view (S1)'
+    p.confidence = 'medium'
+    assert entry_text(p).startswith('Confidence: medium.\n1 — ')
+    assert entry_text(PanelInfo(label='sb', bbox_page_1000=[0, 0, 1, 1], entries=[], annotation=True)).startswith('Annotation')
+    assert entry_text(PanelInfo(label='9', bbox_page_1000=[0, 0, 1, 1], entries=[])) == 'No caption entry matched.'

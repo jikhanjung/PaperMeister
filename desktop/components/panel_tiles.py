@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QToolTip,
     QVBoxLayout,
     QWidget,
 )
@@ -102,6 +103,7 @@ class FigureCanvas(QWidget):
         super().__init__(parent)
         self._image: QImage | None = None
         self._boxes: list[tuple[QRectF, str, str]] = []   # in image pixels: rect, label, colour
+        self._tips: list[str] = []                         # per panel: the entry text shown on hover
         self._lit: int | None = None
         self._hover: int | None = None
         self._aspect = 1.0
@@ -110,8 +112,10 @@ class FigureCanvas(QWidget):
         self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
-    def set_figure(self, image: QImage | None, boxes: list[tuple[QRectF, str, str]], aspect: float) -> None:
+    def set_figure(self, image: QImage | None, boxes: list[tuple[QRectF, str, str]], aspect: float,
+                   tips: list[str] | None = None) -> None:
         self._image, self._boxes, self._lit, self._hover = image, boxes, None, None
+        self._tips = tips or []
         self._aspect = aspect or 1.0
         self._fit()
         self.update()
@@ -201,12 +205,34 @@ class FigureCanvas(QWidget):
         if index != self._hover:
             self.hover(index)
             self.panel_hovered.emit(-1 if index is None else index)
+            # The entry as a tooltip, so a box can be read without finding
+            # its line in the list below.
+            tip = self._tips[index] if index is not None and index < len(self._tips) else ''
+            if tip:
+                QToolTip.showText(event.globalPosition().toPoint(), tip, self)
+            else:
+                QToolTip.hideText()
 
     def leaveEvent(self, event):
         if self._hover is not None:
             self.hover(None)
             self.panel_hovered.emit(-1)
         super().leaveEvent(event)
+
+
+def entry_text(panel) -> str:
+    """A panel's entries as one tooltip: label — description (specimen)."""
+    lines = []
+    for label, description, specimen in panel.entries:
+        text = f'{label} — {description}' if description else label
+        if specimen and specimen not in description:
+            text += f' ({specimen})'
+        lines.append(text)
+    if not lines:
+        lines.append('Annotation (scale bar, key), not a specimen.' if panel.annotation else 'No caption entry matched.')
+    elif panel.confidence != 'high':
+        lines.insert(0, f'Confidence: {panel.confidence}.')
+    return '\n'.join(lines)
 
 
 class PanelTiles(QFrame):
@@ -337,7 +363,8 @@ class PanelTiles(QFrame):
                           (x1 - x0) * page_w / 1000 * sx, (y1 - y0) * page_h / 1000 * sy)
             boxes.append((rect, p.label, p.colour))
         lit = self.canvas.lit()
-        self.canvas.set_figure(image, boxes, image.width() / max(1, image.height()))
+        self.canvas.set_figure(image, boxes, image.width() / max(1, image.height()),
+                               [entry_text(p) for p in self._panel_set.panels])
         self.canvas.light(lit)
 
     def _ensure_worker(self) -> _CropWorker:
