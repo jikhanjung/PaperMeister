@@ -38,3 +38,38 @@ def test_pages_fit_the_width_and_are_rerendered_after_a_resize(qapp):
     view._refit_now()
     assert view._zoom > zoom_before and label.width() > 800
     assert len(doc[0].rendered) == 2          # decoded again for the new width
+
+
+@pytest.mark.ui
+def test_the_toolbar_moves_between_pages_and_zooms(qapp):
+    from desktop.views.detail_panel import PdfTab
+    doc = [_Page(595, 842) for _ in range(5)]
+    tab = PdfTab(doc)
+    tab.resize(500, 600)
+    tab.show()
+    qapp.processEvents()
+    tab.view._refit_now()
+    assert tab.page_total.text() == '/ 5' and tab.page_box.value() == 1 and tab.fit_btn.isChecked()
+    fitted = tab.view.zoom()
+    # next / previous / typed page
+    tab.next_btn.click()
+    qapp.processEvents()
+    assert tab.view.current_page() == 1 and tab.page_box.value() == 2
+    tab.page_box.setValue(4)
+    tab.page_box.editingFinished.emit()
+    qapp.processEvents()
+    assert tab.view.current_page() == 3 and tab.page_box.value() == 4
+    tab.prev_btn.click()
+    qapp.processEvents()
+    assert tab.view.current_page() == 2
+    # zoom leaves fit-width mode; the label follows; a resize no longer refits
+    tab.zoom_in_btn.click()
+    assert not tab.fit_btn.isChecked() and abs(tab.view.zoom() - fitted * 1.25) < 1e-6
+    assert tab.zoom_label.text() == f'{round(fitted * 1.25 * 100)}%'
+    tab.resize(900, 600)
+    qapp.processEvents()
+    tab.view._refit_now()
+    assert abs(tab.view.zoom() - fitted * 1.25) < 1e-6
+    # fit width again follows the (now wider) viewport
+    tab.fit_btn.click()
+    assert tab.fit_btn.isChecked() and tab.view.zoom() > fitted

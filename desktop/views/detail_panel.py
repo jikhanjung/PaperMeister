@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
     QRadioButton,
     QScrollArea,
     QSizePolicy,
+    QSpinBox,
     QTabWidget,
     QTextBrowser,
     QVBoxLayout,
@@ -100,8 +101,12 @@ class _LazyPdfView(QScrollArea):
     """
 
     _LOOKAHEAD_PX = 800
-    _MIN_ZOOM, _MAX_ZOOM = 0.5, 4.0
+    _MIN_ZOOM, _MAX_ZOOM = 0.25, 6.0
     _GUTTER = 2 * SPACING['sm']
+    _STEP = 1.25
+
+    page_changed = pyqtSignal(int)          # 0-based page now at the top of the viewport
+    zoom_changed = pyqtSignal(float, bool)  # zoom, fit-width mode
 
     def __init__(self, doc, parent=None):
         super().__init__(parent)
@@ -114,7 +119,9 @@ class _LazyPdfView(QScrollArea):
         self._doc = doc
         self._sizes_pt = [doc[i].get_size() for i in range(len(doc))]     # points, before zoom
         self._zoom = 1.0
+        self._fit_width = True                  # follow the viewport until the user zooms
         self._fitted_width = 0
+        self._current_page = -1
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -136,6 +143,7 @@ class _LazyPdfView(QScrollArea):
         self._apply_zoom(self._fit_zoom())
 
         self.verticalScrollBar().valueChanged.connect(self._render_visible)
+        self.verticalScrollBar().valueChanged.connect(self._track_page)
         self._refit = QTimer(self)
         self._refit.setSingleShot(True)
         self._refit.setInterval(200)
@@ -158,20 +166,90 @@ class _LazyPdfView(QScrollArea):
             lbl.clear()
         self._rendered = [False] * len(self._page_labels)
 
+    def _rezoom(self, zoom: float) -> None:
+        """Apply a zoom keeping the reader's place in the document."""
+        scrollbar = self.verticalScrollBar()
+        fraction = scrollbar.value() / scrollbar.maximum() if scrollbar.maximum() else 0.0
+        self._apply_zoom(zoom)
+        self.widget().layout().activate()
+        scrollbar.setValue(round(scrollbar.maximum() * fraction))
+        self.zoom_changed.emit(self._zoom, self._fit_width)
+
     def _refit_now(self) -> None:
         width = self.viewport().width()
-        if abs(width - self._fitted_width) > 8:
+        if self._fit_width and abs(width - self._fitted_width) > 8:
             self._fitted_width = width
-            scrollbar = self.verticalScrollBar()
-            fraction = scrollbar.value() / scrollbar.maximum() if scrollbar.maximum() else 0.0
-            self._apply_zoom(self._fit_zoom())
-            self.widget().layout().activate()
-            scrollbar.setValue(round(scrollbar.maximum() * fraction))
+            self._rezoom(self._fit_zoom())
         self._render_visible()
+        self._track_page()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._refit.start()
+
+    # ── controls ──────────────────────────────────────────────
+
+    def page_count(self) -> int:
+        return len(self._page_labels)
+
+    def zoom(self) -> float:
+        return self._zoom
+
+    def fits_width(self) -> bool:
+        return self._fit_width
+
+    def set_zoom(self, zoom: float) -> None:
+        """A zoom the user chose; the view stops following the viewport width."""
+        self._fit_width = False
+        self._rezoom(max(self._MIN_ZOOM, min(self._MAX_ZOOM, zoom)))
+        self._render_visible()
+
+    def zoom_in(self) -> None:
+        self.set_zoom(self._zoom * self._STEP)
+
+    def zoom_out(self) -> None:
+        self.set_zoom(self._zoom / self._STEP)
+
+    def fit_width(self) -> None:
+        self._fit_width = True
+        self._fitted_width = self.viewport().width()
+        self._rezoom(self._fit_zoom())
+        self._render_visible()
+
+    def current_page(self) -> int:
+        """The 0-based page at the top of the viewport (plus a little, so a
+        page just scrolled past its top edge does not still count)."""
+        top = self.verticalScrollBar().value() + self.viewport().height() // 3
+        page = 0
+        for i, lbl in enumerate(self._page_labels):
+            if lbl.y() <= top:
+                page = i
+            else:
+                break
+        return page
+
+    def go_to_page(self, index: int) -> None:
+        index = max(0, min(self.page_count() - 1, index))
+        if not self._page_labels:
+            return
+        self.widget().layout().activate()
+        self.verticalScrollBar().setValue(self._page_labels[index].y())
+
+    def _track_page(self, *_args) -> None:
+        page = self.current_page()
+        if page != self._current_page:
+            self._current_page = page
+            self.page_changed.emit(page)
+
+    def wheelEvent(self, event):
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            if event.angleDelta().y() > 0:
+                self.zoom_in()
+            elif event.angleDelta().y() < 0:
+                self.zoom_out()
+            event.accept()
+            return
+        super().wheelEvent(event)
 
     def _render_visible(self):
         if self._doc is None:
@@ -208,6 +286,93 @@ class _LazyPdfView(QScrollArea):
         pixmap.setDevicePixelRatio(ratio)
         self._page_labels[idx].setPixmap(pixmap)
         self._rendered[idx] = True
+
+
+class PdfTab(QWidget):
+    """The PDF view with its controls: page navigation and zoom."""
+
+    def __init__(self, doc, parent=None):
+        super().__init__(parent)
+        self.setObjectName('PdfTab')
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        self.view = _LazyPdfView(doc)
+        bar = QHBoxLayout()
+        bar.setContentsMargins(SPACING['sm'], SPACING['xs'], SPACING['sm'], SPACING['xs'])
+        bar.setSpacing(SPACING['xs'])
+
+        self.prev_btn = QPushButton('‹')
+        self.prev_btn.setToolTip('Previous page (PageUp)')
+        self.prev_btn.setFixedWidth(28)
+        self.prev_btn.clicked.connect(lambda: self.view.go_to_page(self.view.current_page() - 1))
+        bar.addWidget(self.prev_btn)
+        self.page_box = QSpinBox()
+        self.page_box.setRange(1, max(1, self.view.page_count()))
+        self.page_box.setFixedWidth(64)
+        self.page_box.setToolTip('Page — type a number and press Enter')
+        self.page_box.editingFinished.connect(lambda: self.view.go_to_page(self.page_box.value() - 1))
+        bar.addWidget(self.page_box)
+        self.page_total = QLabel(f'/ {self.view.page_count()}')
+        bar.addWidget(self.page_total)
+        self.next_btn = QPushButton('›')
+        self.next_btn.setToolTip('Next page (PageDown)')
+        self.next_btn.setFixedWidth(28)
+        self.next_btn.clicked.connect(lambda: self.view.go_to_page(self.view.current_page() + 1))
+        bar.addWidget(self.next_btn)
+
+        bar.addStretch(1)
+
+        self.zoom_out_btn = QPushButton('−')
+        self.zoom_out_btn.setToolTip('Zoom out (Ctrl+wheel)')
+        self.zoom_out_btn.setFixedWidth(28)
+        self.zoom_out_btn.clicked.connect(self.view.zoom_out)
+        bar.addWidget(self.zoom_out_btn)
+        self.zoom_label = QLabel('')
+        self.zoom_label.setFixedWidth(48)
+        self.zoom_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        bar.addWidget(self.zoom_label)
+        self.zoom_in_btn = QPushButton('+')
+        self.zoom_in_btn.setToolTip('Zoom in (Ctrl+wheel)')
+        self.zoom_in_btn.setFixedWidth(28)
+        self.zoom_in_btn.clicked.connect(self.view.zoom_in)
+        bar.addWidget(self.zoom_in_btn)
+        self.fit_btn = QPushButton('Fit width')
+        self.fit_btn.setCheckable(True)
+        self.fit_btn.setToolTip('Fit the page to the panel width and keep it fitted as the panel resizes')
+        self.fit_btn.clicked.connect(self._fit_clicked)
+        bar.addWidget(self.fit_btn)
+
+        layout.addLayout(bar)
+        layout.addWidget(self.view, 1)
+
+        self.view.page_changed.connect(self._page_changed)
+        self.view.zoom_changed.connect(self._zoom_changed)
+        self._zoom_changed(self.view.zoom(), self.view.fits_width())
+
+    def _fit_clicked(self, checked: bool):
+        if checked:
+            self.view.fit_width()
+        else:
+            self.view.set_zoom(self.view.zoom())      # keep the size, stop following
+
+    def _page_changed(self, page: int):
+        self.page_box.blockSignals(True)
+        self.page_box.setValue(page + 1)
+        self.page_box.blockSignals(False)
+
+    def _zoom_changed(self, zoom: float, fits: bool):
+        self.zoom_label.setText(f'{round(zoom * 100)}%')
+        self.fit_btn.setChecked(fits)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_PageDown:
+            self.view.go_to_page(self.view.current_page() + 1)
+        elif event.key() == Qt.Key.Key_PageUp:
+            self.view.go_to_page(self.view.current_page() - 1)
+        else:
+            super().keyPressEvent(event)
 
 
 class DetailPanel(QWidget):
@@ -526,7 +691,7 @@ class DetailPanel(QWidget):
             doc = pdfdoc.open_document(pdf_path)
         except Exception as exc:
             return self._ocr_empty_panel(f'Failed to open PDF: {exc}')
-        return _LazyPdfView(doc)
+        return PdfTab(doc)
 
     def _build_pdf_download_panel(self, d) -> QWidget:
         """Show a download button for Zotero-hosted PDFs."""
