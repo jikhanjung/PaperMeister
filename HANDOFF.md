@@ -331,6 +331,8 @@
     - 같은 날 교체: 타일 격자 → **도판 전체 + 패널 상자**(`FigureCanvas`, 페인트 시 그림) 왼쪽, **항목 목록** 오른쪽(패널 색). 항목 클릭 → 상자 노랑 강조·나머지 흐림, 상자 클릭 → 항목 선택(겹치면 가장 작은 상자). 미매칭 항목·항목 없는 패널은 뒤에 회색
   - ✅ **Figures 탭** (2026-09-21, [109](./devlog/20260921_109_P16_Figures_Tab.md)): Text와 References 사이. 도판/플레이트 블록을 페이지 순으로 — 도판 전체(≤760px) + 서브피겨 상자, 아래 캡션 항목(패널 색). **상자 hover → 항목 노랑 채움, 항목 hover → 상자 노랑 강조·나머지 흐림**, 클릭은 고정. 렌더는 뷰포트 근처만(600px 선행, 2,400px 밖 해제, 최대 10장 보유). conftest에 `papermeister.*` 재import 복원 픽스처 추가(전체 실행에서만 나던 "uninitialized Proxy")
     - 같은 날: 상자 hover 툴팁(항목), 도판 아래 **Entries/Caption 탭**, Figures·PDF 탭 **폭 맞춤**(리사이즈 시 재맞춤, 스크롤바 상시 표시), 메인 스플리터 비례(1/2/2). ③ 추가: **1737 Bruton 10/10 · 1541 Naimark 3/4**(Fig. 2 `duplicate_caption_index`)
+    - 같은 날 정리(사용자 요청): **Text 탭에서 도판 목록·분할 뷰·리더 상자 오버레이 제거** — Text는 본문+도판 인라인만, 상세는 Figures 탭. `panel_tiles.py`·`figure_list.py` 삭제, 캔버스·워커는 `figure_canvas.py`로. 패널 상자는 **한 가지 옅은 색**(`PANEL_COLOURS = ('#7b93ad',)`), hover/클릭만 노랑
+    - ③ 검사기 완화: 한 항목이 여러 패널(사진+선화, 스테레오 쌍)이면 거부가 아니라 `entry_on_several_panels` 검토 — 1541 Fig. 2(6패널)·664 Fig. 11(9패널) 반영. `split_panels.py --figure-ids N --force`(서버 캐시 우회)
     - 남은 것: 앱에서 상자 수정/라벨 교정(`figure_curation` UI 미연결), 도판 목록에서 Figures 탭의 해당 블록으로 점프(`FiguresTab.show_figure`는 있음)
   - 1191 Barrande(09-21): `e7708b8a` 3항목 거둠(2/3·3/3 → Pl. 5–10 6장 written 369항목). **1/3은 done이지만 사실상 실패**(9장 중 243만, 그것도 항목 1개에 Fig. 3·5·6·10·12를 뭉침; 나머지 8장은 figures에도 skipped에도 없음 — 웹소켓 재연결 뒤 컨텍스트 유실, ocrserver 분석). 244–246은 이걸로 attempts 3 소진
     → **`--relink 243,244,245,246 --execute`**(새 옵션: 캡션 결과·항목·시도 삭제, 사람 캡션은 거부) 뒤 **`--per-item 8`로 플레이트 1장 = 1항목** 4개 제출(`4e377fbc`). 본문 그림 6장(240–242·247·248·256)은 not_a_figure로 소진 상태 그대로 둠.

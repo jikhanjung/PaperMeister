@@ -51,8 +51,8 @@ class _FigureWorker(QThread):
         self._order: list[int] = []
         self._stopping = False
 
-    def request(self, uri: str, page: int, bbox, width: int, height: int, panels=()):
-        self._queue.put((uri, page, bbox, width, height, tuple(panels)))
+    def request(self, uri: str, page: int, bbox, width: int, height: int):
+        self._queue.put((uri, page, bbox, width, height))
 
     def stop(self):
         self._stopping = True
@@ -73,7 +73,7 @@ class _FigureWorker(QThread):
             if image is not None and not self._stopping:
                 self.ready.emit(uri, image)
 
-    def _render(self, uri, page, bbox, width, height, panels=()):
+    def _render(self, uri, page, bbox, width, height):
         # Enough dpi that the crop is at least as detailed as its slot on
         # screen; derived from how much of the page width the figure takes.
         frac_w = (bbox[2] - bbox[0]) / ocr_layout.BBOX_SCALE
@@ -83,13 +83,10 @@ class _FigureWorker(QThread):
         dpi = int(min(_MAX_DPI, max(_MIN_DPI, dpi)))
 
         page_image = self._page_bitmap(page, dpi)
-        box = ocr_layout.crop_box(bbox, *page_image.size)
-        crop = page_image.crop(box)
+        crop = page_image.crop(ocr_layout.crop_box(bbox, *page_image.size))
         if crop.width < 1 or crop.height < 1:
             return uri, None
         crop = crop.resize((width, height))
-        if panels:
-            draw_panel_boxes(crop, panels, box, page_image.size)
         data = crop.tobytes('raw', 'RGB')
         image = QImage(data, crop.width, crop.height, 3 * crop.width,
                        QImage.Format.Format_RGB888)
@@ -116,39 +113,6 @@ class _FigureWorker(QThread):
         return image
 
 
-def draw_panel_boxes(crop, panels, box, page_size) -> None:
-    """Draw the split stage's panels (P16 ③) over one figure crop.
-
-    `panels` are (label, page-frame box 0..1000, colour); `box` is the pixel
-    box the crop was cut by and `page_size` the rendered page — the same
-    mapping the crop used, so a box lands on its specimen and not a few
-    pixels off. A plate the OCR cut into pieces shows as several crops; a
-    panel is drawn on each crop it overlaps, clipped to it.
-    """
-    from PIL import ImageDraw
-    page_w, page_h = page_size
-    cx0, cy0, cx1, cy1 = box
-    sx = crop.width / max(1, cx1 - cx0)
-    sy = crop.height / max(1, cy1 - cy0)
-    draw = ImageDraw.Draw(crop)
-    for label, (x0, y0, x1, y1), colour in panels:
-        px0, py0 = x0 * page_w / 1000, y0 * page_h / 1000
-        px1, py1 = x1 * page_w / 1000, y1 * page_h / 1000
-        if px1 <= cx0 or px0 >= cx1 or py1 <= cy0 or py0 >= cy1:
-            continue
-        rx0 = max(0, (px0 - cx0) * sx)
-        ry0 = max(0, (py0 - cy0) * sy)
-        rx1 = min(crop.width - 1, (px1 - cx0) * sx)
-        ry1 = min(crop.height - 1, (py1 - cy0) * sy)
-        if rx1 - rx0 < 2 or ry1 - ry0 < 2:
-            continue
-        draw.rectangle((rx0, ry0, rx1, ry1), outline=colour, width=2)
-        if label:
-            tag_w = 6 * len(label) + 6
-            draw.rectangle((rx0, ry0, min(rx1, rx0 + tag_w), min(ry1, ry0 + 12)), fill=colour)
-            draw.text((rx0 + 3, ry0), label, fill='white')
-
-
 class OcrView(QTextBrowser):
     """Read-only view of one paper's OCR, with figures cropped from the PDF."""
 
@@ -166,7 +130,6 @@ class OcrView(QTextBrowser):
         self._images: dict[str, QImage] = {}
         self._requested: set[str] = set()
         self._worker: _FigureWorker | None = None
-        self._panels: dict[int, list] = {}      # page -> [(label, page box, colour)], drawn over figures
 
         # Arrivals are batched: a dozen figures landing in a burst should cost
         # one relayout, not a dozen.
@@ -206,15 +169,6 @@ class OcrView(QTextBrowser):
             self._worker.start()
         self._built_width = self._available_width()
         self.setHtml(html)
-
-    def set_panels(self, panels_by_page: dict[int, list]) -> None:
-        """Boxes to draw over the figures (③). Takes effect on the next build;
-        call `refresh_figures()` to redraw a document already up."""
-        self._panels = panels_by_page or {}
-
-    def refresh_figures(self) -> None:
-        """Drop the crops and re-lay the document, keeping the reader's place."""
-        self._rebuild()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -281,7 +235,7 @@ class OcrView(QTextBrowser):
             self._requested.add(uri)
             page, bbox = parsed
             width, height = self._slots.get(uri, (320, 240))
-            self._worker.request(uri, page, bbox, width, height, self._panels.get(page, ()))
+            self._worker.request(uri, page, bbox, width, height)
         return self._placeholder(uri)
 
     def _placeholder(self, uri: str) -> QImage:

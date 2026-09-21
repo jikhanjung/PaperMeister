@@ -1168,52 +1168,12 @@ class DetailPanel(QWidget):
             f"  font-size: {FONT['size.md']}px;"
             f"}}"
         )
-        # P16: figures assembled for this paper, if any have been stored. A
-        # failure here must not cost the reader, which is the tab's real job.
-        figure_rows, panel_boxes = [], {}
         if structured:
-            try:
-                figure_rows = paper_service.load_figures(d.paper_id)
-                if any(r.panels for r in figure_rows):
-                    panel_boxes = paper_service.load_panel_boxes(d.paper_id)
-            except Exception:
-                figure_rows, panel_boxes = [], {}
-
-        if structured:
-            browser.set_panels(panel_boxes)              # before the build: the crops draw them
             browser.set_pages(pages, self._local_pdf_path(d))
         else:
             browser.setMarkdown(self._join_pages_as_markdown(pages))
         self._ocr_browser = browser
         self._apply_search_highlight(browser)
-
-        if figure_rows:
-            from desktop.components.figure_list import FigureList
-            from desktop.components.panel_tiles import PanelTiles
-            figure_list = FigureList(figure_rows)
-            figure_list.page_requested.connect(
-                lambda page, b=browser: b.scrollToAnchor(ocr_layout.page_anchor(page)))
-            layout.addWidget(figure_list)
-            # ③: the chosen figure's panels as tiles, and its boxes over the
-            # reader's figures (toggle in the list's header).
-            split = {r.id for r in figure_rows if r.panels}
-            with_entries = {r.id for r in figure_rows if r.entries}
-            tiles = PanelTiles(self._local_pdf_path(d))
-
-            def _show_figure(fid: int, t=tiles):
-                if fid in split:
-                    t.show_panels(paper_service.load_panels(fid))
-                elif fid in with_entries:
-                    t.show_entries(*paper_service.load_entries(fid))
-                else:
-                    t.clear()
-            figure_list.figure_chosen.connect(_show_figure)
-            layout.addWidget(tiles)
-
-            def _toggle_boxes(on: bool, b=browser, boxes=panel_boxes):
-                b.set_panels(boxes if on else {})
-                b.refresh_figures()
-            figure_list.boxes_toggled.connect(_toggle_boxes)
 
         layout.addWidget(browser, 1)
         return host

@@ -41,6 +41,11 @@ PANEL_RATIO_MIN, PANEL_RATIO_MAX = 0.5, 2.0
 PANELS_0 = 'panels_0'
 PANELS_1_WITH_SIBLINGS = 'panels_1_with_siblings'
 PANEL_COUNT_OUT_OF_RANGE = 'panel_count_out_of_range'
+#: One entry on several panels — a photograph and its outline drawing, a
+#: stereo pair, dorsal and lateral views under one number. Naimark 2006
+#: Fig. 2 is exactly that and was rejected as a duplicate; it is a review
+#: reason, not a fault in the reply.
+ENTRY_ON_SEVERAL_PANELS = 'entry_on_several_panels'
 SINGLE_IMAGE_MANY_CAPTIONS = 'single_image_many_captions'
 IMAGE_INCOMPLETE = 'image_incomplete'
 NOT_A_FIGURE = 'not_a_figure'
@@ -189,6 +194,7 @@ def validate_panel_result(item: dict, result: dict, siblings_on_page: int = 0) -
 
     panels: list[dict] = []
     used: set[int] = set()
+    shared = False
     for p in result['panels']:
         if not isinstance(p, dict) or not isinstance(p.get('label', ''), str):
             return PanelCheck(False, 'invalid_label')
@@ -198,8 +204,10 @@ def validate_panel_result(item: dict, result: dict, siblings_on_page: int = 0) -
         indices = p.get('caption_indices') or []
         if not isinstance(indices, list) or any(type(i) is not int or not 0 <= i < n for i in indices):
             return PanelCheck(False, 'invalid_caption_index')
-        if len(indices) != len(set(indices)) or used & set(indices):
+        if len(indices) != len(set(indices)):
             return PanelCheck(False, 'duplicate_caption_index')
+        if used & set(indices):
+            shared = True
         used |= set(indices)
         if p.get('confidence', 'low') not in CONFIDENCES:
             return PanelCheck(False, 'invalid_confidence')
@@ -220,6 +228,8 @@ def validate_panel_result(item: dict, result: dict, siblings_on_page: int = 0) -
             p['label'] = entries[i].get('label', '')
 
     check = PanelCheck(True, panels=panels)
+    if shared:
+        check.review.append(ENTRY_ON_SEVERAL_PANELS)
     counted = n - len(annotation)
     if not panels:
         check.review.append(PANELS_0)

@@ -136,7 +136,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
   - `desktop/theme/` — design tokens (`tokens.py`), QSS generator (`qss.py`), SVG icons + runtime tinting loader (`icons.py`)
 - **Rail** (좌측 아이콘 바): Library/Search는 **checkable 모드** → `section_changed` 시그널, Process/Settings는 **one-shot 액션** → `action_triggered` 시그널. Process/Settings는 **동결된 `papermeister/ui/process_window.ProcessWindow` / `preferences_dialog.PreferencesDialog`를 재사용**
 - **SourceNav**: `QTabWidget` — 각 Source마다 탭 하나 (현재 Zotero 하나). 각 탭 내부는 단일 트리에 상단=Library 필터, 하단=hierarchical 컬렉션
-- **DetailPanel**: `QWidget` (not QScrollArea) + 내부 `QTabWidget#DetailTabs`. 탭 5개 — **Metadata / PDF / Text / Figures / References** (Biblio 대조는 Metadata 탭에 통합, PDF·Text·Figures·References는 첫 활성화 때 lazy 빌드; `_on_tab_changed`의 인덱스가 하드코딩이라 탭을 끼우면 거기도 고칠 것). **Figures 탭**(`desktop/views/figures_tab.py`): 도판 블록마다 도판 전체+서브피겨 상자+캡션 항목, hover로 상자↔항목 연동, 뷰포트 근처만 렌더(최대 10장 보유). 각 탭 독립 스크롤, 논문 전환 시 직전 탭 복원. Stub 배너는 탭바 위에 고정
+- **DetailPanel**: `QWidget` (not QScrollArea) + 내부 `QTabWidget#DetailTabs`. 탭 5개 — **Metadata / PDF / Text / Figures / References** (Biblio 대조는 Metadata 탭에 통합, PDF·Text·Figures·References는 첫 활성화 때 lazy 빌드; `_on_tab_changed`의 인덱스가 하드코딩이라 탭을 끼우면 거기도 고칠 것). **Figures 탭**(`desktop/views/figures_tab.py` + `desktop/components/figure_canvas.py`): 도판 블록마다 도판 전체(폭 맞춤)+서브피겨 상자(한 가지 옅은 색, hover/클릭만 노랑)+Entries/Caption 탭, hover로 상자↔항목 연동·툴팁, 뷰포트 근처만 렌더(최대 10장 보유). 각 탭 독립 스크롤, 논문 전환 시 직전 탭 복원. Stub 배너는 탭바 위에 고정
 - **Biblio 탭 대조 비교 UI**: Paper(Zotero) vs PaperBiblio(추출) 필드별 비교 테이블. diff가 있는 행에 라디오 버튼(Paper/Biblio 선택) + 편집 가능한 입력 필드(QPlainTextEdit: Title/Authors/Journal, QLineEdit: Year/DOI) + × 클리어 버튼. Apply 시 `apply_merged()`로 선택/편집된 값 반영. 저자는 한 줄 한 명, "Lastname, Firstname" 형식
 - **Text 탭**: `papermeister.biblio.load_ocr_pages()`로 `~/PaleoBytes/PaperMeister/ocr_json/{hash}.json` 페치.
   **Chandra2 출력은 마크다운이 아니라 레이아웃 HTML**이다 — 블록마다 `data-label`(무엇인지)과
@@ -147,7 +147,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
     — 라이브에서 실제로 잘라 눈으로 확인했다. 페이지 렌더가 ~100ms라 **워커 스레드**에서 하고
     자리는 `<img width height>`로 미리 잡는다 — 그래야 본문이 안 밀리고, Qt가 **그릴 때** 로드하므로
     477쪽 합본도 화면에 든 페이지만 렌더된다 ([094](./devlog/20260828_094_Text_Tab_Reads_The_OCR_Layout.md))
-    **P16 ③ 결과**: 목록 줄에 `N panels / M entries`, 줄 선택 시 `desktop/components/panel_tiles.py::PanelTiles`가 **도판 전체 + 패널 상자**(`FigureCanvas`) + 항목 목록(항목↔상자 클릭 연동; 워커가 페이지 1회 렌더 후 crop), 리더 도판 위엔 `OcrView.set_panels()`로 같은 색 상자(crop과 같은 픽셀 프레임으로 그려야 어긋나지 않음 — `draw_panel_boxes`). 색 순환은 `paper_service.panel_colour()` 한 곳
+    **Text 탭은 본문+도판 인라인만** — 도판 목록·패널 상자·항목은 모두 **Figures 탭**(아래)에 있다. 여기에 도판 정보를 다시 얹지 말 것(2026-09-21에 얹었다가 사용자 요청으로 걷어냄)
   - **legacy 마크다운(~28%)** → `_sanitize_ocr_markdown()` + `setMarkdown()` (아래 sanitizer 주의)
   - **Sanitizer 필수**: Chandra2 원본을 그대로 `setMarkdown()`에 넘기면 `-qt-list-indent` 누적으로 "텍스트가 계속 오른쪽으로 밀리는" 버그. 원인은 (a) 4+ leading space → indented code block, (b) 줄 시작 `숫자.` → ordered list, (c) 레퍼런스의 바 볼륨 번호(`88.`, `158.`) → 빈 OL이 인접하면 Qt가 nested로 해석해서 indent가 누적. Sanitizer가 모든 줄 `lstrip()` + `^(\d+)\.` regex를 backslash escape로 차단
 - **SVG 아이콘**: `desktop/theme/icons/*.svg`는 `stroke="currentColor"`로 작성하고 `icons.rail_icon()` 헬퍼가 런타임에 색을 치환해서 3-state QIcon(idle/checked/hover) 생성. 다크/라이트 테마 스왑도 같은 메커니즘으로 확장 가능

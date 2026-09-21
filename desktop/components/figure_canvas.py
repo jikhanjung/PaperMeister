@@ -1,18 +1,12 @@
-"""The chosen figure's panels and caption entries, under the Text tab's
-figure list — P16 Phase 5.
+"""A figure with its panel boxes, and the worker that crops it — the
+Figures tab's building blocks (P16 Phase 5).
 
-For a figure the split stage (③) worked on: the **figure itself with a box
-on every panel**, and beside it the caption entries. Click an entry and its
-panel lights up on the figure; click a panel and its entry is selected. That
-is the check a reviewer does — is *this* box the specimen *this* entry
-describes — and it needs the whole plate, not a tile: where a box sits among
-its neighbours is half the evidence.
-
-For a figure with entries but no panels (most figures): the entries alone.
-
-The figure crop comes off a worker thread like the reader's figures
-(`ocr_view`): one page render, one crop, delivered as an image; the boxes are
-drawn on paint, so a highlight costs no render.
+`CropWorker` renders a figure's page once, off the UI thread, and crops the
+figure from it. `FigureCanvas` shows the crop with a quiet box on every
+panel; one panel can be lit (a click, kept) and one hovered (the cursor,
+transient), and hovering a box shows its entry as a tooltip. The boxes are
+drawn at paint time, so lighting one costs no render and a resize only
+rescales.
 """
 from __future__ import annotations
 
@@ -21,34 +15,23 @@ import queue
 
 from PyQt6.QtCore import QRectF, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QColor, QImage, QPainter, QPen
-from PyQt6.QtWidgets import (
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QListWidget,
-    QListWidgetItem,
-    QToolTip,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import QToolTip, QWidget
 
-from desktop.theme.tokens import COLORS_DARK, FONT, SPACING
+from desktop.theme.tokens import COLORS_DARK
 
 logger = logging.getLogger('papermeister')
 
-#: The figure is shown no taller than this; a plate is tall, the list beside
-#: it needs the rest of the tab.
-MAX_FIGURE_HEIGHT = 380
+MAX_FIGURE_HEIGHT = 1400
 MIN_FIGURE_WIDTH = 220
-MAX_FIGURE_WIDTH = 520
+MAX_FIGURE_WIDTH = 760
 #: The figure's page is rendered so the crop is about this wide, then scaled
-#: to fit — sharp enough to tell specimens apart, cheap enough per click.
+#: to fit — sharp enough to tell specimens apart, cheap enough per figure.
 RENDER_WIDTH = 900
-_MAX_LIST_HEIGHT = 380
+#: The lit panel's colour: the one loud thing on an otherwise quiet plate.
 HIGHLIGHT = '#facc15'
 
 
-class _CropWorker(QThread):
+class CropWorker(QThread):
     """Renders the figure's page once and crops the figure from it."""
 
     ready = pyqtSignal(int, QImage, tuple, tuple)     # figure id, crop, crop box (px), page size (px)
@@ -90,6 +73,7 @@ class _CropWorker(QThread):
             data = crop.tobytes('raw', 'RGB')
             image = QImage(data, crop.width, crop.height, 3 * crop.width, QImage.Format.Format_RGB888)
             self.ready.emit(figure_id, image.copy(), tuple(box), tuple(page_image.size))
+
 
 
 class FigureCanvas(QWidget):
@@ -175,16 +159,17 @@ class FigureCanvas(QWidget):
             lit = active == index
             faded = active is not None and not lit
             pen_colour = QColor(HIGHLIGHT if lit else colour)
-            if faded:
-                pen_colour.setAlpha(90)
-            painter.setPen(QPen(pen_colour, 3 if lit else 1.5))
+            pen_colour.setAlpha(60 if faded else (255 if lit else 170))
+            painter.setPen(QPen(pen_colour, 2.5 if lit else 1))
             if lit:
                 fill = QColor(HIGHLIGHT)
                 fill.setAlpha(50)
                 painter.fillRect(r, fill)
             painter.drawRect(r)
             if label and (lit or not faded):
-                painter.fillRect(QRectF(r.x(), r.y(), min(r.width(), 6 * len(label) + 8), 13), pen_colour)
+                tag = QColor(pen_colour)
+                tag.setAlpha(255 if lit else 150)
+                painter.fillRect(QRectF(r.x(), r.y(), min(r.width(), 6 * len(label) + 8), 13), tag)
                 painter.setPen(QColor('#000000' if lit else '#ffffff'))
                 painter.drawText(QRectF(r.x() + 3, r.y(), r.width(), 13), Qt.AlignmentFlag.AlignVCenter, label)
         painter.end()
@@ -228,6 +213,7 @@ class FigureCanvas(QWidget):
         super().leaveEvent(event)
 
 
+
 def entry_text(panel) -> str:
     """A panel's entries as one tooltip: label — description (specimen)."""
     lines = []
@@ -241,161 +227,3 @@ def entry_text(panel) -> str:
     elif panel.confidence != 'high':
         lines.insert(0, f'Confidence: {panel.confidence}.')
     return '\n'.join(lines)
-
-
-class PanelTiles(QFrame):
-    """The chosen figure: panels on the figure and its caption entries.
-    `show_panels()` a PanelSet, `show_entries()` for a figure without
-    panels, `clear()` between figures."""
-
-    def __init__(self, pdf_path: str | None, parent=None):
-        super().__init__(parent)
-        self.setObjectName('PanelTiles')
-        self._pdf_path = pdf_path
-        self._worker: _CropWorker | None = None
-        self._figure_id: int | None = None
-        self._panel_set = None
-        self._panel_of_entry: dict[int, int] = {}     # entry row -> panel index
-        self._entry_of_panel: dict[int, int] = {}     # panel index -> first entry row
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(SPACING['lg'], 0, SPACING['lg'], SPACING['sm'])
-        layout.setSpacing(SPACING['xs'])
-        self.header = QLabel('')
-        self.header.setStyleSheet(f"font-weight: {FONT['weight.bold']};")
-        layout.addWidget(self.header)
-
-        body = QHBoxLayout()
-        body.setSpacing(SPACING['md'])
-        self.canvas = FigureCanvas()
-        self.canvas.panel_clicked.connect(self._panel_clicked)
-        body.addWidget(self.canvas, 0, Qt.AlignmentFlag.AlignTop)
-        self.entries = QListWidget()
-        self.entries.setObjectName('EntryList')
-        self.entries.setMaximumHeight(_MAX_LIST_HEIGHT)
-        self.entries.setWordWrap(True)
-        self.entries.currentRowChanged.connect(self._entry_chosen)
-        body.addWidget(self.entries, 1)
-        layout.addLayout(body)
-        self.hide()
-
-    # ── driven by the figure list ─────────────────────────────
-
-    def show_panels(self, panel_set) -> None:
-        self.clear()
-        if panel_set is None or not panel_set.panels:
-            return
-        self._figure_id = panel_set.figure_id
-        self._panel_set = panel_set
-        title = f'{panel_set.name or "Figure"} — {len(panel_set.panels)} panels'
-        if panel_set.unmatched:
-            title += f'  ·  no panel for {", ".join(panel_set.unmatched)}'
-        self.header.setText(title)
-        # Entries in caption order, each remembering its panel; a panel with
-        # no entry (an annotation, an unlabelled specimen) is listed after.
-        for index, p in enumerate(panel_set.panels):
-            for label, description, specimen in p.entries:
-                self._add_entry(label, description, specimen, p.colour, index)
-        for index, p in enumerate(panel_set.panels):
-            if not p.entries:
-                what = 'annotation (scale bar, key)' if p.annotation else 'no caption entry'
-                self._add_entry(p.label or '?', what, '', p.colour, index)
-        for label in panel_set.unmatched:
-            self._add_entry(label, 'no panel — check the plate', '', COLORS_DARK['text.secondary'], None)
-        x0, y0, x1, y1 = panel_set.bbox_page_1000
-        aspect = max(1, x1 - x0) / max(1, y1 - y0)
-        self.canvas.set_figure(None, [], aspect)
-        self.canvas.show()
-        self.show()
-        if self._pdf_path:
-            self._ensure_worker().request(panel_set.figure_id, panel_set.page, panel_set.bbox_page_1000)
-
-    def show_entries(self, name: str, entries: list[tuple[str, str, str]]) -> None:
-        """The caption entries of a figure without panels."""
-        self.clear()
-        if not entries:
-            return
-        self.header.setText(f'{name or "Figure"} — {len(entries)} caption entries')
-        for label, description, specimen in entries:
-            self._add_entry(label, description, specimen, None, None)
-        self.canvas.hide()
-        self.show()
-
-    def clear(self) -> None:
-        self._figure_id = None
-        self._panel_set = None
-        self._panel_of_entry.clear()
-        self._entry_of_panel.clear()
-        self.entries.clear()
-        self.canvas.set_figure(None, [], 1.0)
-        self.canvas.show()
-        self.header.setText('')
-        self.hide()
-
-    # ── internals ─────────────────────────────────────────────
-
-    def _add_entry(self, label, description, specimen, colour, panel_index):
-        text = f'{label}  {description}' if description else label
-        if specimen and specimen not in description:
-            text += f'  ({specimen})'
-        item = QListWidgetItem(text)
-        item.setToolTip(text)
-        if colour:
-            item.setForeground(QColor(colour))
-        row = self.entries.count()
-        self.entries.addItem(item)
-        if panel_index is not None:
-            self._panel_of_entry[row] = panel_index
-            self._entry_of_panel.setdefault(panel_index, row)
-
-    def _entry_chosen(self, row: int):
-        self.canvas.light(self._panel_of_entry.get(row))
-
-    def _panel_clicked(self, index: int):
-        row = self._entry_of_panel.get(index)
-        if row is None:
-            self.canvas.light(index)
-            return
-        self.entries.setCurrentRow(row)      # lights the panel through _entry_chosen
-
-    def _crop_ready(self, figure_id: int, image: QImage, box: tuple, page_size: tuple):
-        if figure_id != self._figure_id or self._panel_set is None:
-            return                              # the figure before this one
-        cx0, cy0, cx1, cy1 = box
-        page_w, page_h = page_size
-        sx = image.width() / max(1, cx1 - cx0)
-        sy = image.height() / max(1, cy1 - cy0)
-        boxes = []
-        for p in self._panel_set.panels:
-            x0, y0, x1, y1 = p.bbox_page_1000
-            rect = QRectF((x0 * page_w / 1000 - cx0) * sx, (y0 * page_h / 1000 - cy0) * sy,
-                          (x1 - x0) * page_w / 1000 * sx, (y1 - y0) * page_h / 1000 * sy)
-            boxes.append((rect, p.label, p.colour))
-        lit = self.canvas.lit()
-        self.canvas.set_figure(image, boxes, image.width() / max(1, image.height()),
-                               [entry_text(p) for p in self._panel_set.panels])
-        self.canvas.light(lit)
-
-    def _ensure_worker(self) -> _CropWorker:
-        if self._worker is None:
-            self._worker = _CropWorker(self._pdf_path, self)
-            self._worker.ready.connect(self._crop_ready)
-            self._worker.start()
-        return self._worker
-
-    def _stop_worker(self):
-        if self._worker is None:
-            return
-        self._worker.ready.disconnect()
-        self._worker.stop()
-        self._worker.wait(2000)
-        self._worker = None
-
-    def closeEvent(self, event):
-        self._stop_worker()
-        super().closeEvent(event)
-
-    def __del__(self):
-        try:
-            self._stop_worker()
-        except Exception:
-            pass

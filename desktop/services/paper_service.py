@@ -789,7 +789,7 @@ class PanelInfo:
     entries: list[tuple[str, str, str]]   # (label, description, specimen number) it was matched to
     confidence: str = 'high'
     annotation: bool = False       # a scale bar or key, not a specimen
-    colour: str = '#e11d48'        # the box's colour in the reader (panel_colour of its index)
+    colour: str = '#7b93ad'        # the box's colour in the reader (panel_colour of its index)
 
 
 @dataclass
@@ -802,36 +802,15 @@ class PanelSet:
     unmatched: list[str]           # entry labels no panel claims
 
 
-#: One colour per panel, cycling; the same cycle in the tiles and in the
-#: boxes drawn over the reader's figures, so a tile and its box match.
-PANEL_COLOURS = ('#e11d48', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '#0891b2')
+#: One quiet colour for every panel box — the plate is what the eye should
+#: be on; the box only says where a panel is. A hovered or chosen panel is
+#: lit separately (HIGHLIGHT). Kept as a cycle so a per-panel colour can come
+#: back with one line.
+PANEL_COLOURS = ('#7b93ad',)
 
 
 def panel_colour(index: int) -> str:
     return PANEL_COLOURS[index % len(PANEL_COLOURS)]
-
-
-def load_panel_boxes(paper_id: int) -> dict[int, list[tuple[str, list[int], str]]]:
-    """Every panel of the paper as (label, page-frame box, colour), by 0-based
-    page — what the reader draws over its figure images (P16 Phase 5, step 3)."""
-    import json
-
-    from papermeister.figure_panels import to_page_frame
-    from papermeister.models import Figure, FigurePanel
-    out: dict[int, list[tuple[str, list[int], str]]] = {}
-    index_in_figure: dict[int, int] = {}
-    query = (FigurePanel.select(FigurePanel.label, FigurePanel.bbox_figure_1000, FigurePanel.order,
-                                Figure.id, Figure.page, Figure.bbox_page_1000)
-             .join(Figure)
-             .where((Figure.paper == paper_id) & (Figure.dismissed == False))  # noqa: E712 (peewee)
-             .order_by(Figure.page, Figure.id, FigurePanel.order))
-    for p in query:
-        fig = p.figure
-        i = index_in_figure.get(fig.id, 0)
-        index_in_figure[fig.id] = i + 1
-        box = to_page_frame(json.loads(fig.bbox_page_1000), json.loads(p.bbox_figure_1000))
-        out.setdefault(fig.page, []).append((p.label, box, panel_colour(i)))
-    return out
 
 
 def load_entries(figure_id: int) -> tuple[str, list[tuple[str, str, str]]]:

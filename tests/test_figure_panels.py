@@ -144,6 +144,18 @@ def test_doubts_a_person_should_see(plate):
     # legend marks are not counted as entries when judging the panel count
     legend = reply(annotation_indices=[1, 2], panels=[reply()['panels'][0]])
     assert fp.validate_panel_result(item, legend).review == []
+    # one entry on two panels (Naimark 2006 Fig. 2: a photograph and its
+    # outline drawing per specimen) is accepted and marked for a look
+    paired = reply(panels=[
+        {'label': '', 'bbox_figure_1000': [0, 0, 480, 480], 'caption_indices': [0], 'confidence': 'high'},
+        {'label': 'A', 'bbox_figure_1000': [520, 0, 1000, 480], 'caption_indices': [0], 'confidence': 'high'},
+        {'label': 'B', 'bbox_figure_1000': [0, 520, 1000, 1000], 'caption_indices': [1], 'confidence': 'high'}])
+    check = fp.validate_panel_result(item, paired)
+    assert check.ok and check.review == [fp.ENTRY_ON_SEVERAL_PANELS]
+    assert [p['label'] for p in check.panels] == ['A', 'A', 'B']       # the unlabelled twin takes its entry's label
+    # the same index twice on one panel is still a fault
+    assert fp.validate_panel_result(item, reply(panels=[
+        {'label': 'A', 'bbox_figure_1000': [0, 0, 480, 480], 'caption_indices': [0, 0], 'confidence': 'high'}])).why == 'duplicate_caption_index'
 
 
 @pytest.mark.unit

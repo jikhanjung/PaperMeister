@@ -29,7 +29,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from desktop.components.panel_tiles import HIGHLIGHT, FigureCanvas, _CropWorker, entry_text
+from desktop.components.figure_canvas import HIGHLIGHT, CropWorker, FigureCanvas, entry_text
 from desktop.services import paper_service
 from desktop.theme.tokens import COLORS_DARK, FONT, SPACING
 
@@ -184,8 +184,8 @@ class FigureBlock(QFrame):
             text += f'  ({specimen})'
         item = QListWidgetItem(text)
         item.setToolTip(text)
-        if colour:
-            item.setForeground(QColor(colour))
+        if panel_index is None and colour:
+            item.setForeground(QColor(colour))          # greyed: an entry no panel claims
         row = self.entries.count()
         self.entries.addItem(item)
         if panel_index is not None:
@@ -255,7 +255,7 @@ class FiguresTab(QScrollArea):
         self._blocks: dict[int, FigureBlock] = {}
         self._order: list[int] = []                 # figure ids, page order
         self._live: list[int] = []                  # figure ids holding a crop, oldest first
-        self._worker: _CropWorker | None = None
+        self._worker: CropWorker | None = None
         self._pdf_path: str | None = None
         self._scrolled = QTimer(self)
         self._scrolled.setSingleShot(True)
@@ -296,7 +296,7 @@ class FiguresTab(QScrollArea):
             self._layout.addWidget(block)
         self._layout.addStretch()
         if pdf_path:
-            self._worker = _CropWorker(pdf_path, self)
+            self._worker = CropWorker(pdf_path, self)
             self._worker.ready.connect(self._crop_ready)
             self._worker.start()
         self._fitted_width = 0
