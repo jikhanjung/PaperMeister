@@ -813,6 +813,23 @@ def panel_colour(index: int) -> str:
     return PANEL_COLOURS[index % len(PANEL_COLOURS)]
 
 
+def load_figure_unions(paper_id: int) -> dict[int, list]:
+    """The paper's assembled figures that span several OCR picture blocks,
+    by 0-based page, as `ocr_layout.Union`s — so the reader shows a plate
+    the OCR cut into photographs as one plate."""
+    import json
+
+    from papermeister.figure_store import figures_for_paper
+    out: dict[int, list] = {}
+    for f in figures_for_paper(paper_id):
+        blocks = json.loads(f.blocks_json or '[]')
+        if len(blocks) < 2:
+            continue
+        out.setdefault(f.page, []).append((tuple(json.loads(f.bbox_page_1000)),
+                                          frozenset(tuple(b) for b in blocks)))
+    return out
+
+
 def load_entries(figure_id: int) -> tuple[str, list[tuple[str, str, str]]]:
     """A figure's caption entries as (label, description, specimen number),
     for the list under the figure list when the figure has no panels yet."""

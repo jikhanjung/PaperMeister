@@ -196,6 +196,37 @@ def test_every_page_carries_an_anchor_to_jump_to():
     """The figure list jumps the reader to a figure's page by this anchor."""
     from papermeister import ocr_layout
 
-    html = ocr_layout.document_html(['<div data-bbox="0 0 10 10" data-label="Text"><p>a</p></div>'] * 3)
+    html = layout.document_html(['<div data-bbox="0 0 10 10" data-label="Text"><p>a</p></div>'] * 3)
     for index in range(3):
         assert f'<a name="{ocr_layout.page_anchor(index)}"></a>' in html
+
+
+@pytest.mark.unit
+def test_a_plate_the_ocr_cut_into_photographs_is_shown_once_as_the_plate():
+    """Bruton 2004: the OCR gave Plate 2 as eight picture blocks and Plate 3
+    as one. Assembly made one figure of each; the reader should too."""
+    page = ''.join(
+        f'<div data-bbox="{x} {y} {x + 200} {y + 200}" data-label="Figure"><img alt="photo {i}"/></div>'
+        for i, (x, y) in enumerate([(100, 100), (400, 100), (700, 100), (100, 400)]))
+    page += '<div data-bbox="100 700 900 730" data-label="Caption"><p>Plate 2</p></div>'
+    sized = []
+
+    def sizer(p, bbox):
+        sized.append(bbox)
+        return 300, 300
+
+    plate = ((100, 100, 900, 600), frozenset({(100, 100, 300, 300), (400, 100, 600, 300),
+                                              (700, 100, 900, 300), (100, 400, 300, 600)}))
+    html = layout.page_html(page, 5, sizer, unions=[plate])
+    assert html.count('<img') == 1 and layout.figure_uri(5, (100, 100, 900, 600)) in html
+    assert sized == [(100, 100, 900, 600)]
+    assert 'Plate 2' in html
+    # a piece the union does not name (the OCR cut it differently since) shows on its own
+    page += '<div data-bbox="400 400 600 600" data-label="Figure"><img alt="stray"/></div>'
+    html = layout.page_html(page, 5, sizer, unions=[plate])
+    assert html.count('<img') == 2 and layout.figure_uri(5, (400, 400, 600, 600)) in html
+    # without unions the pieces show as the OCR cut them
+    assert layout.page_html(page, 5, sizer).count('<img') == 5
+    # document_html takes them by page
+    doc = layout.document_html(['', page], sizer, unions={1: [plate]})
+    assert doc.count('<img') == 2

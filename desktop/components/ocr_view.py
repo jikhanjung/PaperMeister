@@ -130,6 +130,7 @@ class OcrView(QTextBrowser):
         self._images: dict[str, QImage] = {}
         self._requested: set[str] = set()
         self._worker: _FigureWorker | None = None
+        self._unions: dict[int, list] = {}      # page -> assembled multi-block figures (ocr_layout.Union)
 
         # Arrivals are batched: a dozen figures landing in a burst should cost
         # one relayout, not a dozen.
@@ -149,6 +150,11 @@ class OcrView(QTextBrowser):
 
     # ── building ────────────────────────────────────────────────
 
+    def set_unions(self, unions: dict[int, list]) -> None:
+        """Figures the assembly stage made of several OCR pieces, by page:
+        shown as one image each. Set before `set_pages`."""
+        self._unions = unions or {}
+
     def set_pages(self, pages: list[str], pdf_path: str | None = None):
         """Show these OCR pages, cropping figures from `pdf_path` if given."""
         self._stop_worker()
@@ -162,7 +168,7 @@ class OcrView(QTextBrowser):
         # sizer records a slot per figure). The worker has to be running before
         # the document is set, because setting it is what asks for the images —
         # a request that arrives with no worker to take it is simply dropped.
-        html = ocr_layout.document_html(pages, sizer=self._slot_size)
+        html = ocr_layout.document_html(pages, sizer=self._slot_size, unions=self._unions)
         if self._slots and pdf_path:
             self._worker = _FigureWorker(pdf_path, self)
             self._worker.ready.connect(self._figure_ready)

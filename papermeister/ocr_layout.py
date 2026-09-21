@@ -203,11 +203,17 @@ def picture_pages(pages: list[str]) -> list[int]:
     ]
 
 
+#: A figure the assembly stage (P16 ①) made from several OCR picture blocks:
+#: its box on the page, and the boxes of the blocks it absorbed.
+Union = tuple[tuple[int, int, int, int], frozenset[tuple[int, int, int, int]]]
+
+
 def page_html(
     text: str,
     page: int,
     sizer=None,
     keep_chrome: bool = False,
+    unions: list[Union] = (),
 ) -> str:
     """One page as display HTML.
 
@@ -216,13 +222,30 @@ def page_html(
     size has to be settled here rather than left to the image itself: figures
     arrive later, and without reserved space the text would reflow under the
     reader as each one lands.
+
+    `unions` are the page's assembled figures that span several picture
+    blocks (a plate the OCR cut into its photographs, a figure cut into
+    pieces): the union is shown once, where its first piece was, and the
+    other pieces are not shown — the reader sees the plate the assembly
+    stage sees, not the OCR's cut of it. Pieces the OCR cut differently
+    since (a re-OCR) match no union and show as before.
     """
     out: list[str] = []
+    piece_of: dict[tuple[int, int, int, int], tuple[int, int, int, int]] = {}
+    for union_box, pieces in unions:
+        for piece in pieces:
+            piece_of[tuple(piece)] = tuple(union_box)
+    shown: set[tuple[int, int, int, int]] = set()
     for block in parse_blocks(text):
         if block.label in CHROME_LABELS and not keep_chrome:
             continue
         if block.is_picture:
-            out.append(_picture_html(block, page, sizer))
+            union_box = piece_of.get(tuple(block.bbox)) if block.bbox else None
+            if union_box is None:
+                out.append(_picture_html(block, page, sizer))
+            elif union_box not in shown:
+                shown.add(union_box)
+                out.append(_picture_html(block, page, sizer, bbox=union_box))
         elif block.label in HEADING_LABELS:
             inner = _HEADING_TAG.sub('', block.html).strip()
             out.append(f'<h2 class="pm-section">{inner}</h2>')
@@ -235,8 +258,8 @@ def page_html(
     return '\n'.join(part for part in out if part.strip())
 
 
-def _picture_html(block: Block, page: int, sizer) -> str:
-    bbox = block.bbox
+def _picture_html(block: Block, page: int, sizer, bbox=None) -> str:
+    bbox = bbox or block.bbox
     if bbox is None:             # only is_picture blocks reach here, which have one
         return ''
     size = sizer(page, bbox) if sizer else None
@@ -265,11 +288,13 @@ def page_anchor(index: int) -> str:
     return f'pm-page-{index}'
 
 
-def document_html(pages: list[str], sizer=None, keep_chrome: bool = False) -> str:
-    """The whole OCR document as one HTML string, page markers included."""
+def document_html(pages: list[str], sizer=None, keep_chrome: bool = False,
+                  unions: dict[int, list[Union]] | None = None) -> str:
+    """The whole OCR document as one HTML string, page markers included.
+    `unions` by 0-based page — see `page_html`."""
     parts: list[str] = []
     for index, text in enumerate(pages):
-        body = page_html(text or '', index, sizer, keep_chrome)
+        body = page_html(text or '', index, sizer, keep_chrome, (unions or {}).get(index, ()))
         if not body.strip():
             continue
         parts.append(f'<a name="{page_anchor(index)}"></a>'

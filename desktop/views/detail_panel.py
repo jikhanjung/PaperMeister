@@ -1169,6 +1169,13 @@ class DetailPanel(QWidget):
             f"}}"
         )
         if structured:
+            # A plate the OCR cut into its photographs reads as one plate,
+            # as the assembly stage (P16 ①) has it. Nothing else of the
+            # figures is shown here — that is the Figures tab.
+            try:
+                browser.set_unions(paper_service.load_figure_unions(d.paper_id))
+            except Exception:
+                browser.set_unions({})
             browser.set_pages(pages, self._local_pdf_path(d))
         else:
             browser.setMarkdown(self._join_pages_as_markdown(pages))
