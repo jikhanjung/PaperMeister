@@ -434,3 +434,30 @@ def test_a_job_whose_split_moved_is_rebuilt_from_its_replies(stored):
     applied = fl.apply_link(t2, check, {}, DIGEST, PROMPT, 'm')
     assert applied.written == 8 and applied.failed == 2
     assert check.unknown == [str(gone.id)]          # the folded row: named by the reply, no longer ours
+
+
+@pytest.mark.unit
+def test_a_reset_row_is_due_again_and_a_persons_caption_is_not(stored):
+    """Barrande Pl. 1 came back 'done' with one entry naming five figures —
+    the checks let it through, a person would not. Reset makes it due, drops
+    the entry and the attempts; a locked caption is refused."""
+    from papermeister import figure_link as fl
+    from papermeister.models import Figure, FigureEntry
+    pf, rows = stored
+    t = fl.link_targets(pf, DIGEST, PROMPT)
+    plate, body = rows[2], rows[3]
+    check = fl.LinkCheck().merge(fl.validate_link_result(
+        fl.link_item(pf, PAGES, t, DIGEST, PROMPT), reply(str(plate.id), str(body.id)), PAGES))
+    fl.apply_link(t, check, {}, DIGEST, PROMPT, 'm')
+    body = Figure.get_by_id(body.id)
+    body.caption_locked = True
+    body.save()
+    assert FigureEntry.select().where(FigureEntry.figure == plate.id).count() == 3
+    done, refused = fl.reset_link([plate.id, body.id])
+    assert done == [plate.id] and refused == [body.id]
+    plate = Figure.get_by_id(plate.id)
+    assert plate.link_key == '' and plate.caption == '' and plate.link_attempts == 0 and plate.linked_at is None
+    assert FigureEntry.select().where(FigureEntry.figure == plate.id).count() == 0
+    assert Figure.get_by_id(body.id).caption.startswith('Fig. 4')
+    t2 = fl.link_targets(pf, DIGEST, PROMPT)
+    assert [r.id for r in t2.due] == [plate.id] and [r.id for r in t2.context] == [body.id]

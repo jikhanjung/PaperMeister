@@ -219,6 +219,8 @@ def main() -> int:
     parser.add_argument('--cache-dir', default=OCR_JSON_DIR)
     parser.add_argument('--dump', help='write workspace_<id>.json and link_<id>.json per paper here')
     parser.add_argument('--retry-errors', action='store_true')
+    parser.add_argument('--relink', help='comma-separated figure ids: drop their caption result and attempts so '
+                                         'they are due again (with --execute; then submit as usual)')
     parser.add_argument('--execute', action='store_true', help='submit to the server and write replies')
     parser.add_argument('--limit', type=int, help='execute: at most this many papers')
     parser.add_argument('--no-wait', action='store_true', help='execute: submit only; apply later with --collect')
@@ -229,8 +231,8 @@ def main() -> int:
                         help=f'answer weight per request item — a plate counts {figure_link.PLATE_WEIGHT}, a body figure 1 '
                              f'(default {figure_link.MAX_ITEM_WEIGHT}; smaller for a paper whose sessions drop)')
     args = parser.parse_args()
-    if not args.paper_ids and not args.pilot and not args.collect:
-        parser.error('give --paper-ids or --pilot (or --collect)')
+    if not args.paper_ids and not args.pilot and not args.collect and not args.relink:
+        parser.error('give --paper-ids or --pilot (or --collect, --relink)')
     if args.recheck and not (args.paper_ids or args.pilot):
         parser.error('--recheck needs --paper-ids or --pilot')
 
@@ -244,6 +246,15 @@ def main() -> int:
     if args.execute or args.collect:
         from papermeister.figure_client import from_preferences
         client = from_preferences()
+    if args.relink:
+        ids = [int(x) for x in args.relink.split(',')]
+        if not args.execute:
+            print(f'would reset the caption result of {len(ids)} figure(s): {ids} (add --execute)')
+            return 0
+        done, refused = figure_link.reset_link(ids)
+        print(f'reset {len(done)} figure(s): {done}' + (f'; refused (person\'s caption) {refused}' if refused else ''))
+        if not args.paper_ids:
+            return 0
     if args.collect:
         return collect(client, args, index)
     if args.recheck:

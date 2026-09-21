@@ -426,6 +426,36 @@ def result_digest(item: dict) -> str:
     return hashlib.sha256(json.dumps(item, sort_keys=True, ensure_ascii=False).encode('utf-8')).hexdigest()
 
 
+def reset_link(ids: list[int]) -> tuple[list[int], list[int]]:
+    """Make these figures due for the caption stage again: the key, caption,
+    entries and attempts go; the row and its box stay. For a reply the checks
+    let through but a person can see is wrong (Barrande Pl. 1 given one
+    entry that names five figures), and for rows a bad session exhausted.
+    A row a person claimed is refused. Returns (reset ids, refused ids)."""
+    from .figure_store import protection
+    from .models import FigureEntry, db
+    done, refused = [], []
+    with db.atomic():
+        for row in Figure.select().where(Figure.id << list(ids)):
+            if protection(row).caption:
+                refused.append(row.id)
+                continue
+            FigureEntry.delete().where(FigureEntry.figure == row.id).execute()
+            row.link_key = row.link_result_digest = row.link_model = row.link_prompt_version = ''
+            row.caption = row.caption_source = ''
+            row.caption_page = None
+            row.caption_pages_json = '[]'
+            row.linked_at = None
+            row.link_attempts = 0
+            reasons = json.loads(row.uncertain_reasons_json or '[]')
+            row.uncertain_reasons_json = json.dumps([r for r in reasons if not r.startswith('link_skipped')
+                                                     and r not in ('caption_shared', 'plate_no_entries',
+                                                                   'entries_shrank', 'caption_not_printed')])
+            row.save()
+            done.append(row.id)
+    return done, refused
+
+
 def apply_link(targets: LinkTargets, check: LinkCheck, result: dict, digest: str,
                prompt_version: str, model: str) -> LinkApplied:
     """Write what the check accepted, in one transaction per file.

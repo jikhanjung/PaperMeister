@@ -328,7 +328,8 @@
   - ✅ **Phase 5 step 1** (2026-09-21, [107](./devlog/20260921_107_P16_Figure_List_Shows_Entries_And_Panels.md)): Text 탭 도판 목록 줄에 `33 panels / 33 entries` · `1 unmatched` · `panels failed` · `single image` 표시(`FigureRow.entries/panels/unmatched/panel_state`, 논문당 쿼리 2개). 툴팁에 한 문장
   - ✅ **Phase 5 step 2·3** (2026-09-21, [108](./devlog/20260921_108_P16_Panel_Tiles_And_Reader_Overlay.md)): 도판 줄 선택 → 아래 **패널 타일**(`PanelTiles`, 워커가 페이지 1회 렌더 후 패널별 crop, 색 테두리, hover/클릭에 매칭 항목) + 리더 도판 이미지 위 **같은 색 상자 오버레이**(`OcrView.set_panels`/`draw_panel_boxes`, crop과 같은 픽셀 프레임), 목록 헤더 "Panel boxes" 토글. 664 Plate I 실물로 확인. 545 passed
     - 남은 것: 타일 클릭 → 해당 표본으로 스크롤, 앱에서 상자 수정/라벨 교정(`figure_curation` UI 미연결)
-  - 🟡 1191 link 재제출(09-21): 남은 15도판을 무게 80 1항목(`9f6134eb`, 지난 실패와 같은 모양)으로 냈다가 `--per-item 40` 3항목(`e7708b8a`)을 추가 제출 — **서버에서 `9f6134eb` 취소** 요청함. 끝나면 `--collect --execute`
+  - 1191 Barrande(09-21): `e7708b8a` 3항목 거둠(2/3·3/3 → Pl. 5–10 6장 written 369항목). **1/3은 done이지만 사실상 실패**(9장 중 243만, 그것도 항목 1개에 Fig. 3·5·6·10·12를 뭉침; 나머지 8장은 figures에도 skipped에도 없음 — 웹소켓 재연결 뒤 컨텍스트 유실, ocrserver 분석). 244–246은 이걸로 attempts 3 소진
+    → **`--relink 243,244,245,246 --execute`**(새 옵션: 캡션 결과·항목·시도 삭제, 사람 캡션은 거부) 뒤 **`--per-item 8`로 플레이트 1장 = 1항목** 4개 제출(`4e377fbc`). 본문 그림 6장(240–242·247·248·256)은 not_a_figure로 소진 상태 그대로 둠. 끝나면 `--collect --execute`
   - [ ] 릴리스는 **pre-release beta**(`v0.2.0-beta.1`, `release.yml`이 `-beta`를 prerelease로) — CHANGELOG + ko 카탈로그 + `version.py`(지금 0.1.9) + 태그
     - **프롬프트 손볼 것(모아서 한 번에 — 버전이 바뀌면 linked 444행이 전부 다시 due)**: `name`은 인쇄된 단어 포함(`Text-fig. 15`, 맨 `15` 금지; 8803 p.29만 `Plate II`로 영어화) → 합쳐진 행은 link가 새 키로 다시 돈다(`link_figures.py --pilot … --execute --no-wait` 재실행) → panels 100장 (104 §5)
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
