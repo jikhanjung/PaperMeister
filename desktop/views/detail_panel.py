@@ -202,9 +202,11 @@ class DetailPanel(QWidget):
         self._current_detail = None
         self._pdf_built = False
         self._text_built = False
+        self._figures_built = False
         self._refs_built = False
         self._pdf_wrapper: QWidget | None = None
         self._text_wrapper: QWidget | None = None
+        self._figures_wrapper: QWidget | None = None
         self._refs_wrapper: QWidget | None = None
         self._apply_task: BackgroundTask | None = None
         self._apply_btn: QPushButton | None = None
@@ -305,6 +307,7 @@ class DetailPanel(QWidget):
         self._tabs.clear()
         self._pdf_built = False
         self._text_built = False
+        self._figures_built = False
         self._refs_built = False
 
         # Metadata is cheap — build now. PDF/Text/References wrappers stay empty
@@ -315,6 +318,8 @@ class DetailPanel(QWidget):
         self._tabs.addTab(self._pdf_wrapper, 'PDF')
         self._text_wrapper = self._make_lazy_wrapper()
         self._tabs.addTab(self._text_wrapper, 'Text')
+        self._figures_wrapper = self._make_lazy_wrapper()
+        self._tabs.addTab(self._figures_wrapper, 'Figures')
         self._refs_wrapper = self._make_lazy_wrapper()
         self._tabs.addTab(self._refs_wrapper, 'References')
 
@@ -350,7 +355,12 @@ class DetailPanel(QWidget):
             self._text_wrapper.layout().addWidget(
                 self._build_ocr_tab(self._current_detail)
             )
-        elif idx == 3 and not self._refs_built and self._refs_wrapper is not None:
+        elif idx == 3 and not self._figures_built and self._figures_wrapper is not None:
+            self._figures_built = True
+            self._figures_wrapper.layout().addWidget(
+                self._build_figures_tab(self._current_detail)
+            )
+        elif idx == 4 and not self._refs_built and self._refs_wrapper is not None:
             self._refs_built = True
             self._refs_wrapper.layout().addWidget(
                 self._build_references_tab(self._current_detail)
@@ -853,6 +863,15 @@ class DetailPanel(QWidget):
             self._apply_btn.setEnabled(True)
 
     # ── References tab ───────────────────────────────────────
+
+    # ── Figures tab (P16) ────────────────────────────────────
+
+    def _build_figures_tab(self, d) -> QWidget:
+        """The paper by its figures: each with its panel boxes and entries."""
+        from desktop.views.figures_tab import FiguresTab
+        tab = FiguresTab()
+        tab.set_paper(d.paper_id, self._local_pdf_path(d))
+        return tab
 
     def _build_references_tab(self, d) -> QWidget:
         """Citation relationships for the paper (P11).

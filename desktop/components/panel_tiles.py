@@ -92,21 +92,26 @@ class _CropWorker(QThread):
 
 
 class FigureCanvas(QWidget):
-    """The figure with its panel boxes; one panel can be lit."""
+    """The figure with its panel boxes. One panel can be lit (a click, kept)
+    and one hovered (the cursor, transient); the hovered one wins the paint."""
 
     panel_clicked = pyqtSignal(int)      # panel index
+    panel_hovered = pyqtSignal(int)      # panel index, or -1 when the cursor leaves every box
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, max_width: int = MAX_FIGURE_WIDTH, max_height: int = MAX_FIGURE_HEIGHT):
         super().__init__(parent)
         self._image: QImage | None = None
         self._boxes: list[tuple[QRectF, str, str]] = []   # in image pixels: rect, label, colour
         self._lit: int | None = None
+        self._hover: int | None = None
         self._aspect = 1.0
+        self._max_width, self._max_height = max_width, max_height
         self.setMinimumSize(MIN_FIGURE_WIDTH, 120)
+        self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def set_figure(self, image: QImage | None, boxes: list[tuple[QRectF, str, str]], aspect: float) -> None:
-        self._image, self._boxes, self._lit = image, boxes, None
+        self._image, self._boxes, self._lit, self._hover = image, boxes, None, None
         self._aspect = aspect or 1.0
         self._fit()
         self.update()
@@ -118,12 +123,18 @@ class FigureCanvas(QWidget):
     def lit(self) -> int | None:
         return self._lit
 
+    def hover(self, index: int | None) -> None:
+        """Light a panel while the cursor is on its entry."""
+        if index != self._hover:
+            self._hover = index
+            self.update()
+
     def _fit(self):
         """As tall as allowed, unless that makes it too wide; never narrower than the minimum."""
-        height = MAX_FIGURE_HEIGHT
+        height = self._max_height
         width = int(height * self._aspect)
-        if width > MAX_FIGURE_WIDTH:
-            width = MAX_FIGURE_WIDTH
+        if width > self._max_width:
+            width = self._max_width
             height = int(width / self._aspect)
         self.setFixedSize(max(MIN_FIGURE_WIDTH, width), max(120, height))
 
@@ -146,10 +157,11 @@ class FigureCanvas(QWidget):
         sx = target.width() / max(1, self._image.width())
         sy = target.height() / max(1, self._image.height())
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        active = self._hover if self._hover is not None else self._lit
         for index, (rect, label, colour) in enumerate(self._boxes):
             r = QRectF(target.x() + rect.x() * sx, target.y() + rect.y() * sy, rect.width() * sx, rect.height() * sy)
-            lit = self._lit == index
-            faded = self._lit is not None and not lit
+            lit = active == index
+            faded = active is not None and not lit
             pen_colour = QColor(HIGHLIGHT if lit else colour)
             if faded:
                 pen_colour.setAlpha(90)
@@ -165,20 +177,36 @@ class FigureCanvas(QWidget):
                 painter.drawText(QRectF(r.x() + 3, r.y(), r.width(), 13), Qt.AlignmentFlag.AlignVCenter, label)
         painter.end()
 
-    def mousePressEvent(self, event):
+    def _panel_at(self, p) -> int | None:
+        """The smallest box under the point, so an a/b sub-panel inside a numbered one is reachable."""
         if self._image is None:
-            return
+            return None
         target = self._drawn_rect()
         sx = target.width() / max(1, self._image.width())
         sy = target.height() / max(1, self._image.height())
-        p = event.position()
         hits = []
         for index, (rect, _label, _colour) in enumerate(self._boxes):
             r = QRectF(target.x() + rect.x() * sx, target.y() + rect.y() * sy, rect.width() * sx, rect.height() * sy)
             if r.contains(p):
                 hits.append((r.width() * r.height(), index))
-        if hits:
-            self.panel_clicked.emit(min(hits)[1])     # the smallest box under the cursor
+        return min(hits)[1] if hits else None
+
+    def mousePressEvent(self, event):
+        index = self._panel_at(event.position())
+        if index is not None:
+            self.panel_clicked.emit(index)
+
+    def mouseMoveEvent(self, event):
+        index = self._panel_at(event.position())
+        if index != self._hover:
+            self.hover(index)
+            self.panel_hovered.emit(-1 if index is None else index)
+
+    def leaveEvent(self, event):
+        if self._hover is not None:
+            self.hover(None)
+            self.panel_hovered.emit(-1)
+        super().leaveEvent(event)
 
 
 class PanelTiles(QFrame):

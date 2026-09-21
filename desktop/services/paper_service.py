@@ -1,6 +1,6 @@
 """Paper list + paper detail queries."""
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from peewee import JOIN
@@ -778,6 +778,7 @@ class FigureRow:
     panels: int = 0                # panels the split stage drew (P16 ③)
     unmatched: int = 0             # entries no panel claims — the reviewer's first stop
     panel_state: str = ''          # '' not run | 'split' | 'single' (not compound) | 'failed'
+    bbox_page_1000: list[int] = field(default_factory=list)   # the figure's box on its page (Figures tab)
 
 
 @dataclass
@@ -923,5 +924,5 @@ def load_figures(paper_id: int) -> list[FigureRow]:
             pieces=len(json.loads(f.blocks_json or '[]')),
             caption=f.caption, caption_hint=f.caption_hint, plate_inferred=f.plate_inferred,
             entries=len(orders), panels=panels, unmatched=len(orders - claimed.get(f.id, set())),
-            panel_state=state))
+            panel_state=state, bbox_page_1000=json.loads(f.bbox_page_1000)))
     return rows
