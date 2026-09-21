@@ -109,6 +109,10 @@ def main() -> int:
     parser.add_argument('--rematch', action='store_true', help='re-attach panels whose entries changed')
     parser.add_argument('--include-maps', action='store_true')
     parser.add_argument('--retry-errors', action='store_true')
+    parser.add_argument('--figure-ids', help='comma-separated: only these figures (with --paper-ids)')
+    parser.add_argument('--force', action='store_true',
+                        help='ask the server to answer again instead of serving its cached reply — '
+                             'for an item whose reply the checks rejected (same key, same bad answer otherwise)')
     parser.add_argument('--execute', action='store_true', help='submit and write (or, with --rematch, re-attach)')
     parser.add_argument('--limit', type=int, help='execute: at most this many papers')
     parser.add_argument('--no-wait', action='store_true')
@@ -158,9 +162,17 @@ def main() -> int:
         if args.limit and submitted >= args.limit:
             break
         submitted += 1
-        items = [figure_panels.panel_item(r, PROMPT_VERSION) for r in t.due]
+        due = t.due
+        if args.figure_ids:
+            wanted = {int(x) for x in args.figure_ids.split(',')}
+            due = [r for r in due if r.id in wanted]
+            if not due:
+                continue
+        items = [figure_panels.panel_item(r, PROMPT_VERSION) for r in due]
         body = {'client_id': client_id, 'file_hash': pf.hash, 'items': items, 'prompt': PROMPT,
                 'options': {'model': 'gpt-6-astra', 'effort': 'high', 'dpi': figure_panels.RENDER_DPI}}
+        if args.force:
+            body['force'] = True
         try:
             figure_lane.ensure_pdf(client, pf, print)
             job = figure_lane.run_job(client, 'panels', body, print, wait=not args.no_wait)
