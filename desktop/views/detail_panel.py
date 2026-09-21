@@ -1134,9 +1134,17 @@ class DetailPanel(QWidget):
             # ③: the chosen figure's panels as tiles, and its boxes over the
             # reader's figures (toggle in the list's header).
             split = {r.id for r in figure_rows if r.panels}
+            with_entries = {r.id for r in figure_rows if r.entries}
             tiles = PanelTiles(self._local_pdf_path(d))
-            figure_list.figure_chosen.connect(
-                lambda fid, t=tiles: t.show_panels(paper_service.load_panels(fid) if fid in split else None))
+
+            def _show_figure(fid: int, t=tiles):
+                if fid in split:
+                    t.show_panels(paper_service.load_panels(fid))
+                elif fid in with_entries:
+                    t.show_entries(*paper_service.load_entries(fid))
+                else:
+                    t.clear()
+            figure_list.figure_chosen.connect(_show_figure)
             layout.addWidget(tiles)
 
             def _toggle_boxes(on: bool, b=browser, boxes=panel_boxes):

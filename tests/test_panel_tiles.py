@@ -170,3 +170,36 @@ def test_the_box_map_is_by_page_with_colours_cycling_per_figure(db):
     ps = load_panels(fig.id)
     assert ps.unmatched == ['2'] and ps.panels[0].entries == [('1', 'Cranidium', 'S1')]
     assert ps.panels[1].colour == panel_colour(1)
+
+
+@pytest.mark.ui
+def test_a_figure_with_entries_but_no_panels_lists_the_entries(qapp):
+    from desktop.components.panel_tiles import PanelTiles
+    tiles = PanelTiles(None)
+    tiles.show_entries('Plate 1', [('1', 'Shumardia cf. pentagonalis. PMO 140.788. Cranidium, dorsal view, ×20.', 'PMO 140.788'),
+                                   ('4', 'Pseudocalymene superba. Hypostoma.', 'PMO 140.763')])
+    assert tiles.header.text() == 'Plate 1 — 2 caption entries'
+    assert tiles.entries.count() == 2 and tiles.grid.isHidden()
+    assert tiles.entries.item(1).text() == '4  Pseudocalymene superba. Hypostoma.  (PMO 140.763)'
+    assert '(PMO 140.788)' not in tiles.entries.item(0).text()      # already in the description
+    tiles.show_panels(_panel_set(1))          # back to tiles: the entry list goes
+    assert tiles.entries.count() == 0 and tiles.entries.isHidden() and not tiles.grid.isHidden()
+    tiles.show_entries('Fig. 1', [])
+    assert tiles.isHidden()
+    tiles._stop_worker()
+
+
+@pytest.mark.unit
+def test_load_entries_reads_the_figures_entries_in_order(db):
+    import json
+
+    from desktop.services.paper_service import load_entries
+    from papermeister.models import Figure, FigureEntry, Paper, PaperFile
+    paper = Paper.create(title='t')
+    pf = PaperFile.create(paper=paper, path='x.pdf', hash='cd' * 32, status='processed')
+    fig = Figure.create(paper=paper, paper_file=pf, file_hash=pf.hash, page=3, name='Plate 1',
+                        bbox_page_1000=json.dumps([100, 200, 900, 800]), blocks_json='[]')
+    FigureEntry.create(figure=fig, order=1, label='2', description='Pygidium')
+    FigureEntry.create(figure=fig, order=0, label='1', description='Cranidium', specimen_number='S1')
+    assert load_entries(fig.id) == ('Plate 1', [('1', 'Cranidium', 'S1'), ('2', 'Pygidium', '')])
+    assert load_entries(999) == ('', [])

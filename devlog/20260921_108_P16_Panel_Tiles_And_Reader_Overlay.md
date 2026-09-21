@@ -55,6 +55,16 @@ reader draws boxes only when given them and stops after the toggle; the box
 map is by page with colours cycling per figure and `load_panels` names the
 unmatched entries. Full suite **545 passed**.
 
+## Addendum (same day): entries without panels
+
+Most linked figures have caption entries and no panels yet (613 of 696
+linked figures carry entries; three papers are split). Those had nowhere in
+the app to show their entries. Choosing such a figure now lists them under
+the figure list in the same widget (`PanelTiles.show_entries`): one line per
+entry — label, description, specimen number when the description does not
+already carry it — with the header `Plate 1 — 16 caption entries`.
+`paper_service.load_entries(figure_id)`. Two tests.
+
 ## Left
 
 - Clicking a tile could scroll the reader to that specimen; today it scrolls

@@ -833,6 +833,17 @@ def load_panel_boxes(paper_id: int) -> dict[int, list[tuple[str, list[int], str]
     return out
 
 
+def load_entries(figure_id: int) -> tuple[str, list[tuple[str, str, str]]]:
+    """A figure's caption entries as (label, description, specimen number),
+    for the list under the figure list when the figure has no panels yet."""
+    from papermeister.models import Figure, FigureEntry
+    row = Figure.get_or_none(Figure.id == figure_id)
+    if row is None:
+        return '', []
+    return row.name, [(e.label, e.description, e.specimen_number)
+                      for e in FigureEntry.select().where(FigureEntry.figure == row.id).order_by(FigureEntry.order)]
+
+
 def load_panels(figure_id: int) -> PanelSet | None:
     import json
 

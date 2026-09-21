@@ -112,6 +112,14 @@ class PanelTiles(QFrame):
         self.grid.setWordWrap(False)
         self.grid.currentItemChanged.connect(self._describe)
         layout.addWidget(self.grid)
+        # Entries alone, for a figure whose caption is linked but whose
+        # panels are not split (most figures): one line per entry.
+        self.entries = QListWidget()
+        self.entries.setObjectName('EntryList')
+        self.entries.setMaximumHeight(_MAX_HEIGHT)
+        self.entries.setWordWrap(True)
+        self.entries.hide()
+        layout.addWidget(self.entries)
         self.detail = QLabel('')
         self.detail.setWordWrap(True)
         self.detail.setStyleSheet(f"color: {COLORS_DARK['text.secondary']}; font-size: {FONT['size.sm']}px;")
@@ -144,9 +152,29 @@ class PanelTiles(QFrame):
             self._ensure_worker().request(panel_set.figure_id, panel_set.page,
                                           [(p.bbox_page_1000, p.colour) for p in panel_set.panels])
 
+    def show_entries(self, name: str, entries: list[tuple[str, str, str]]) -> None:
+        """The caption entries of a figure without panels."""
+        self.clear()
+        if not entries:
+            return
+        self.header.setText(f'{name or "Figure"} — {len(entries)} caption entries')
+        for label, description, specimen in entries:
+            text = f'{label}  {description}' if description else label
+            if specimen and specimen not in description:
+                text += f'  ({specimen})'
+            item = QListWidgetItem(text)
+            item.setToolTip(text)
+            self.entries.addItem(item)
+        self.grid.hide()
+        self.entries.show()
+        self.show()
+
     def clear(self) -> None:
         self._figure_id = None
         self.grid.clear()
+        self.entries.clear()
+        self.entries.hide()
+        self.grid.show()
         self.header.setText('')
         self.detail.setText('')
         self.hide()
