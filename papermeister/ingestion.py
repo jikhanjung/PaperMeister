@@ -1,5 +1,6 @@
 import datetime
 import hashlib
+import json
 import os
 import time
 from pathlib import Path
@@ -277,6 +278,58 @@ def _get_or_create_zotero_folder(source, collection):
     return folder
 
 
+def _refresh_sibling_json(existing_pf, att, zotero_client, progress_callback=None) -> bool:
+    """An OCR JSON sibling that another machine replaced on Zotero: fetch it
+    over the local cache and land the figures it carries.
+
+    The incremental sync already brings the attachment back when its file
+    changed (a new version, a new md5) — but only its metadata; the content
+    was fetched only when this machine had no cache. So a second machine's
+    captions and panels never reached a machine that had OCR'd the paper
+    itself. Compare Zotero's md5 with the cache file's; when they differ,
+    the cache is stale. Returns whether the cache was refreshed.
+    """
+    if zotero_client is None or not is_derived(existing_pf.path, att.get('content_type', '')):
+        return False
+    remote_md5 = att.get('md5') or ''
+    if not remote_md5:
+        return False
+    from .paths import OCR_JSON_DIR
+    local = os.path.join(OCR_JSON_DIR, existing_pf.path)
+    if not os.path.isfile(local):
+        return False                      # nothing here to be stale; the OCR step fetches it
+    with open(local, 'rb') as f:
+        if hashlib.md5(f.read()).hexdigest() == remote_md5:  # noqa: S324 — Zotero's own content hash
+            return False
+    try:
+        content = zotero_client.download_file_content(att['key'])
+        data = json.loads(content.decode('utf-8'))
+    except Exception as exc:
+        if progress_callback:
+            progress_callback(f'  sibling JSON refresh failed for {existing_pf.path}: {exc}')
+        return False
+    from .text_extract import write_ocr_json
+    write_ocr_json(local, data)
+    if progress_callback:
+        progress_callback(f'  OCR JSON refreshed from Zotero: {existing_pf.path}')
+    if data.get('figures'):
+        pdf = PaperFile.select().where((PaperFile.paper == existing_pf.paper_id)
+                                       & ~PaperFile.path.endswith('.json')
+                                       & (PaperFile.hash == data['figures'].get('file_hash', ''))).first()
+        if pdf is not None:
+            try:
+                from .figure_share import import_figures
+                pages = [(p.get('markdown') or '') for p in sorted(data.get('pages') or [],
+                                                                   key=lambda p: p.get('page', 0))]
+                report = import_figures(pdf, data, pages)
+                if progress_callback:
+                    progress_callback(f'  figures: {report}')
+            except Exception as exc:
+                if progress_callback:
+                    progress_callback(f'  figures in the refreshed JSON not imported: {exc}')
+    return True
+
+
 def _refresh_existing_attachment(existing_pf, att):
     """Apply attachment field updates that incremental sync otherwise skips.
 
@@ -545,8 +598,10 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
                     _merge_stale_standalone(existing_pf.paper, paper)
                 # Otherwise the PaperFile is already correctly parented
                 # (idempotent re-sync). Still refresh fields the user may
-                # have changed on the Zotero side (e.g. attachment rename).
+                # have changed on the Zotero side (e.g. attachment rename),
+                # and an OCR JSON another machine replaced.
                 _refresh_existing_attachment(existing_pf, att)
+                _refresh_sibling_json(existing_pf, att, zotero_client, progress_callback)
                 continue
             ct = att.get('content_type', '')
             fname = att['filename']
@@ -586,6 +641,7 @@ def sync_zotero_items(source, items, orphan_attachments=None, progress_callback=
                             )
                         _merge_stale_standalone(existing_pf.paper, paper)
                     _refresh_existing_attachment(existing_pf, att)
+                    _refresh_sibling_json(existing_pf, att, zotero_client, progress_callback)
                     continue
                 ct = att.get('content_type', '')
                 fname = att['filename']

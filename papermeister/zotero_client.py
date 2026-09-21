@@ -186,6 +186,7 @@ class ZoteroClient:
                         'key': data['key'],
                         'filename': data.get('filename', data['key']),
                         'content_type': content_type,
+                        'md5': data.get('md5') or '',      # the file's content; changes when it is replaced
                     })
                 else:
                     standalone_pdfs.append(data)
