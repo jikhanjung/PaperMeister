@@ -65,6 +65,25 @@ entry — label, description, specimen number when the description does not
 already carry it — with the header `Plate 1 — 16 caption entries`.
 `paper_service.load_entries(figure_id)`. Two tests.
 
+## Addendum 2 (same day): the figure with its boxes, entries beside it
+
+The tile grid did not survive the first review: what a reviewer wants to
+see is *this* box on *this* plate next to *this* entry, and a tile loses
+where the box sits among its neighbours. The split view is now the **whole
+figure with a box on every panel** (`FigureCanvas`, boxes drawn on paint from
+the crop delivered by `_CropWorker`) and the **entries beside it**, each in
+its panel's colour. Click an entry → its panel lights (yellow, the others
+fade); click a panel → its entry is selected; the smallest box under the
+cursor wins, so an a/b sub-panel inside a numbered one is reachable. Panels
+with no entry (annotations, unlabelled specimens) and entries with no panel
+are listed after, greyed. Looked at with 664 Plate I offscreen: 33 boxes,
+33 entries, one lit.
+
+Sizing: as tall as 380 px unless that makes the figure wider than 520 px; a
+tall plate ends up ~245 px wide, which is enough to find a box but not to
+read a specimen — the reader below, with the same boxes, is where to look
+closely.
+
 ## Left
 
 - Clicking a tile could scroll the reader to that specimen; today it scrolls

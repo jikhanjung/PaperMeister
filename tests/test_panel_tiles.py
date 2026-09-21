@@ -59,31 +59,78 @@ def _settle(qapp, done, seconds=5):
 
 
 @pytest.mark.ui
-def test_tiles_go_up_at_once_and_the_crops_land_on_them(qapp, white_pdf):
+def test_the_figure_goes_up_with_its_entries_and_the_crop_lands(qapp, white_pdf):
     from PyQt6.QtCore import Qt
 
     from desktop.components.panel_tiles import PanelTiles
 
     tiles = PanelTiles('paper.pdf')
     tiles.show_panels(_panel_set(3, unmatched=['4']))
-    assert tiles.grid.count() == 3
     assert tiles.header.text() == 'Plate I — 3 panels  ·  no panel for 4'
-    assert [tiles.grid.item(i).text() for i in range(3)] == ['1', '2', '3']
-    assert 'dorsal view' in tiles.grid.item(0).toolTip() and 'YSUG 0' in tiles.grid.item(0).toolTip()
-    tiles.grid.setCurrentRow(1)
-    assert tiles.detail.text().startswith('2 — Specimen 2')
-    # one page render for the figure, not one per panel
+    # entries in caption order, the unmatched one last and greyed
+    assert [tiles.entries.item(i).text().split('  ')[0] for i in range(tiles.entries.count())] == ['1', '2', '3', '4']
+    assert 'no panel' in tiles.entries.item(3).text()
+    assert tiles.entries.item(0).foreground().color().name() == '#e11d48'
+    # one page render for the figure
     assert _settle(qapp, lambda: len(white_pdf) >= 1)
     tiles._worker.wait(3000)
     qapp.processEvents()
-    assert white_pdf == [(4, 150)]
-    assert tiles.grid.item(2).icon().availableSizes()      # a real crop replaced the blank
-    assert tiles.grid.item(0).data(Qt.ItemDataRole.UserRole).startswith('1 — ')
+    assert [page for page, _ in white_pdf] == [4]
+    assert tiles.canvas._image is not None and len(tiles.canvas._boxes) == 3
+    assert tiles.canvas._boxes[0][1] == '1' and tiles.canvas._boxes[0][2] == '#e11d48'
+    assert tiles.entries.item(0).data(Qt.ItemDataRole.ToolTipRole).startswith('1  Specimen 1')
     tiles._stop_worker()
 
 
 @pytest.mark.ui
-def test_clearing_between_figures_drops_late_crops(qapp, white_pdf):
+def test_an_entry_lights_its_panel_and_a_panel_selects_its_entry(qapp, white_pdf):
+    from desktop.components.panel_tiles import PanelTiles
+
+    tiles = PanelTiles('paper.pdf')
+    tiles.show_panels(_panel_set(3, unmatched=['4']))
+    tiles.entries.setCurrentRow(1)
+    assert tiles.canvas.lit() == 1
+    tiles.entries.setCurrentRow(3)            # the unmatched entry lights nothing
+    assert tiles.canvas.lit() is None
+    tiles.canvas.panel_clicked.emit(2)
+    assert tiles.entries.currentRow() == 2 and tiles.canvas.lit() == 2
+    # the highlight survives the crop arriving late
+    assert _settle(qapp, lambda: tiles.canvas._image is not None)
+    assert tiles.canvas.lit() == 2
+    tiles._stop_worker()
+
+
+@pytest.mark.ui
+def test_a_click_on_the_figure_finds_the_smallest_box_under_it(qapp):
+    from PyQt6.QtCore import QRectF
+    from PyQt6.QtGui import QImage
+
+    from desktop.components.panel_tiles import FigureCanvas
+    canvas = FigureCanvas()
+    image = QImage(400, 400, QImage.Format.Format_RGB888)
+    image.fill(0xffffff)
+    canvas.set_figure(image, [(QRectF(0, 0, 400, 400), 'all', '#e11d48'),
+                              (QRectF(100, 100, 50, 50), '2', '#2563eb')], 1.0)
+    hits = []
+    canvas.panel_clicked.connect(hits.append)
+    target = canvas._drawn_rect()
+    sx = target.width() / 400
+
+    class Ev:
+        def __init__(self, x, y):
+            self._p = (x, y)
+
+        def position(self):
+            from PyQt6.QtCore import QPointF
+            return QPointF(*self._p)
+
+    canvas.mousePressEvent(Ev(target.x() + 120 * sx, target.y() + 120 * sx))
+    canvas.mousePressEvent(Ev(target.x() + 300 * sx, target.y() + 300 * sx))
+    assert hits == [1, 0]
+
+
+@pytest.mark.ui
+def test_clearing_between_figures_drops_a_late_crop(qapp, white_pdf):
     from PyQt6.QtGui import QImage
 
     from desktop.components.panel_tiles import PanelTiles
@@ -91,11 +138,11 @@ def test_clearing_between_figures_drops_late_crops(qapp, white_pdf):
     tiles = PanelTiles('paper.pdf')
     tiles.show_panels(_panel_set(2))
     tiles.clear()
-    assert tiles.grid.count() == 0 and tiles.header.text() == ''
-    tiles._tile_ready(7, 0, QImage(4, 4, QImage.Format.Format_RGB888))   # the old figure's crop, too late
-    assert tiles.grid.count() == 0
+    assert tiles.entries.count() == 0 and tiles.header.text() == ''
+    tiles._crop_ready(7, QImage(4, 4, QImage.Format.Format_RGB888), (0, 0, 4, 4), (100, 100))
+    assert tiles.canvas._image is None
     tiles.show_panels(None)
-    assert tiles.grid.count() == 0
+    assert tiles.entries.count() == 0
     tiles._stop_worker()
 
 
@@ -179,11 +226,11 @@ def test_a_figure_with_entries_but_no_panels_lists_the_entries(qapp):
     tiles.show_entries('Plate 1', [('1', 'Shumardia cf. pentagonalis. PMO 140.788. Cranidium, dorsal view, ×20.', 'PMO 140.788'),
                                    ('4', 'Pseudocalymene superba. Hypostoma.', 'PMO 140.763')])
     assert tiles.header.text() == 'Plate 1 — 2 caption entries'
-    assert tiles.entries.count() == 2 and tiles.grid.isHidden()
+    assert tiles.entries.count() == 2 and tiles.canvas.isHidden()
     assert tiles.entries.item(1).text() == '4  Pseudocalymene superba. Hypostoma.  (PMO 140.763)'
     assert '(PMO 140.788)' not in tiles.entries.item(0).text()      # already in the description
-    tiles.show_panels(_panel_set(1))          # back to tiles: the entry list goes
-    assert tiles.entries.count() == 0 and tiles.entries.isHidden() and not tiles.grid.isHidden()
+    tiles.show_panels(_panel_set(1))          # a split figure: the figure comes back
+    assert tiles.entries.count() == 1 and not tiles.canvas.isHidden()
     tiles.show_entries('Fig. 1', [])
     assert tiles.isHidden()
     tiles._stop_worker()

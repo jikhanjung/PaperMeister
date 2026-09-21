@@ -328,6 +328,7 @@
   - ✅ **Phase 5 step 1** (2026-09-21, [107](./devlog/20260921_107_P16_Figure_List_Shows_Entries_And_Panels.md)): Text 탭 도판 목록 줄에 `33 panels / 33 entries` · `1 unmatched` · `panels failed` · `single image` 표시(`FigureRow.entries/panels/unmatched/panel_state`, 논문당 쿼리 2개). 툴팁에 한 문장
   - ✅ **Phase 5 step 2·3** (2026-09-21, [108](./devlog/20260921_108_P16_Panel_Tiles_And_Reader_Overlay.md)): 도판 줄 선택 → 아래 **패널 타일**(`PanelTiles`, 워커가 페이지 1회 렌더 후 패널별 crop, 색 테두리, hover/클릭에 매칭 항목) + 리더 도판 이미지 위 **같은 색 상자 오버레이**(`OcrView.set_panels`/`draw_panel_boxes`, crop과 같은 픽셀 프레임), 목록 헤더 "Panel boxes" 토글. 664 Plate I 실물로 확인. 545 passed
     - 같은 날 추가: 패널이 없는(캡션만 연결된) 도판을 고르면 같은 자리에 **항목 목록**(라벨·설명·표본번호, `show_entries`/`load_entries`)
+    - 같은 날 교체: 타일 격자 → **도판 전체 + 패널 상자**(`FigureCanvas`, 페인트 시 그림) 왼쪽, **항목 목록** 오른쪽(패널 색). 항목 클릭 → 상자 노랑 강조·나머지 흐림, 상자 클릭 → 항목 선택(겹치면 가장 작은 상자). 미매칭 항목·항목 없는 패널은 뒤에 회색
     - 남은 것: 타일 클릭 → 해당 표본으로 스크롤, 앱에서 상자 수정/라벨 교정(`figure_curation` UI 미연결)
   - 1191 Barrande(09-21): `e7708b8a` 3항목 거둠(2/3·3/3 → Pl. 5–10 6장 written 369항목). **1/3은 done이지만 사실상 실패**(9장 중 243만, 그것도 항목 1개에 Fig. 3·5·6·10·12를 뭉침; 나머지 8장은 figures에도 skipped에도 없음 — 웹소켓 재연결 뒤 컨텍스트 유실, ocrserver 분석). 244–246은 이걸로 attempts 3 소진
     → **`--relink 243,244,245,246 --execute`**(새 옵션: 캡션 결과·항목·시도 삭제, 사람 캡션은 거부) 뒤 **`--per-item 8`로 플레이트 1장 = 1항목** 4개 제출(`4e377fbc`). 본문 그림 6장(240–242·247·248·256)은 not_a_figure로 소진 상태 그대로 둠.
