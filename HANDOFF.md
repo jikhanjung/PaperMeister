@@ -326,7 +326,8 @@
   - ✅ **Phase 4b (앱)** (2026-09-18, [106](./devlog/20260918_106_P16_Process_Figures_In_The_App.md)): 우클릭 "Process Figures"(논문/폴더/전체) → `figure_pipeline.process_file`이 ①→①′→②→③을 **한 논문씩** 직렬 큐로(끝난 단계는 키로 건너뜀, 단계마다 JSON 갱신) + `FiguresWindow`(워커 paused = "Waiting", 취소는 다음 단계에서) + 서버 미설정이면 **비활성 + 이유 툴팁**. 537 passed.
     - 🟡 **앱에서 실전 미실행** — 먼저 다 끝난 논문(서버 호출 0, "nothing to do")으로, 다음 새 논문 하나로 확인. 파일럿의 미수거 잡(link 7편+1191/3853, panels 112장)은 레인 `--collect --execute`로 거둔 뒤
   - ✅ **Phase 5 step 1** (2026-09-21, [107](./devlog/20260921_107_P16_Figure_List_Shows_Entries_And_Panels.md)): Text 탭 도판 목록 줄에 `33 panels / 33 entries` · `1 unmatched` · `panels failed` · `single image` 표시(`FigureRow.entries/panels/unmatched/panel_state`, 논문당 쿼리 2개). 툴팁에 한 문장
-  - [ ] **Phase 5 step 2**: 선택한 도판 아래 패널 타일(page bbox → figure bbox 합성 crop, `ocr_view` 렌더 워커 경로) + 라벨·매칭 항목. step 3(선택): 리더 도판 이미지 위 상자 오버레이
+  - ✅ **Phase 5 step 2·3** (2026-09-21, [108](./devlog/20260921_108_P16_Panel_Tiles_And_Reader_Overlay.md)): 도판 줄 선택 → 아래 **패널 타일**(`PanelTiles`, 워커가 페이지 1회 렌더 후 패널별 crop, 색 테두리, hover/클릭에 매칭 항목) + 리더 도판 이미지 위 **같은 색 상자 오버레이**(`OcrView.set_panels`/`draw_panel_boxes`, crop과 같은 픽셀 프레임), 목록 헤더 "Panel boxes" 토글. 664 Plate I 실물로 확인. 545 passed
+    - 남은 것: 타일 클릭 → 해당 표본으로 스크롤, 앱에서 상자 수정/라벨 교정(`figure_curation` UI 미연결)
   - 🟡 1191 link 재제출(09-21): 남은 15도판을 무게 80 1항목(`9f6134eb`, 지난 실패와 같은 모양)으로 냈다가 `--per-item 40` 3항목(`e7708b8a`)을 추가 제출 — **서버에서 `9f6134eb` 취소** 요청함. 끝나면 `--collect --execute`
   - [ ] 릴리스는 **pre-release beta**(`v0.2.0-beta.1`, `release.yml`이 `-beta`를 prerelease로) — CHANGELOG + ko 카탈로그 + `version.py`(지금 0.1.9) + 태그
     - **프롬프트 손볼 것(모아서 한 번에 — 버전이 바뀌면 linked 444행이 전부 다시 due)**: `name`은 인쇄된 단어 포함(`Text-fig. 15`, 맨 `15` 금지; 8803 p.29만 `Plate II`로 영어화) → 합쳐진 행은 link가 새 키로 다시 돈다(`link_figures.py --pilot … --execute --no-wait` 재실행) → panels 100장 (104 §5)

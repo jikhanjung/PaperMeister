@@ -9,7 +9,15 @@ the list says so — otherwise the review this list exists for would take a
 rule's guess for the printed caption.
 """
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QFrame, QLabel, QListWidget, QListWidgetItem, QVBoxLayout
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QVBoxLayout,
+)
 
 from desktop.theme.tokens import FONT, SPACING
 
@@ -86,6 +94,8 @@ class FigureList(QFrame):
     """A paper's assembled figures. Emits the 0-based page of the chosen one."""
 
     page_requested = pyqtSignal(int)
+    figure_chosen = pyqtSignal(int)      # the row's Figure id, as the selection moves
+    boxes_toggled = pyqtSignal(bool)     # draw the panel boxes over the reader's figures
 
     def __init__(self, rows, parent=None):
         super().__init__(parent)
@@ -94,21 +104,38 @@ class FigureList(QFrame):
         layout.setContentsMargins(SPACING['lg'], SPACING['sm'], SPACING['lg'], SPACING['sm'])
         layout.setSpacing(SPACING['xs'])
 
+        head = QHBoxLayout()
+        head.setContentsMargins(0, 0, 0, 0)
         header = QLabel(f'Figures ({len(rows)})')
         header.setStyleSheet(f"font-weight: {FONT['weight.bold']};")
-        layout.addWidget(header)
+        head.addWidget(header)
+        head.addStretch()
+        # Only offered when the split stage has drawn something to show.
+        self.boxes = QCheckBox('Panel boxes')
+        self.boxes.setChecked(True)
+        self.boxes.setToolTip('Draw the split stage\'s panel boxes over the figures in the reader')
+        self.boxes.setVisible(any(getattr(r, 'panels', 0) for r in rows))
+        self.boxes.toggled.connect(self.boxes_toggled)
+        head.addWidget(self.boxes)
+        layout.addLayout(head)
 
         self.list = QListWidget()
         self.list.setObjectName('FigureListItems')
         for row in rows:
             item = QListWidgetItem(describe(row))
             item.setData(Qt.ItemDataRole.UserRole, row.page)
+            item.setData(Qt.ItemDataRole.UserRole + 1, row.id)
             item.setToolTip(tooltip(row))
             self.list.addItem(item)
         self.list.setMaximumHeight(_MAX_LIST_HEIGHT)
         self.list.itemClicked.connect(self._chosen)
         self.list.itemActivated.connect(self._chosen)
+        self.list.currentItemChanged.connect(self._current_changed)
         layout.addWidget(self.list)
 
     def _chosen(self, item: QListWidgetItem):
         self.page_requested.emit(int(item.data(Qt.ItemDataRole.UserRole)))
+
+    def _current_changed(self, current, _previous=None):
+        if current is not None:
+            self.figure_chosen.emit(int(current.data(Qt.ItemDataRole.UserRole + 1)))

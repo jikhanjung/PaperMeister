@@ -147,6 +147,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
     — 라이브에서 실제로 잘라 눈으로 확인했다. 페이지 렌더가 ~100ms라 **워커 스레드**에서 하고
     자리는 `<img width height>`로 미리 잡는다 — 그래야 본문이 안 밀리고, Qt가 **그릴 때** 로드하므로
     477쪽 합본도 화면에 든 페이지만 렌더된다 ([094](./devlog/20260828_094_Text_Tab_Reads_The_OCR_Layout.md))
+    **P16 ③ 결과**: 목록 줄에 `N panels / M entries`, 줄 선택 시 `desktop/components/panel_tiles.py::PanelTiles`가 패널 타일(워커가 페이지 1회 렌더 후 crop), 리더 도판 위엔 `OcrView.set_panels()`로 같은 색 상자(crop과 같은 픽셀 프레임으로 그려야 어긋나지 않음 — `draw_panel_boxes`). 색 순환은 `paper_service.panel_colour()` 한 곳
   - **legacy 마크다운(~28%)** → `_sanitize_ocr_markdown()` + `setMarkdown()` (아래 sanitizer 주의)
   - **Sanitizer 필수**: Chandra2 원본을 그대로 `setMarkdown()`에 넘기면 `-qt-list-indent` 누적으로 "텍스트가 계속 오른쪽으로 밀리는" 버그. 원인은 (a) 4+ leading space → indented code block, (b) 줄 시작 `숫자.` → ordered list, (c) 레퍼런스의 바 볼륨 번호(`88.`, `158.`) → 빈 OL이 인접하면 Qt가 nested로 해석해서 indent가 누적. Sanitizer가 모든 줄 `lstrip()` + `^(\d+)\.` regex를 backslash escape로 차단
 - **SVG 아이콘**: `desktop/theme/icons/*.svg`는 `stroke="currentColor"`로 작성하고 `icons.rail_icon()` 헬퍼가 런타임에 색을 치환해서 3-state QIcon(idle/checked/hover) 생성. 다크/라이트 테마 스왑도 같은 메커니즘으로 확장 가능

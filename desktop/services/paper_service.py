@@ -780,6 +780,86 @@ class FigureRow:
     panel_state: str = ''          # '' not run | 'split' | 'single' (not compound) | 'failed'
 
 
+@dataclass
+class PanelInfo:
+    """One panel of a split figure, for the tiles under the figure list (P16 ③)."""
+    label: str
+    bbox_page_1000: list[int]      # already in the page's frame — what the PDF is cropped by
+    entries: list[tuple[str, str, str]]   # (label, description, specimen number) it was matched to
+    confidence: str = 'high'
+    annotation: bool = False       # a scale bar or key, not a specimen
+    colour: str = '#e11d48'        # the box's colour in the reader (panel_colour of its index)
+
+
+@dataclass
+class PanelSet:
+    figure_id: int
+    name: str
+    page: int                      # 0-based
+    bbox_page_1000: list[int]
+    panels: list[PanelInfo]
+    unmatched: list[str]           # entry labels no panel claims
+
+
+#: One colour per panel, cycling; the same cycle in the tiles and in the
+#: boxes drawn over the reader's figures, so a tile and its box match.
+PANEL_COLOURS = ('#e11d48', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '#0891b2')
+
+
+def panel_colour(index: int) -> str:
+    return PANEL_COLOURS[index % len(PANEL_COLOURS)]
+
+
+def load_panel_boxes(paper_id: int) -> dict[int, list[tuple[str, list[int], str]]]:
+    """Every panel of the paper as (label, page-frame box, colour), by 0-based
+    page — what the reader draws over its figure images (P16 Phase 5, step 3)."""
+    import json
+
+    from papermeister.figure_panels import to_page_frame
+    from papermeister.models import Figure, FigurePanel
+    out: dict[int, list[tuple[str, list[int], str]]] = {}
+    index_in_figure: dict[int, int] = {}
+    query = (FigurePanel.select(FigurePanel.label, FigurePanel.bbox_figure_1000, FigurePanel.order,
+                                Figure.id, Figure.page, Figure.bbox_page_1000)
+             .join(Figure)
+             .where((Figure.paper == paper_id) & (Figure.dismissed == False))  # noqa: E712 (peewee)
+             .order_by(Figure.page, Figure.id, FigurePanel.order))
+    for p in query:
+        fig = p.figure
+        i = index_in_figure.get(fig.id, 0)
+        index_in_figure[fig.id] = i + 1
+        box = to_page_frame(json.loads(fig.bbox_page_1000), json.loads(p.bbox_figure_1000))
+        out.setdefault(fig.page, []).append((p.label, box, panel_colour(i)))
+    return out
+
+
+def load_panels(figure_id: int) -> PanelSet | None:
+    import json
+
+    from papermeister.figure_panels import to_page_frame
+    from papermeister.models import Figure, FigureEntry, FigurePanel
+    row = Figure.get_or_none(Figure.id == figure_id)
+    if row is None:
+        return None
+    box = json.loads(row.bbox_page_1000)
+    entries = {e.order: e for e in FigureEntry.select().where(FigureEntry.figure == row.id)}
+    claimed: set[int] = set()
+    panels = []
+    for i, p in enumerate(FigurePanel.select().where(FigurePanel.figure == row.id).order_by(FigurePanel.order)):
+        orders = json.loads(p.entry_orders_json or '[]')
+        claimed.update(orders)
+        panels.append(PanelInfo(
+            label=p.label, bbox_page_1000=to_page_frame(box, json.loads(p.bbox_figure_1000)),
+            entries=[(entries[o].label, entries[o].description, entries[o].specimen_number)
+                     for o in orders if o in entries],
+            confidence=p.confidence, annotation=p.annotation, colour=panel_colour(i)))
+    if not panels:
+        return None
+    unmatched = [e.label for o, e in sorted(entries.items()) if o not in claimed]
+    return PanelSet(figure_id=row.id, name=row.name, page=row.page, bbox_page_1000=box,
+                    panels=panels, unmatched=unmatched)
+
+
 def _import_shared_figures(paper_id: int) -> None:
     """A paper whose cache JSON carries figures another machine found, and
     whose rows this library does not have yet: land them (figure_share)."""
