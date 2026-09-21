@@ -101,6 +101,10 @@ def test_a_paper_runs_through_all_stages_and_resumes_where_it_stopped(paper):
     row = Figure.get(Figure.paper_file == paper.id)
     assert row.caption.startswith('PLATE 2') and FigureEntry.select().where(FigureEntry.figure == row.id).count() == 2
     assert FigurePanel.select().where(FigurePanel.figure == row.id).count() == 2
+    # the Text tab's list reads the counts back
+    from desktop.services.paper_service import load_figures
+    shown = load_figures(paper.paper_id)
+    assert (shown[0].entries, shown[0].panels, shown[0].unmatched, shown[0].panel_state) == (2, 2, 0, 'split')
     # the cache JSON carries it
     from papermeister.figure_share import cache_path
     with open(cache_path(paper), encoding='utf-8') as f:

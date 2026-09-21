@@ -56,3 +56,27 @@ def test_choosing_a_figure_asks_for_its_page(qapp):
     widget.list.itemClicked.emit(widget.list.item(1))
 
     assert asked == [12]
+
+
+@pytest.mark.ui
+def test_the_line_says_what_the_split_left(qapp):
+    """Phase 5 step 1: a plate with 33 panels for 33 entries reads as done; an
+    entry no panel claims is the reviewer's first stop; a failed split says so."""
+    from desktop.components.figure_list import FigureList
+
+    widget = FigureList([
+        row(name='Plate I', page=34, assembly='plate_page_union', pieces=33, caption='PLATE I.',
+            entries=33, panels=33, panel_state='split'),
+        row(name='Plate XI', page=44, assembly='plate_page_union', pieces=22, caption='PLATE XI.',
+            entries=23, panels=22, unmatched=1, panel_state='split'),
+        row(name='Fig. 11', page=27, caption='Fig. 11.', entries=6, panel_state='failed'),
+        row(name='Fig. 4', page=3, caption='Fig. 4.', panel_state='single'),
+        row(name='Fig. 5', page=5, caption='Fig. 5.', entries=4),
+    ])
+    lines = [widget.list.item(i).text() for i in range(widget.list.count())]
+    assert lines[0].endswith('caption  ·  33 panels / 33 entries')
+    assert lines[1].endswith('22 panels / 23 entries  ·  1 unmatched')
+    assert lines[2].endswith('caption  ·  panels failed, 6 entries')
+    assert lines[3].endswith('caption  ·  single image')
+    assert lines[4].endswith('caption  ·  4 entries')
+    assert 'no panel' in widget.list.item(1).toolTip() and widget.list.item(1).toolTip().startswith('PLATE XI.')

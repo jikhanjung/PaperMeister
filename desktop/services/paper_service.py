@@ -774,6 +774,10 @@ class FigureRow:
     caption: str        # linked caption (P16 ②), '' until then
     caption_hint: str   # caption block found under it by assembly
     plate_inferred: bool = False   # plate number not printed on its page
+    entries: int = 0               # caption entries the linking stage found (P16 ②)
+    panels: int = 0                # panels the split stage drew (P16 ③)
+    unmatched: int = 0             # entries no panel claims — the reviewer's first stop
+    panel_state: str = ''          # '' not run | 'split' | 'single' (not compound) | 'failed'
 
 
 def _import_shared_figures(paper_id: int) -> None:
@@ -796,10 +800,37 @@ def load_figures(paper_id: int) -> list[FigureRow]:
     import json
 
     from papermeister.figure_store import figures_for_paper
+    from papermeister.models import Figure, FigureEntry, FigurePanel
     _import_shared_figures(paper_id)
-    return [
-        FigureRow(id=f.id, page=f.page, name=f.name, assembly=f.assembly,
-                  pieces=len(json.loads(f.blocks_json or '[]')),
-                  caption=f.caption, caption_hint=f.caption_hint, plate_inferred=f.plate_inferred)
-        for f in figures_for_paper(paper_id)
-    ]
+    figures = figures_for_paper(paper_id)
+    # Two queries for the whole paper, not two per figure: a plate paper has
+    # a hundred rows and the Text tab builds this on every paper switch.
+    entry_orders: dict[int, set[int]] = {}
+    for e in (FigureEntry.select(FigureEntry.figure, FigureEntry.order).join(Figure)
+              .where(Figure.paper == paper_id)):
+        entry_orders.setdefault(e.figure_id, set()).add(e.order)
+    panel_counts: dict[int, int] = {}
+    claimed: dict[int, set[int]] = {}
+    for p in (FigurePanel.select(FigurePanel.figure, FigurePanel.entry_orders_json).join(Figure)
+              .where(Figure.paper == paper_id)):
+        panel_counts[p.figure_id] = panel_counts.get(p.figure_id, 0) + 1
+        claimed.setdefault(p.figure_id, set()).update(json.loads(p.entry_orders_json or '[]'))
+    rows = []
+    for f in figures:
+        orders = entry_orders.get(f.id, set())
+        panels = panel_counts.get(f.id, 0)
+        if panels:
+            state = 'split'
+        elif f.panel_key and not f.is_compound:
+            state = 'single'
+        elif f.panel_attempts:
+            state = 'failed'
+        else:
+            state = ''
+        rows.append(FigureRow(
+            id=f.id, page=f.page, name=f.name, assembly=f.assembly,
+            pieces=len(json.loads(f.blocks_json or '[]')),
+            caption=f.caption, caption_hint=f.caption_hint, plate_inferred=f.plate_inferred,
+            entries=len(orders), panels=panels, unmatched=len(orders - claimed.get(f.id, set())),
+            panel_state=state))
+    return rows

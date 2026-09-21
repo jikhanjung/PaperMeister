@@ -32,15 +32,54 @@ def describe(row) -> str:
         parts.append('caption hint')
     else:
         parts.append('no caption found')
+    parts.extend(_panel_parts(row))
     return '  ·  '.join(parts)
+
+
+def _panel_parts(row) -> list[str]:
+    """What ② and ③ left on the row: entries, panels, and the two things a
+    reviewer looks for first — an entry no panel claims, a split that failed."""
+    state = getattr(row, 'panel_state', '')
+    entries = getattr(row, 'entries', 0)
+    panels = getattr(row, 'panels', 0)
+    unmatched = getattr(row, 'unmatched', 0)
+    if state == 'split':
+        parts = [f'{panels} panels / {entries} entries']
+        if unmatched:
+            parts.append(f'{unmatched} unmatched')
+        return parts
+    if state == 'single':
+        return ['single image' + (f', {entries} entries' if entries else '')]
+    if state == 'failed':
+        return ['panels failed' + (f', {entries} entries' if entries else '')]
+    if entries:
+        return [f'{entries} entries']
+    return []
 
 
 def tooltip(row) -> str:
     if row.caption:
-        return row.caption
+        note = _panel_note(row)
+        return f'{row.caption}\n\n{note}' if note else row.caption
     if row.caption_hint:
         return f'Caption hint (not yet linked):\n{row.caption_hint}'
     return 'No caption block under this figure. The linking stage may find one elsewhere.'
+
+
+def _panel_note(row) -> str:
+    state = getattr(row, 'panel_state', '')
+    if state == 'split':
+        note = f'{row.panels} panels matched to {row.entries} caption entries.'
+        if row.unmatched:
+            note += f' {row.unmatched} entries have no panel — check the plate.'
+        return note
+    if state == 'single':
+        return 'One image, not split into panels.'
+    if state == 'failed':
+        return 'Panel split failed — the reply did not pass the checks.'
+    if getattr(row, 'entries', 0):
+        return f'{row.entries} caption entries; panels not split yet.'
+    return ''
 
 
 class FigureList(QFrame):
