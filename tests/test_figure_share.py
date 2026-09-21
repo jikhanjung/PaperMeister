@@ -153,3 +153,44 @@ def test_the_cache_json_round_trip(db, monkeypatch):
     Figure.delete().where(Figure.paper_file == src.id).execute()
     report = fs.import_from_cache(src)
     assert report.created == 3
+
+
+@pytest.mark.unit
+def test_a_changed_json_is_landed_once_per_export_an_unchanged_one_not_at_all(db, monkeypatch):
+    """The app opens a paper's tabs many times a session; another machine
+    may write new stages to the JSON in between. The JSON is read when its
+    export stamp is new to this session, and the import only moves what is
+    newer — so a second machine's panels land on rows this one already had."""
+    from papermeister import figure_share as fs
+    from papermeister.models import Figure, FigurePanel
+    from papermeister.paths import OCR_JSON_DIR
+    from papermeister.text_extract import ocr_json_filename
+    src = make_file('A', 'a.pdf')
+    plate, _body = processed(src)
+    os.makedirs(OCR_JSON_DIR, exist_ok=True)
+    path = os.path.join(OCR_JSON_DIR, ocr_json_filename(src))
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump({'pages': [{'page': i, 'markdown': t} for i, t in enumerate(PAGES)]}, f)
+    fs.write_to_cache(src, push=False)
+    seen: dict[int, str] = {}
+    first = fs.import_from_cache_if_new(src, seen)
+    assert first is not None and first.created == 0 and src.id in seen
+    assert fs.import_from_cache_if_new(src, seen) is None          # same export: not read again
+    # the other machine: panels dropped locally, a newer paneled_at in the JSON
+    FigurePanel.delete().where(FigurePanel.figure == plate.id).execute()
+    plate = Figure.get_by_id(plate.id)
+    plate.paneled_at = datetime.datetime.fromisoformat('2026-09-01T00:00:00')
+    plate.save()
+    with open(path, encoding='utf-8') as f:
+        data = json.load(f)
+    data['figures']['exported_at'] = '2026-09-22T00:00:00+00:00'
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(data, f)
+    again = fs.import_from_cache_if_new(src, seen)
+    assert again is not None and again.updated == 1
+    assert FigurePanel.select().where(FigurePanel.figure == plate.id).count() == 2
+    assert fs.import_from_cache_if_new(src, seen) is None
+    # a JSON without figures is never "new"
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump({'pages': []}, f)
+    assert fs.import_from_cache_if_new(src, {}) is None

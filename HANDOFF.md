@@ -335,6 +335,7 @@
     - ③ 검사기 완화: 한 항목이 여러 패널(사진+선화, 스테레오 쌍)이면 거부가 아니라 `entry_on_several_panels` 검토 — 1541 Fig. 2(6패널)·664 Fig. 11(9패널) 반영. `split_panels.py --figure-ids N --force`(서버 캐시 우회)
     - 🟡 **③ 파일럿 전체 제출**(09-21): link 끝난 나머지 논문 **253장 / 32잡** `--pilot --execute --no-wait`. 장당 70–150 s → **6–10시간**. 끝나면 앱 닫고 `split_panels.py --collect --execute`. ⚠️ panels 레인은 **같은 PDF 형제를 해시로 합치지 않는다**(Lee 2004 ×3, Müller 2010 ×2 → 11장 중복 제출) — link의 `propagate_link` 같은 처리가 필요
     - 같은 날: Text 탭에서 OCR이 조각낸 플레이트를 **assemble 결과대로 한 장**으로(`ocr_layout.page_html(unions=)`, `load_figure_unions`); **PDF 탭 툴바**(페이지 이동·입력, 줌 −/+/%, Fit width 토글, Ctrl+휠, PageUp/Down)
+    - JSON→DB 동기화 보강(09-21): 탭을 열 때 캐시 JSON의 `figures.exported_at`이 이 세션에서 본 것과 다르면 **행이 있어도 import**(`figure_share.import_from_cache_if_new`, 단계별 새 것만·사람 행 불가침). 남은 구멍: **로컬 캐시가 있으면 Zotero sibling 갱신을 안 받아옴**(sibling은 캐시 없을 때만 fetch) — 첨부 version 비교로 재fetch 필요. 로컬 디렉터리 소스만 쓰면 해당 없음
     - 남은 것: 앱에서 상자 수정/라벨 교정(`figure_curation` UI 미연결), 도판 목록에서 Figures 탭의 해당 블록으로 점프(`FiguresTab.show_figure`는 있음)
   - 1191 Barrande(09-21): `e7708b8a` 3항목 거둠(2/3·3/3 → Pl. 5–10 6장 written 369항목). **1/3은 done이지만 사실상 실패**(9장 중 243만, 그것도 항목 1개에 Fig. 3·5·6·10·12를 뭉침; 나머지 8장은 figures에도 skipped에도 없음 — 웹소켓 재연결 뒤 컨텍스트 유실, ocrserver 분석). 244–246은 이걸로 attempts 3 소진
     → **`--relink 243,244,245,246 --execute`**(새 옵션: 캡션 결과·항목·시도 삭제, 사람 캡션은 거부) 뒤 **`--per-item 8`로 플레이트 1장 = 1항목** 4개 제출(`4e377fbc`). 본문 그림 6장(240–242·247·248·256)은 not_a_figure로 소진 상태 그대로 둠.

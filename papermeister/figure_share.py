@@ -215,6 +215,27 @@ def _replace_children(row: Figure, item: dict) -> None:
         FigurePanel.create(figure=row.id, **{k: p.get(k, '' if k != 'annotation' else False) for k in _PANEL_FIELDS})
 
 
+def import_from_cache_if_new(paper_file: PaperFile, seen: dict[int, str]) -> ImportReport | None:
+    """Land the cache JSON's figures unless this export was already landed
+    (its `exported_at` is the one in `seen` for this file). For the app: a
+    paper's tab is opened many times a session, and another machine may
+    have written new panels to the JSON since the rows here were made —
+    importing is safe to repeat (newer stages only, a person's rows never
+    touched), so the only question is whether the JSON changed."""
+    path = cache_path(paper_file)
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding='utf-8') as f:
+        data = json.load(f)
+    stamp = ((data.get('figures') or {}).get('exported_at')) or ''
+    if not stamp or seen.get(paper_file.id) == stamp:
+        return None
+    pages = [(p.get('markdown') or '') for p in sorted(data.get('pages') or [], key=lambda p: p.get('page', 0))]
+    report = import_figures(paper_file, data, pages)
+    seen[paper_file.id] = stamp
+    return report
+
+
 def import_from_cache(paper_file: PaperFile) -> ImportReport:
     """Land the cache JSON's `figures` block, if it has one."""
     path = cache_path(paper_file)

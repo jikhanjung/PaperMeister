@@ -868,17 +868,22 @@ def load_panels(figure_id: int) -> PanelSet | None:
                     panels=panels, unmatched=unmatched)
 
 
+#: Per file, the `exported_at` of the cache JSON's figures last landed this
+#: session — so a tab opened again and again does not re-read a JSON that
+#: has not changed, and one another machine changed is read once.
+_shared_figures_seen: dict[int, str] = {}
+
+
 def _import_shared_figures(paper_id: int) -> None:
-    """A paper whose cache JSON carries figures another machine found, and
-    whose rows this library does not have yet: land them (figure_share)."""
+    """Land what the paper's cache JSON says about its figures, when the
+    JSON changed since it was last landed here (figure_share): rows this
+    library does not have, and stages another machine ran since."""
     try:
-        from papermeister.figure_share import import_from_cache
-        from papermeister.models import Figure, PaperFile
+        from papermeister.figure_share import import_from_cache_if_new
+        from papermeister.models import PaperFile
         for pf in PaperFile.select().where((PaperFile.paper == paper_id) & (PaperFile.hash != '')
                                            & ~PaperFile.path.endswith('.json')):
-            if Figure.select().where(Figure.paper_file == pf.id).exists():
-                continue
-            import_from_cache(pf)
+            import_from_cache_if_new(pf, _shared_figures_seen)
     except Exception:
         import logging
         logging.getLogger(__name__).debug('shared figures not imported for paper %s', paper_id, exc_info=True)
