@@ -33,9 +33,12 @@ from desktop.components.panel_tiles import HIGHLIGHT, FigureCanvas, _CropWorker,
 from desktop.services import paper_service
 from desktop.theme.tokens import COLORS_DARK, FONT, SPACING
 
-#: The figure's largest size in this tab: read the plate here, not in a thumbnail.
-FIGURE_MAX_WIDTH = 760
-FIGURE_MAX_HEIGHT = 1100
+#: The figure fills the tab's width (re-fitted on resize); a plate taller
+#: than this is scaled down, so a page-tall plate stays one screen.
+FIGURE_MAX_WIDTH = 760           # until the tab is laid out; then the viewport decides
+FIGURE_MAX_HEIGHT = 1400
+#: Crops are rendered a little wider than shown, so a hidpi screen stays sharp.
+OVERSAMPLE = 1.5
 #: Blocks this far outside the viewport are rendered ahead; farther ones are let go.
 PREFETCH = 600
 RELEASE = 2400
@@ -243,6 +246,7 @@ class FiguresTab(QScrollArea):
         self.setObjectName('FiguresTab')
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)   # a stable width to fit to
         self._host = QWidget()
         self._layout = QVBoxLayout(self._host)
         self._layout.setContentsMargins(SPACING['lg'], 0, SPACING['lg'], SPACING['lg'])
@@ -258,6 +262,11 @@ class FiguresTab(QScrollArea):
         self._scrolled.setInterval(120)
         self._scrolled.timeout.connect(self._render_visible)
         self.verticalScrollBar().valueChanged.connect(lambda _v: self._scrolled.start())
+        self._fitted_width = 0
+        self._resized = QTimer(self)
+        self._resized.setSingleShot(True)
+        self._resized.setInterval(200)
+        self._resized.timeout.connect(self._refit)
 
     def set_paper(self, paper_id: int, pdf_path: str | None) -> int:
         """Build the blocks. Returns how many figures the paper has."""
@@ -290,8 +299,32 @@ class FiguresTab(QScrollArea):
             self._worker = _CropWorker(pdf_path, self)
             self._worker.ready.connect(self._crop_ready)
             self._worker.start()
+        self._fitted_width = 0
+        QTimer.singleShot(0, self._refit)
         QTimer.singleShot(0, self._render_visible)
         return len(rows)
+
+    def figure_width(self) -> int:
+        """How wide a figure may be: the viewport minus the gutters."""
+        width = self.viewport().width()
+        if width < 100:
+            return FIGURE_MAX_WIDTH
+        return width - 2 * SPACING['lg'] - 4
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._resized.start()
+
+    def _refit(self) -> None:
+        """Width-fit every block to the tab; crops already held are rescaled at
+        paint, blocks not yet rendered will be rendered for the new width."""
+        width = self.figure_width()
+        if abs(width - self._fitted_width) < 8:
+            return
+        self._fitted_width = width
+        for block in self._blocks.values():
+            block.canvas.set_limits(width)
+        self._scrolled.start()
 
     def show_figure(self, figure_id: int) -> None:
         block = self._blocks.get(figure_id)
@@ -320,7 +353,8 @@ class FiguresTab(QScrollArea):
             far = y1 < top - RELEASE or y0 > bottom + RELEASE
             if near and not block.requested:
                 block.requested = True
-                self._worker.request(fid, block.row.page, block.row.bbox_page_1000)
+                self._worker.request(fid, block.row.page, block.row.bbox_page_1000,
+                                     int(self.figure_width() * OVERSAMPLE))
             elif far and block.canvas._image is not None:
                 block.release()
                 if fid in self._live:

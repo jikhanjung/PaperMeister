@@ -149,3 +149,22 @@ def test_the_detail_panel_has_a_figures_tab_before_references(qapp, monkeypatch,
     monkeypatch.setattr(panel, '_build_figures_tab', lambda d: built.append(d.paper_id) or __import__('PyQt6.QtWidgets').QtWidgets.QWidget())
     panel._tabs.setCurrentIndex(3)
     assert built == [paper_id] and panel._figures_built
+
+
+@pytest.mark.ui
+def test_figures_fit_the_tab_width_and_refit_on_resize(qapp, paper, white_pdf):
+    from desktop.views import figures_tab as mod
+    paper_id, ids = paper
+    tab = mod.FiguresTab()
+    tab.resize(600, 700)
+    tab.show()
+    tab.set_paper(paper_id, 'x.pdf')
+    qapp.processEvents()
+    tab._refit()
+    first = tab._blocks[ids[0]].canvas
+    assert first.width() == tab.figure_width() and first.width() < 600
+    tab.resize(1000, 700)
+    qapp.processEvents()
+    tab._refit()
+    assert first.width() == tab.figure_width() and first.width() > 900
+    tab._stop_worker()

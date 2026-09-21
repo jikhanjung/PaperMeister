@@ -59,8 +59,8 @@ class _CropWorker(QThread):
         self._queue: queue.Queue = queue.Queue()
         self._stopping = False
 
-    def request(self, figure_id: int, page: int, bbox_page_1000: list[int]):
-        self._queue.put((figure_id, page, bbox_page_1000))
+    def request(self, figure_id: int, page: int, bbox_page_1000: list[int], width: int = RENDER_WIDTH):
+        self._queue.put((figure_id, page, bbox_page_1000, width))
 
     def stop(self):
         self._stopping = True
@@ -71,12 +71,12 @@ class _CropWorker(QThread):
             job = self._queue.get()
             if job is None:
                 return
-            figure_id, page, bbox = job
+            figure_id, page, bbox, width = job
             try:
                 from papermeister import ocr_layout, pdfdoc
                 page_pt = pdfdoc.page_sizes(self._pdf_path, [page])[0][0]
                 frac = max(0.05, (bbox[2] - bbox[0]) / 1000)
-                dpi = int(max(72, min(220, RENDER_WIDTH * 72 / (page_pt * frac))))
+                dpi = int(max(72, min(300, width * 72 / (page_pt * frac))))
                 page_image = pdfdoc.render_page(self._pdf_path, page, dpi=dpi)
                 box = ocr_layout.crop_box(tuple(bbox), *page_image.size)
                 crop = page_image.crop(box).convert('RGB')
@@ -126,6 +126,14 @@ class FigureCanvas(QWidget):
 
     def lit(self) -> int | None:
         return self._lit
+
+    def set_limits(self, max_width: int, max_height: int | None = None) -> None:
+        """Re-fit to a new width (the tab was resized); the image is scaled at paint."""
+        self._max_width = max(MIN_FIGURE_WIDTH, max_width)
+        if max_height is not None:
+            self._max_height = max_height
+        self._fit()
+        self.update()
 
     def hover(self, index: int | None) -> None:
         """Light a panel while the cursor is on its entry."""

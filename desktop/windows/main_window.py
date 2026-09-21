@@ -111,9 +111,11 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self.source_nav)
         splitter.addWidget(self.paper_list)
         splitter.addWidget(self.detail_panel)
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-        splitter.setStretchFactor(2, 0)
+        # Extra width is shared in the panels' own proportions, so a wider
+        # window widens the reader too, not only the paper list.
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 2)
+        splitter.setStretchFactor(2, 2)
         splitter.setSizes([LAYOUT['sourcenav.default'], 600, LAYOUT['detail.default']])
 
         layout.addWidget(splitter, 1)

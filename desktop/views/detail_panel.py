@@ -92,17 +92,29 @@ class _LazyPdfView(QScrollArea):
     Page placeholders are sized upfront from `page.rect` (cheap — no decode),
     so the scrollbar reflects total document height immediately. Pages are
     decoded to QPixmap only when they overlap the viewport plus a lookahead.
+
+    Pages are shown **fitted to the viewport width**: the zoom follows the
+    widest page, and a resize re-fits (debounced) and re-renders what is on
+    screen — a page decoded for the old width would either overflow or leave
+    the column half empty.
     """
 
-    _ZOOM = 1.5
     _LOOKAHEAD_PX = 800
+    _MIN_ZOOM, _MAX_ZOOM = 0.5, 4.0
+    _GUTTER = 2 * SPACING['sm']
 
     def __init__(self, doc, parent=None):
         super().__init__(parent)
         self.setWidgetResizable(True)
         self.setFrameShape(QScrollArea.Shape.NoFrame)
 
+        # The scrollbar always has its place: were it to appear after the
+        # first fit, the viewport would narrow and every page be decoded twice.
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         self._doc = doc
+        self._sizes_pt = [doc[i].get_size() for i in range(len(doc))]     # points, before zoom
+        self._zoom = 1.0
+        self._fitted_width = 0
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -112,12 +124,8 @@ class _LazyPdfView(QScrollArea):
         self._page_labels: list[QLabel] = []
         self._rendered: list[bool] = []
 
-        for i in range(len(doc)):
-            pw, ph = doc[i].get_size()          # points, before zoom
-            w = int(pw * self._ZOOM)
-            h = int(ph * self._ZOOM)
+        for _ in self._sizes_pt:
             lbl = QLabel()
-            lbl.setFixedSize(w, h)
             lbl.setStyleSheet('background: #1a1a1a;')
             layout.addWidget(lbl, alignment=Qt.AlignmentFlag.AlignHCenter)
             self._page_labels.append(lbl)
@@ -125,14 +133,45 @@ class _LazyPdfView(QScrollArea):
 
         layout.addStretch(1)
         self.setWidget(container)
+        self._apply_zoom(self._fit_zoom())
 
         self.verticalScrollBar().valueChanged.connect(self._render_visible)
+        self._refit = QTimer(self)
+        self._refit.setSingleShot(True)
+        self._refit.setInterval(200)
+        self._refit.timeout.connect(self._refit_now)
         # Defer first render so label .y() is populated by the layout pass.
-        QTimer.singleShot(0, self._render_visible)
+        QTimer.singleShot(0, self._refit_now)
+
+    def _fit_zoom(self) -> float:
+        """The zoom that makes the widest page fill the viewport."""
+        width = self.viewport().width()
+        if width < 100:
+            width = 720                      # not laid out yet: a readable column
+        widest = max((w for w, _h in self._sizes_pt), default=595.0)
+        return max(self._MIN_ZOOM, min(self._MAX_ZOOM, (width - self._GUTTER) / max(1.0, widest)))
+
+    def _apply_zoom(self, zoom: float) -> None:
+        self._zoom = zoom
+        for (pw, ph), lbl in zip(self._sizes_pt, self._page_labels, strict=True):
+            lbl.setFixedSize(int(pw * zoom), int(ph * zoom))
+            lbl.clear()
+        self._rendered = [False] * len(self._page_labels)
+
+    def _refit_now(self) -> None:
+        width = self.viewport().width()
+        if abs(width - self._fitted_width) > 8:
+            self._fitted_width = width
+            scrollbar = self.verticalScrollBar()
+            fraction = scrollbar.value() / scrollbar.maximum() if scrollbar.maximum() else 0.0
+            self._apply_zoom(self._fit_zoom())
+            self.widget().layout().activate()
+            scrollbar.setValue(round(scrollbar.maximum() * fraction))
+        self._render_visible()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._render_visible()
+        self._refit.start()
 
     def _render_visible(self):
         if self._doc is None:
@@ -156,13 +195,18 @@ class _LazyPdfView(QScrollArea):
         from PyQt6.QtGui import QImage, QPixmap
         # PDFium renders BGRA by default; ask for plain RGB so the buffer maps
         # straight onto Format_RGB888 without a channel swap per page.
-        bitmap = self._doc[idx].render(scale=self._ZOOM, rev_byteorder=True,
+        # Rendered at the screen's pixel ratio so a hidpi display gets a
+        # sharp page in the same fitted slot.
+        ratio = self.devicePixelRatioF() or 1.0
+        bitmap = self._doc[idx].render(scale=self._zoom * ratio, rev_byteorder=True,
                                        prefer_bgrx=False)
         buf = bitmap.buffer          # keep a reference: QImage does not copy
         qimg = QImage(buf, bitmap.width, bitmap.height, bitmap.stride,
                       QImage.Format.Format_RGB888)
         # copy() before the buffer goes out of scope with the bitmap.
-        self._page_labels[idx].setPixmap(QPixmap.fromImage(qimg.copy()))
+        pixmap = QPixmap.fromImage(qimg.copy())
+        pixmap.setDevicePixelRatio(ratio)
+        self._page_labels[idx].setPixmap(pixmap)
         self._rendered[idx] = True
 
 
