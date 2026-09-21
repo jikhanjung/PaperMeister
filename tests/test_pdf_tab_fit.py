@@ -73,3 +73,22 @@ def test_the_toolbar_moves_between_pages_and_zooms(qapp):
     # fit width again follows the (now wider) viewport
     tab.fit_btn.click()
     assert tab.fit_btn.isChecked() and tab.view.zoom() > fitted
+
+
+@pytest.mark.ui
+def test_a_landscape_page_does_not_narrow_the_others(qapp):
+    """Bruton 2004 has one 766 pt landscape page among 557 pt portrait ones;
+    fitting to the widest left every portrait page at two thirds of the panel."""
+    from desktop.views.detail_panel import _LazyPdfView
+    doc = [_Page(557, 763), _Page(766, 560), _Page(557, 763)]
+    view = _LazyPdfView(doc)
+    view.resize(600, 700)
+    view.show()
+    qapp.processEvents()
+    view._refit_now()
+    want = view.viewport().width() - view._GUTTER
+    assert all(abs(lbl.width() - want) <= 1 for lbl in view._page_labels)
+    assert view._zooms[1] < view._zooms[0]
+    # a chosen zoom is one zoom for every page
+    view.set_zoom(1.0)
+    assert view._page_labels[1].width() == 766 and view._page_labels[0].width() == 557

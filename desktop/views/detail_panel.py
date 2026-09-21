@@ -94,10 +94,12 @@ class _LazyPdfView(QScrollArea):
     so the scrollbar reflects total document height immediately. Pages are
     decoded to QPixmap only when they overlap the viewport plus a lookahead.
 
-    Pages are shown **fitted to the viewport width**: the zoom follows the
-    widest page, and a resize re-fits (debounced) and re-renders what is on
-    screen — a page decoded for the old width would either overflow or leave
-    the column half empty.
+    Pages are shown **fitted to the viewport width**, each page on its own —
+    a document with one landscape page (a folded table) must not leave every
+    portrait page narrow. A resize re-fits (debounced) and re-renders what is
+    on screen: a page decoded for the old width would either overflow or
+    leave the column half empty. A zoom the user chose applies to every page
+    alike and stops the following.
     """
 
     _LOOKAHEAD_PX = 800
@@ -118,7 +120,8 @@ class _LazyPdfView(QScrollArea):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         self._doc = doc
         self._sizes_pt = [doc[i].get_size() for i in range(len(doc))]     # points, before zoom
-        self._zoom = 1.0
+        self._zoom = 1.0                        # the zoom shown; per page in fit-width mode (`_zooms`)
+        self._zooms = [1.0] * len(self._sizes_pt)
         self._fit_width = True                  # follow the viewport until the user zooms
         self._fitted_width = 0
         self._current_page = -1
@@ -151,18 +154,22 @@ class _LazyPdfView(QScrollArea):
         # Defer first render so label .y() is populated by the layout pass.
         QTimer.singleShot(0, self._refit_now)
 
-    def _fit_zoom(self) -> float:
-        """The zoom that makes the widest page fill the viewport."""
+    def _fit_zoom(self) -> list[float]:
+        """Per page, the zoom that makes it fill the viewport."""
         width = self.viewport().width()
         if width < 100:
             width = 720                      # not laid out yet: a readable column
-        widest = max((w for w, _h in self._sizes_pt), default=595.0)
-        return max(self._MIN_ZOOM, min(self._MAX_ZOOM, (width - self._GUTTER) / max(1.0, widest)))
+        return [max(self._MIN_ZOOM, min(self._MAX_ZOOM, (width - self._GUTTER) / max(1.0, pw)))
+                for pw, _ph in self._sizes_pt]
 
-    def _apply_zoom(self, zoom: float) -> None:
-        self._zoom = zoom
-        for (pw, ph), lbl in zip(self._sizes_pt, self._page_labels, strict=True):
-            lbl.setFixedSize(int(pw * zoom), int(ph * zoom))
+    def _apply_zoom(self, zoom) -> None:
+        """One zoom for all pages, or a list with one per page."""
+        zooms = list(zoom) if isinstance(zoom, list | tuple) else [zoom] * len(self._sizes_pt)
+        self._zooms = zooms
+        # What the toolbar shows: the zoom of the typical page.
+        self._zoom = sorted(zooms)[len(zooms) // 2] if zooms else 1.0
+        for (pw, ph), z, lbl in zip(self._sizes_pt, zooms, self._page_labels, strict=True):
+            lbl.setFixedSize(int(pw * z), int(ph * z))
             lbl.clear()
         self._rendered = [False] * len(self._page_labels)
 
@@ -276,7 +283,7 @@ class _LazyPdfView(QScrollArea):
         # Rendered at the screen's pixel ratio so a hidpi display gets a
         # sharp page in the same fitted slot.
         ratio = self.devicePixelRatioF() or 1.0
-        bitmap = self._doc[idx].render(scale=self._zoom * ratio, rev_byteorder=True,
+        bitmap = self._doc[idx].render(scale=self._zooms[idx] * ratio, rev_byteorder=True,
                                        prefer_bgrx=False)
         buf = bitmap.buffer          # keep a reference: QImage does not copy
         qimg = QImage(buf, bitmap.width, bitmap.height, bitmap.stride,
