@@ -105,10 +105,11 @@ class MainWindow(EdgeResizer, QMainWindow):
         layout.addWidget(title)
         layout.addWidget(VersionLabel(about.APP_VERSION), 0, Qt.AlignmentFlag.AlignVCenter)
 
-        layout.addSpacing(SPACING['lg'])
-
+        # The left half of the bar is the title's (and free to drag the
+        # window by); the search box takes the right half.
+        layout.addStretch(1)
         self.search_bar = SearchBar()
-        self.search_bar.setMinimumWidth(420)
+        self.search_bar.setMinimumWidth(320)
         layout.addWidget(self.search_bar, 1)
 
         if self._frameless:
