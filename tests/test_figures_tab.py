@@ -108,7 +108,7 @@ def test_only_blocks_near_the_viewport_are_rendered_and_far_ones_are_let_go(qapp
     paper_id, ids = paper
     tab = mod.FiguresTab()
     tab.resize(900, 600)
-    tab.show()
+    tab.show()                    # hidden widgets are not laid out; positions need geometry
     tab.set_paper(paper_id, 'x.pdf')
     qapp.processEvents()
     tab._render_visible()

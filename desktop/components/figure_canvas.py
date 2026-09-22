@@ -14,7 +14,7 @@ import logging
 import queue
 
 from PyQt6.QtCore import QRectF, Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QColor, QImage, QPainter, QPen
+from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QToolTip, QWidget
 
 from desktop.theme.tokens import COLORS_DARK
@@ -86,6 +86,7 @@ class FigureCanvas(QWidget):
     def __init__(self, parent=None, max_width: int = MAX_FIGURE_WIDTH, max_height: int = MAX_FIGURE_HEIGHT):
         super().__init__(parent)
         self._image: QImage | None = None
+        self._pixmap: QPixmap | None = None     # the image as the GUI thread paints it
         self._boxes: list[tuple[QRectF, str, str]] = []   # in image pixels: rect, label, colour
         self._tips: list[str] = []                         # per panel: the entry text shown on hover
         self._lit: int | None = None
@@ -99,6 +100,10 @@ class FigureCanvas(QWidget):
     def set_figure(self, image: QImage | None, boxes: list[tuple[QRectF, str, str]], aspect: float,
                    tips: list[str] | None = None) -> None:
         self._image, self._boxes, self._lit, self._hover = image, boxes, None, None
+        # Painted from a pixmap made here, on the GUI thread, so the paint
+        # never touches memory the worker thread built the QImage on (CI
+        # crashed in paintEvent while the worker was rendering, 2026-09-21).
+        self._pixmap = QPixmap.fromImage(image) if image is not None and not image.isNull() else None
         self._tips = tips or []
         self._aspect = aspect or 1.0
         self._fit()
@@ -149,7 +154,9 @@ class FigureCanvas(QWidget):
             painter.end()
             return
         target = self._drawn_rect()
-        painter.drawImage(target, self._image)
+        if self._pixmap is not None:
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            painter.drawPixmap(target.toRect(), self._pixmap)
         sx = target.width() / max(1, self._image.width())
         sy = target.height() / max(1, self._image.height())
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
