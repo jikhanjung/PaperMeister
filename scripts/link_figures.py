@@ -227,6 +227,8 @@ def main() -> int:
     parser.add_argument('--collect', action='store_true', help='apply finished jobs from earlier runs')
     parser.add_argument('--recheck', action='store_true',
                         help='re-run the printed-text checks on already linked figures (after the checks changed)')
+    parser.add_argument('--effort', default=figure_link.DEFAULT_EFFORT, choices=('low', 'medium', 'high'),
+                        help='model reasoning effort for the submit (default high; an experiment knob)')
     parser.add_argument('--per-item', type=int, default=figure_link.MAX_ITEM_WEIGHT,
                         help=f'answer weight per request item — a plate counts {figure_link.PLATE_WEIGHT}, a body figure 1 '
                              f'(default {figure_link.MAX_ITEM_WEIGHT}; smaller for a paper whose sessions drop)')
@@ -285,7 +287,7 @@ def main() -> int:
             totals['papers with nothing due'] += 1
             continue
         totals['papers due'] += 1
-        request = figure_link.link_payload(pf, pages, targets, digest, client_id, PROMPT, args.per_item)
+        request = figure_link.link_payload(pf, pages, targets, digest, client_id, PROMPT, args.per_item, args.effort)
         workspace = figure_link.workspace_payload(pf, pages)
         if args.execute:
             if args.limit and submitted >= args.limit:

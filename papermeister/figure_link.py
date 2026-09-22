@@ -245,17 +245,22 @@ def link_item(paper_file: PaperFile, pages: list[str], targets: LinkTargets, dig
     return link_items(paper_file, pages, targets, digest, prompt_version)[0]
 
 
+DEFAULT_EFFORT = 'high'
+
+
 def link_payload(paper_file: PaperFile, pages: list[str], targets: LinkTargets,
                  digest: str, client_id: str, prompt: dict | None = None,
-                 per_item: int = MAX_ITEM_WEIGHT) -> dict:
-    """The request body of `POST /figures/link`: the items, plus the prompt block."""
+                 per_item: int = MAX_ITEM_WEIGHT, effort: str = DEFAULT_EFFORT) -> dict:
+    """The request body of `POST /figures/link`: the items, plus the prompt block.
+    `effort` is the model's reasoning effort; it is part of the server's
+    dedup key, not of the row's `link_key`."""
     version = (prompt or {}).get('version', '')
     body = {
         'client_id': client_id,
         'file_hash': paper_file.hash,
         'ocr_digest': digest,
         'items': link_items(paper_file, pages, targets, digest, version, per_item),
-        'options': {'model': 'gpt-6-astra', 'effort': 'high'},
+        'options': {'model': 'gpt-6-astra', 'effort': effort},
     }
     if prompt:
         body['prompt'] = prompt
