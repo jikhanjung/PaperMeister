@@ -230,6 +230,120 @@ def _panels(pf, pages, digest, client, prompts, notify, r: StageReport, check) -
 _STAGE_FN = {'assemble': _assemble, 'detect': _detect, 'link': _link, 'panels': _panels}
 
 
+# ── what the server still holds ──────────────────────────────────────
+
+@dataclass
+class CollectReport:
+    jobs: int = 0
+    link_written: int = 0
+    panels_written: int = 0
+    papers: set = field(default_factory=set)      # paper ids touched
+    skipped: int = 0                              # replies nothing here was waiting for
+
+    def summary(self) -> str:
+        if not self.jobs:
+            return 'nothing to collect'
+        return (f'{self.jobs} finished job(s): {self.link_written} caption(s), {self.panels_written} panel split(s) '
+                f'landed on {len(self.papers)} paper(s)')
+
+
+def collect_finished(client: FigureClient, notify: Notify | None = None) -> CollectReport:
+    """Land the replies of finished link and panels jobs this client left on
+    the server — a paper whose Process Figures was cut short by closing the
+    app, or one run by the lane scripts elsewhere. Same code path as the
+    lanes' `--collect`; a reply already applied is unchanged."""
+    from . import figure_lane, figure_link, figure_panels, figure_prompts, figure_share
+    report = CollectReport()
+    say = notify or (lambda k, m: None)
+    link_prompt = figure_prompts.load('link')
+    panels_prompt = figure_prompts.load('panels')
+
+    for job in client.jobs(kind='link'):
+        if job.get('status') not in ('done', 'done_with_errors'):
+            continue
+        replies = figure_lane.results_by_key(client.job('link', job['job_id']))
+        pf = _file_of_replies(replies)
+        if pf is None:
+            report.skipped += 1
+            continue
+        pages = _pages_of(pf)
+        if pages is None:
+            report.skipped += 1
+            continue
+        digest = figure_link.ocr_digest(pages)
+        targets = figure_link.link_targets(pf, digest, link_prompt['version'])
+        if not targets.due:
+            continue
+        items = figure_link.items_from_replies(pf, pages, targets, digest, link_prompt['version'], replies)
+        if not items:
+            report.skipped += 1
+            continue
+        report.jobs += 1
+        check = figure_link.LinkCheck()
+        existing = {str(x.id): x for x in targets.due}
+        model = 'gpt-6-astra'
+        for item in items:
+            reply = replies.get(item['key'], {})
+            if reply.get('status') == 'done' and isinstance(reply.get('result'), dict):
+                check.merge(figure_link.validate_link_result(item, reply['result'], pages, existing))
+                model = reply.get('model') or model
+        applied = figure_link.apply_link(targets, check, {}, digest, link_prompt['version'], model)
+        figure_link.propagate_link(pf)
+        report.link_written += applied.written
+        report.papers.add(pf.paper_id)
+        figure_share.write_to_cache(pf)
+        say('info', f'collected captions for paper {pf.paper_id}: {applied.written} written')
+
+    for job in client.jobs(kind='panels'):
+        if job.get('status') not in ('done', 'done_with_errors'):
+            continue
+        replies = figure_lane.results_by_key(client.job('panels', job['job_id']))
+        rows, items = [], []
+        for key in replies:
+            fid = key.split('@')[0]
+            row = Figure.get_or_none(Figure.id == int(fid)) if fid.isdigit() else None
+            if row is None or row.dismissed:
+                continue
+            item = figure_panels.panel_item(row, panels_prompt['version'])
+            if item['key'] != key or (row.panel_key == key.split('@', 1)[1] and row.panel_result_digest):
+                continue
+            rows.append(row)
+            items.append(item)
+        if not rows:
+            continue
+        report.jobs += 1
+        pf = PaperFile.get_by_id(rows[0].paper_file_id)
+        for row, item in zip(rows, items, strict=True):
+            reply = replies.get(item['key'], {})
+            result = reply.get('result') if reply.get('status') == 'done' else None
+            siblings = Figure.select().where((Figure.paper_file == pf.id) & (Figure.page == row.page)
+                                             & (Figure.id != row.id) & (Figure.dismissed == False)).count()  # noqa: E712
+            check_ = figure_panels.validate_panel_result(item, result, siblings) if result else None
+            applied = figure_panels.apply_panels(row, item, result, check_, panels_prompt['version'],
+                                                 reply.get('model') or 'gpt-6-astra')
+            report.panels_written += applied.written
+        report.papers.add(pf.paper_id)
+        figure_share.write_to_cache(pf)
+        say('info', f'collected panels for paper {pf.paper_id}: {len(rows)} figure(s)')
+    return report
+
+
+def _file_of_replies(replies: dict) -> PaperFile | None:
+    """The file whose rows a link reply names; twins of one PDF share the hash prefix."""
+    for reply in replies.values():
+        result = reply.get('result') if isinstance(reply, dict) else None
+        for f in ((result or {}).get('figures') or []) + ((result or {}).get('skipped') or []):
+            fid = str(f.get('figure_id', ''))
+            if fid.isdigit():
+                row = Figure.get_or_none(Figure.id == int(fid))
+                if row is not None:
+                    return PaperFile.get_or_none(PaperFile.id == row.paper_file_id)
+    prefix = next(iter(replies), '').split('@')[0]
+    if prefix:
+        return PaperFile.select().where(PaperFile.hash.startswith(prefix) & ~PaperFile.path.endswith('.json')).first()
+    return None
+
+
 def _note(r: StageReport) -> str:
     return f'{r.failed} without a usable reply' if r.failed else ''
 

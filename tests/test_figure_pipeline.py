@@ -61,10 +61,22 @@ class FakeClient:
         self.submitted.append((kind, body))
         return {'job_id': f'{kind}-1', 'total': len(body['items']), 'cached': 0, 'queued': len(body['items'])}
 
+    # What a closed app left behind: the lanes' and the app's collect read these.
+    def jobs(self, kind=None, status=None):
+        return [{'job_id': f'{k}-{i}', 'kind': k, 'status': 'done', 'total': len(b['items'])}
+                for i, (k, b) in enumerate(self.submitted) if kind in (None, k)]
+
+    def job(self, kind, job_id):
+        index = int(job_id.rsplit('-', 1)[1])
+        return self._answer(kind, self.submitted[index][1])
+
     def wait(self, kind, job_id, poll_seconds=0, on_progress=None, should_stop=None):
         if should_stop:
             should_stop()
         body = next(b for k, b in self.submitted if k == kind)
+        return self._answer(kind, body)
+
+    def _answer(self, kind, body):
         items = []
         for it in body['items']:
             if kind == 'link':
@@ -159,3 +171,34 @@ def test_the_server_hint_names_the_missing_setting(monkeypatch):
     monkeypatch.setattr('papermeister.preferences.get_pref',
                         lambda k, d=None: {'ocr_backend': 'wrapper', 'ocr_pod_url': 'http://x'}.get(k, d))
     assert fp.server_hint() == ''
+
+
+@pytest.mark.unit
+def test_a_job_left_on_the_server_by_a_closed_app_is_collected_later(paper):
+    """Closing the app mid-run leaves the submitted job finishing on the
+    server. The next start (or the next Process Figures) lands it."""
+    from papermeister import figure_pipeline as fp
+    from papermeister.models import Figure, FigurePanel
+
+    class ClosingClient(FakeClient):
+        def wait(self, kind, job_id, poll_seconds=0, on_progress=None, should_stop=None):
+            raise fp.Cancelled()                 # the app closed while the job was out
+
+    client = ClosingClient()
+    report = fp.process_file(paper, client, lambda k, m: None)
+    assert report.error == 'cancelled' and [k for k, _ in client.submitted] == ['link']
+    assert Figure.get(Figure.paper_file == paper.id).caption == ''
+    # next start: the finished link job lands; nothing is re-asked
+    log = []
+    collected = fp.collect_finished(client, lambda k, m: log.append(m))
+    assert collected.jobs == 1 and collected.link_written == 1 and collected.papers == {paper.paper_id}
+    assert Figure.get(Figure.paper_file == paper.id).caption.startswith('PLATE 2')
+    assert any('collected captions' in m for m in log)
+    # collecting again finds nothing new; then a full run only needs panels
+    assert fp.collect_finished(client).jobs == 0
+    reopened = FakeClient()                      # the app open again, waiting normally
+    reopened.submitted = client.submitted
+    report = fp.process_file(paper, reopened, lambda k, m: None)
+    assert report.error == '' and [k for k, _ in reopened.submitted] == ['link', 'panels']
+    assert FigurePanel.select().where(FigurePanel.figure == Figure.get(Figure.paper_file == paper.id).id).count() == 2
+    assert fp.collect_finished(reopened).jobs == 0

@@ -82,6 +82,7 @@ class MainWindow(EdgeResizer, QMainWindow):
         self._figures_window = None   # progress window (lazy)
         self._figures_cancel = False
         self._recount_task = None     # status counts after Apply, off the UI thread
+        self._collect_task = None     # finished figure jobs left on the server, off the UI thread
         self._cited_works_window = None  # Cited Works browser (lazy)
         self._network_window = None  # citation-network ego view (lazy)
         self._sync_worker = None  # ZoteroSyncWorker
@@ -90,6 +91,7 @@ class MainWindow(EdgeResizer, QMainWindow):
         self._wire_events()
         self._load_initial()
         self._sync_zotero()  # auto-sync on startup, like the old GUI
+        self._collect_figures()  # replies a closed app left on the figure server
 
     # ── Top bar ──────────────────────────────────────────────
 
@@ -913,6 +915,38 @@ class MainWindow(EdgeResizer, QMainWindow):
             out.append((pf.paper_id, pf.id))
         return out
 
+    def _collect_figures(self, then=None):
+        """Land finished link / panels replies this client left on the figure
+        server — closing the app mid-run leaves the job finishing there. Runs
+        off the UI thread; touched papers get their badge re-read."""
+        from papermeister.figure_pipeline import server_hint
+        if server_hint() or (self._collect_task is not None and self._collect_task.isRunning()):
+            if then:
+                then()
+            return
+        from desktop.workers.background import BackgroundTask
+
+        def _do():
+            from papermeister.figure_client import from_preferences
+            from papermeister.figure_pipeline import collect_finished
+            return collect_finished(from_preferences())
+
+        def _done(report):
+            if report.jobs:
+                self.status_bar.set_task(f'Figures: {report.summary()}')
+                for pid in report.papers:
+                    self.paper_list.refresh_row(pid)
+                if self.detail_panel._current_paper_id in report.papers:
+                    self.detail_panel.show_paper(self.detail_panel._current_paper_id)
+            if then:
+                then()
+
+        task = BackgroundTask(_do)
+        task.done.connect(_done)
+        task.failed.connect(lambda _msg: then() if then else None)
+        self._collect_task = task
+        task.start()
+
     def _run_figures(self, targets, scope_label: str):
         from papermeister.figure_pipeline import server_hint
         hint = server_hint()
@@ -941,7 +975,9 @@ class MainWindow(EdgeResizer, QMainWindow):
         self._figures_window.begin(len(targets))
         self._figures_queue.extend(targets)
         self.status_bar.set_task(f'Figures: {len(targets)} paper(s)…')
-        self._drain_figures_queue()
+        # What the server already finished for these papers lands first, so
+        # a paper cut short last time is not re-asked.
+        self._collect_figures(then=self._drain_figures_queue)
 
     def _cancel_figures(self):
         dropped = len(self._figures_queue)
