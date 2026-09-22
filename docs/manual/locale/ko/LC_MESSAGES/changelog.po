@@ -26,7 +26,7 @@ msgstr "변경 이력"
 
 #: ../../changelog.rst:4
 msgid ""
-"Release notes are maintained in ``CHANGELOG.md`` at the repository root, "
+"Release notes are maintained in `CHANGELOG.md` at the repository root, "
 "which is also what the GitHub release pages quote. It is included here "
 "rather than copied, so the two can never drift apart."
 msgstr ""
@@ -114,7 +114,7 @@ msgid ""
 "produced, and the context menu offers what moves the paper on. The "
 "Metadata tab has a PROCESSING card with the same."
 msgstr ""
-"**논문이 파이프라인의 어디에 있는지.** OCR → Info(서지정보) → References → Figures. 목록의 Status 배지는 논문이 진행 중이거나 다음에 돌려야 할 단계를 이름으로 보여주고(`OCR wait`, `INFO rev`, `REF part`, `FIG cap`, … `done`), 커서를 올리면 네 단계와 각 산출물이 나열되며, 우클릭 메뉴는 그 논문을 다음 단계로 보낼 항목을 내놓습니다. Metadata 탭에도 같은 내용의 PROCESSING 카드가 있습니다."
+"**논문이 파이프라인의 어디에 있는지.** OCR → Info(서지정보) → References → Figures. 목록의 Status 배지는 논문이 진행 중이거나 다음에 돌려야 할 단계를 이름으로 보여주고(``OCR wait``, ``INFO rev``, ``REF part``, ``FIG cap``, … ``done``), 커서를 올리면 네 단계와 각 산출물이 나열되며, 우클릭 메뉴는 그 논문을 다음 단계로 보낼 항목을 내놓습니다. Metadata 탭에도 같은 내용의 PROCESSING 카드가 있습니다."
 
 #: ../../../../CHANGELOG.md:47
 msgid ""
@@ -146,7 +146,7 @@ msgid ""
 "window resizes by its edges as before. (`native_title_bar: true` in "
 "preferences gives the OS frame back.)"
 msgstr ""
-"**OS 타이틀바 없음.** 상단 바가 타이틀바입니다: 끌어서 창을 옮기고, 더블클릭으로 최대화하며, 최소화/최대화/닫기 버튼이 오른쪽에 있습니다. 버전은 이름 옆에 표시됩니다. 창 크기는 전처럼 가장자리에서 조절합니다. (설정에 `native_title_bar: true`를 두면 OS 프레임으로 돌아갑니다.)"
+"**OS 타이틀바 없음.** 상단 바가 타이틀바입니다: 끌어서 창을 옮기고, 더블클릭으로 최대화하며, 최소화/최대화/닫기 버튼이 오른쪽에 있습니다. 버전은 이름 옆에 표시됩니다. 창 크기는 전처럼 가장자리에서 조절합니다. (설정에 ``native_title_bar: true``\ 를 두면 OS 프레임으로 돌아갑니다.)"
 
 #: ../../../../CHANGELOG.md:59
 msgid ""
