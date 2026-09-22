@@ -295,6 +295,19 @@ class _LazyPdfView(QScrollArea):
         self._rendered[idx] = True
 
 
+class _ClickLabel(QLabel):
+    """A label that reports a click — the read-only side of a biblio row,
+    so choosing "keep the current value" is a click on the value, not a hunt
+    for the radio."""
+
+    clicked = pyqtSignal()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
+
+
 class PdfTab(QWidget):
     """The PDF view with its controls: page navigation and zoom."""
 
@@ -927,74 +940,50 @@ class DetailPanel(QWidget):
         editable: bool,
         css_class: str,
     ) -> QWidget:
-        """Build one cell: [RadioButton] [value widget] [× clear button].
+        """Build one cell: [radio] [value widget] [× clear button], one row.
 
-        Paper side (radio_id=0): read-only QLabel.
-        Biblio side (radio_id=1): editable QLineEdit / QPlainTextEdit + × button.
+        The radio sits in the cell's top-left corner and takes only its own
+        width; the value gets the rest. Paper side (radio_id=0): read-only
+        QLabel. Biblio side (radio_id=1): editable QLineEdit / QPlainTextEdit
+        with a × button in the top-right corner. Clicking the read-only value
+        picks that side too.
         """
         cell = QWidget()
         _TEXTAREA_FIELDS = {'title', 'authors', 'journal'}
         use_textarea = field_key in _TEXTAREA_FIELDS
 
-        if use_textarea:
-            # Vertical: radio + × on top, text area below
-            outer = QVBoxLayout(cell)
-            outer.setContentsMargins(0, 0, 0, 0)
-            outer.setSpacing(SPACING['xs'])
+        row_lay = QHBoxLayout(cell)
+        row_lay.setContentsMargins(0, 0, 0, 0)
+        row_lay.setSpacing(SPACING['xs'])
 
-            radio_row = QHBoxLayout()
-            radio_row.setContentsMargins(0, 0, 0, 0)
-            radio = QRadioButton()
-            group.addButton(radio, radio_id)
-            radio_row.addWidget(radio)
-            radio_row.addStretch(1)
+        radio = QRadioButton()
+        radio.setToolTip('Use this value')
+        group.addButton(radio, radio_id)
+        row_lay.addWidget(radio, 0, Qt.AlignmentFlag.AlignTop)
 
-            if editable:
-                clear_btn = self._make_clear_button()
-                radio_row.addWidget(clear_btn)
-
-            outer.addLayout(radio_row)
-
-            if editable:
+        if editable:
+            if use_textarea:
                 edit = QPlainTextEdit()
                 edit.setPlainText(value)
                 line_count = max(value.count('\n') + 1, 2)
                 edit.setFixedHeight(line_count * 20 + 12)
-                edit.setProperty('class', css_class)
-                self._field_edits[field_key] = edit
-                clear_btn.clicked.connect(lambda: edit.setPlainText(''))
-                outer.addWidget(edit)
+                clear = lambda e=edit: e.setPlainText('')  # noqa: E731
             else:
-                lbl = QLabel(value or '(empty)')
-                lbl.setWordWrap(True)
-                lbl.setProperty('class', css_class)
-                outer.addWidget(lbl)
-        else:
-            # Single row: [radio] [value] [×]
-            row_lay = QHBoxLayout(cell)
-            row_lay.setContentsMargins(0, 0, 0, 0)
-            row_lay.setSpacing(SPACING['xs'])
-
-            radio = QRadioButton()
-            group.addButton(radio, radio_id)
-            row_lay.addWidget(radio)
-
-            if editable:
                 edit = QLineEdit(value)
-                edit.setProperty('class', css_class)
-                self._field_edits[field_key] = edit
-                row_lay.addWidget(edit, 1)
-                clear_btn = self._make_clear_button()
-                clear_btn.clicked.connect(lambda: edit.clear())
-                row_lay.addWidget(clear_btn)
-            else:
-                lbl = QLabel(value or '(empty)')
-                lbl.setWordWrap(True)
-                lbl.setProperty('class', css_class)
-                lbl.setSizePolicy(
-                    QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred,
-                )
-                row_lay.addWidget(lbl, 1)
+                clear = lambda e=edit: e.clear()  # noqa: E731
+            edit.setProperty('class', css_class)
+            self._field_edits[field_key] = edit
+            row_lay.addWidget(edit, 1)
+            clear_btn = self._make_clear_button()
+            clear_btn.clicked.connect(clear)
+            row_lay.addWidget(clear_btn, 0, Qt.AlignmentFlag.AlignTop)
+        else:
+            lbl = _ClickLabel(value or '(empty)')
+            lbl.setWordWrap(True)
+            lbl.setProperty('class', css_class)
+            lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            lbl.clicked.connect(lambda r=radio: r.setChecked(True))
+            row_lay.addWidget(lbl, 1)
 
         return cell
 
