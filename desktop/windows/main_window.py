@@ -1686,8 +1686,10 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         self.source_nav.refresh()
-        if changed:
-            self.paper_list.refresh_row(paper_id)
+        # The row's status pill moves (review → done) even when no field
+        # changed — the biblio is marked applied either way — so the row is
+        # re-read every time, not only after a change.
+        self.paper_list.refresh_row(paper_id)
         self.status_bar.set_task(
             f'Applied paper #{paper_id} ({action})' if changed else f'No changes for paper #{paper_id}'
         )
