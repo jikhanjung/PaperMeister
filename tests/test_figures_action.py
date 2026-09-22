@@ -42,7 +42,7 @@ def test_process_figures_is_offered_for_a_processed_paper(paper_list, monkeypatc
     monkeypatch.setattr('papermeister.figure_pipeline.server_hint', lambda: '')
     captured = _menu_actions(monkeypatch, mod)
     widget.contextMenuEvent(_event_at(widget, item))
-    figs = [a for a in captured['actions'] if a[0] == 'Process Figures']
+    figs = [a for a in captured['actions'] if a[0].startswith('Process Figures')]
     assert figs and figs[0][1] is True
 
 
@@ -52,7 +52,7 @@ def test_process_figures_is_disabled_with_the_reason_when_there_is_no_server(pap
     monkeypatch.setattr('papermeister.figure_pipeline.server_hint', lambda: 'needs the wrapper server')
     captured = _menu_actions(monkeypatch, mod)
     widget.contextMenuEvent(_event_at(widget, item))
-    figs = [a for a in captured['actions'] if a[0] == 'Process Figures']
+    figs = [a for a in captured['actions'] if a[0].startswith('Process Figures')]
     assert figs and figs[0][1] is False and 'wrapper' in figs[0][2]
 
 
@@ -63,7 +63,7 @@ def test_pending_paper_has_no_figures_action(paper_list, monkeypatch):
     monkeypatch.setattr('papermeister.figure_pipeline.server_hint', lambda: '')
     captured = _menu_actions(monkeypatch, mod)
     widget.contextMenuEvent(_event_at(widget, item))
-    assert all(a[0] != 'Process Figures' for a in captured['actions'])
+    assert all(not a[0].startswith('Process Figures') for a in captured['actions'])
 
 
 @pytest.mark.ui
@@ -97,3 +97,29 @@ def test_cancel_drops_the_queue_and_says_so(qapp):
     w.mark_cancelling(4)
     w.finish()
     assert '4 paper(s) dropped' in w.log.toPlainText() and w.current_label.text() == 'Cancelled'
+
+
+@pytest.mark.ui
+def test_the_menu_follows_the_stages(paper_list, monkeypatch):
+    """Each stage offers what moves it on; the Figures label names what is next."""
+    from desktop.services.paper_service import Stages
+    from desktop.views.paper_list import ROLE_STAGES
+    widget, item, mod = paper_list
+    monkeypatch.setattr('papermeister.figure_pipeline.server_hint', lambda: '')
+
+    def labels(stages):
+        item.setData(0, ROLE_STAGES, stages)
+        captured = _menu_actions(monkeypatch, mod)
+        widget.contextMenuEvent(_event_at(widget, item))
+        return [a[0] for a in captured['actions']]
+
+    fresh = labels(Stages(ocr='done'))
+    assert fresh[:3] == ['Extract Bibliography', 'Extract References', 'Process Figures (assemble → captions → panels)']
+    assert 'Open PDF' in fresh and 'Show in citation network' in fresh
+    mid = labels(Stages(ocr='done', biblio='review', refs='partial', figs='linked'))
+    assert mid[:3] == ['Review Bibliography (Metadata tab)', 'Retry References', 'Process Figures (panels)']
+    finished = labels(Stages(ocr='done', biblio='done', refs='done', figs='split'))
+    assert finished[:3] == ['Re-extract Bibliography', 'Re-extract References', 'Process Figures (re-check)']
+    # before OCR, only OCR
+    item.setText(0, 'failed')
+    assert labels(Stages(ocr='failed')) == ['Retry OCR', 'Show in citation network']

@@ -44,6 +44,16 @@ def _html_escape(text: str) -> str:
     return (text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
 
 
+#: The pipeline card's one-word state per stage, and its colour (the same
+#: reading as the list's Stages column).
+_STAGE_WORD = {'none': 'not run', 'pending': 'pending', 'failed': 'failed', 'done': 'done',
+               'extracted': 'extracted', 'review': 'needs review', 'partial': 'partial',
+               'assembled': 'assembled', 'linked': 'captioned', 'split': 'split'}
+_STAGE_TEXT_COLOUR = {'done': '#4ade80', 'split': '#4ade80', 'linked': '#60a5fa', 'assembled': '#60a5fa',
+                      'extracted': '#60a5fa', 'review': '#fbbf24', 'partial': '#fbbf24',
+                      'pending': '#a0a5b4', 'failed': '#f87171', 'none': '#6b7080'}
+
+
 def _field_label(text: str) -> QLabel:
     lbl = QLabel(text)
     lbl.setProperty('class', 'FieldLabel')
@@ -667,6 +677,7 @@ class DetailPanel(QWidget):
         layout.setSpacing(SPACING['md'])
 
         layout.addWidget(self._build_metadata_card(d))
+        layout.addWidget(self._build_pipeline_card(d))
         layout.addWidget(self._build_file_card(d))
 
         # Biblio comparison section (merged from former Biblio tab)
@@ -709,6 +720,33 @@ class DetailPanel(QWidget):
         if d.collections:
             paths = '\n'.join(path for _, path in d.collections)
             add_row(next_row, 'Collection', paths)
+        layout.addLayout(grid)
+        return frame
+
+    def _build_pipeline_card(self, d) -> QFrame:
+        """Where this paper is in the pipeline: OCR → Bibliography →
+        References → Figures, each with its state and what it produced."""
+        from desktop.services.paper_service import STAGE_KEYS, STAGE_NAMES, load_stages
+        frame, layout = _card('PROCESSING')
+        try:
+            stages = load_stages(d.paper_id)
+        except Exception:
+            stages = None
+        if stages is None:
+            layout.addWidget(_field_value('—'))
+            return frame
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(SPACING['lg'])
+        grid.setVerticalSpacing(SPACING['sm'])
+        grid.setColumnStretch(2, 1)
+        for r, key in enumerate(STAGE_KEYS):
+            state = stages.state(key)
+            grid.addWidget(_field_label(STAGE_NAMES[key]), r, 0, Qt.AlignmentFlag.AlignTop)
+            pill = QLabel(_STAGE_WORD.get(state, state))
+            pill.setProperty('class', 'StagePill')
+            pill.setStyleSheet(f"color: {_STAGE_TEXT_COLOUR.get(state, '#9aa0aa')}; font-weight: 600;")
+            grid.addWidget(pill, r, 1, Qt.AlignmentFlag.AlignTop)
+            grid.addWidget(_field_value(stages.detail.get(key, '')), r, 2)
         layout.addLayout(grid)
         return frame
 

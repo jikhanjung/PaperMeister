@@ -65,6 +65,11 @@ def test_batched_rows_match_the_single_row_path(library):
     assert by_title['Done paper'].file_id is not None       # the PDF, not the JSON sibling
     lib = {r.paper_id: r for r in ps.list_by_library('all')}
     assert {pid: lib[pid] for pid in ids} == rows
+    # the stages read the same way batched and single
+    st = by_title['Done paper'].stages
+    assert (st.ocr, st.biblio, st.refs, st.figs) == ('done', 'done', 'none', 'none')
+    assert by_title['Review paper'].stages.biblio == 'review' and by_title['Failed'].stages.ocr == 'failed'
+    assert 'Bibliography: applied' in st.tooltip()
 
 
 @pytest.mark.unit

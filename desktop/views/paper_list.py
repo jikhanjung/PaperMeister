@@ -13,7 +13,35 @@ from PyQt6.QtWidgets import (
 from desktop.services import paper_service
 from desktop.theme.tokens import FONT, RADIUS
 
-COLUMNS = ['Status', 'Authors', 'Year', 'Title']
+COLUMNS = ['Status', 'Stages', 'Authors', 'Year', 'Title']
+#: Column indexes, so a column added in the middle does not silently shift
+#: every literal below.
+COL_STATUS, COL_STAGES, COL_AUTHORS, COL_YEAR, COL_TITLE = range(5)
+#: Item data roles on column 0.
+ROLE_PAPER_ID = Qt.ItemDataRole.UserRole
+ROLE_FOLDER_ID = Qt.ItemDataRole.UserRole + 1
+ROLE_FILE_ID = Qt.ItemDataRole.UserRole + 2
+ROLE_STANDALONE = Qt.ItemDataRole.UserRole + 3
+ROLE_STAGES = Qt.ItemDataRole.UserRole + 4      # a paper_service.Stages
+
+
+#: The pipeline after the PDF, one mini-badge each: label and, per state,
+#: the colour it is drawn in. States not listed are drawn muted (not run).
+_STAGE_BADGES = (
+    ('ocr', 'OCR'), ('biblio', 'BIB'), ('refs', 'REF'), ('figs', 'FIG'),
+)
+_STAGE_COLOURS: dict[str, QColor] = {
+    'done':      QColor(74, 222, 128),    # green: finished
+    'split':     QColor(74, 222, 128),
+    'linked':    QColor(96, 165, 250),    # blue: well along
+    'assembled': QColor(96, 165, 250),
+    'extracted': QColor(96, 165, 250),
+    'review':    QColor(251, 191, 36),    # amber: a person's turn
+    'partial':   QColor(251, 191, 36),
+    'pending':   QColor(160, 165, 180),   # grey: waiting
+    'failed':    QColor(248, 113, 113),   # red
+}
+_STAGE_MUTED = QColor(90, 95, 110)
 
 
 _STATUS_STYLES: dict[str, tuple[QColor, QColor, str]] = {
@@ -26,6 +54,73 @@ _STATUS_STYLES: dict[str, tuple[QColor, QColor, str]] = {
     'skipped':   (QColor(107, 112, 128, 30), QColor(130, 135, 150), 'skip'),
     'none':      (QColor(43, 47, 61, 0),     QColor(107, 112, 128), '—'),
 }
+
+
+#: How far along each state is, for sorting the Stages column.
+_STAGE_RANK = {'none': 0, 'pending': 1, 'failed': 1, 'partial': 2, 'assembled': 2, 'extracted': 2,
+               'review': 3, 'linked': 3, 'done': 4, 'split': 4}
+
+
+def _stages_sort_key(stages) -> str:
+    """The cell's text: invisible (the delegate paints), but what a header
+    click sorts by — furthest-along papers together."""
+    if stages is None:
+        return '0000'
+    return ''.join(str(_STAGE_RANK.get(stages.state(k), 0)) for k, _ in _STAGE_BADGES)
+
+
+def _set_stages(item, stages) -> None:
+    item.setData(0, ROLE_STAGES, stages)
+    item.setData(COL_STAGES, ROLE_STAGES, stages)
+    if stages is not None:
+        item.setToolTip(COL_STAGES, stages.tooltip())
+
+
+class StagesDelegate(QStyledItemDelegate):
+    """Four mini-badges — OCR BIB REF FIG — coloured by each stage's state.
+    The cell's data is the row's `Stages`; its tooltip says the details."""
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index):
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        opt.text = ''
+        widget = opt.widget
+        from PyQt6.QtWidgets import QApplication, QStyle
+        style = widget.style() if widget is not None else QApplication.style()
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, widget)
+
+        stages = index.data(ROLE_STAGES)
+        if stages is None:
+            return
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        font = QFont(painter.font())
+        font.setPointSize(FONT['size.xs'] - 1)
+        font.setWeight(QFont.Weight.DemiBold)
+        painter.setFont(font)
+        metrics = painter.fontMetrics()
+        rect = option.rect
+        x = rect.x() + 4
+        h = metrics.height() + 2
+        y = rect.y() + (rect.height() - h) // 2
+        for key, label in _STAGE_BADGES:
+            state = stages.state(key)
+            colour = _STAGE_COLOURS.get(state, _STAGE_MUTED)
+            w = metrics.horizontalAdvance(label) + 8
+            badge = QRectF(x, y, w, h)
+            bg = QColor(colour)
+            bg.setAlpha(0 if state == 'none' else 40)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(bg))
+            painter.drawRoundedRect(badge, 3, 3)
+            painter.setPen(QPen(colour))
+            painter.drawText(badge, int(Qt.AlignmentFlag.AlignCenter), label)
+            x += w + 3
+        painter.restore()
+
+    def sizeHint(self, option, index):
+        hint = super().sizeHint(option, index)
+        return QSize(max(hint.width(), 128), max(hint.height(), 26))
 
 
 class StatusPillDelegate(QStyledItemDelegate):
@@ -111,20 +206,22 @@ class PaperListView(QTreeWidget):
 
         # All columns user-resizable (Interactive); Title stretches to fill.
         header = self.header()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)  # Status
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)  # Authors
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)  # Year
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)      # Title (fills)
+        for col in (COL_STATUS, COL_STAGES, COL_AUTHORS, COL_YEAR):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(COL_TITLE, QHeaderView.ResizeMode.Stretch)      # Title (fills)
         header.setStretchLastSection(False)
-        self.setColumnWidth(0, 60)   # Status (small)
-        self.setColumnWidth(1, 140)  # Authors (citation style, compact)
-        self.setColumnWidth(2, 68)   # Year
+        self.setColumnWidth(COL_STATUS, 60)    # Status (small)
+        self.setColumnWidth(COL_STAGES, 132)   # OCR BIB REF FIG
+        self.setColumnWidth(COL_AUTHORS, 140)  # Authors (citation style, compact)
+        self.setColumnWidth(COL_YEAR, 68)      # Year
 
         self.setSortingEnabled(True)
-        self.sortByColumn(3, Qt.SortOrder.AscendingOrder)  # default: Title A-Z
+        self.sortByColumn(COL_TITLE, Qt.SortOrder.AscendingOrder)  # default: Title A-Z
 
         self._pill_delegate = StatusPillDelegate(self)
-        self.setItemDelegateForColumn(0, self._pill_delegate)
+        self.setItemDelegateForColumn(COL_STATUS, self._pill_delegate)
+        self._stages_delegate = StagesDelegate(self)
+        self.setItemDelegateForColumn(COL_STAGES, self._stages_delegate)
 
         self.currentItemChanged.connect(self._on_selection_changed)
         self.itemPressed.connect(self._on_item_pressed)
@@ -161,7 +258,7 @@ class PaperListView(QTreeWidget):
             return
         if not rows:
             self.clear()
-            item = QTreeWidgetItem(['', '', '', f'No results for "{query}"'])
+            item = QTreeWidgetItem(['', '', '', '', f'No results for "{query}"'])
             item.setFlags(Qt.ItemFlag.NoItemFlags)
             self.addTopLevelItem(item)
             return
@@ -220,15 +317,17 @@ class PaperListView(QTreeWidget):
             item = self.topLevelItem(i)
             if item.data(0, Qt.ItemDataRole.UserRole) == paper_id:
                 item.setText(0, row.status if row.status != 'none' else 'none')
-                item.setText(1, row.authors or '—')
-                item.setText(2, str(row.year) if row.year is not None else '—')
-                item.setText(3, row.title)
+                item.setText(COL_STAGES, _stages_sort_key(row.stages))
+                _set_stages(item, row.stages)
+                item.setText(COL_AUTHORS, row.authors or '—')
+                item.setText(COL_YEAR, str(row.year) if row.year is not None else '—')
+                item.setText(COL_TITLE, row.title)
                 if row.file_id is not None:
                     item.setData(0, Qt.ItemDataRole.UserRole + 2, row.file_id)
                 item.setData(0, Qt.ItemDataRole.UserRole + 3, row.is_standalone)
-                font = item.font(3)
+                font = item.font(COL_TITLE)
                 font.setItalic(bool(row.is_stub))
-                item.setFont(3, font)
+                item.setFont(COL_TITLE, font)
                 break
 
     def visible_paper_ids(self) -> list[int]:
@@ -254,20 +353,22 @@ class PaperListView(QTreeWidget):
             status_cell = status_override or (row.status if row.status != 'none' else 'none')
             item = QTreeWidgetItem([
                 status_cell,
+                _stages_sort_key(row.stages),
                 row.authors or '—',
                 year,
                 title,
             ])
-            item.setData(0, Qt.ItemDataRole.UserRole, row.paper_id)
+            item.setData(0, ROLE_PAPER_ID, row.paper_id)
             if row.folder_id is not None:
-                item.setData(0, Qt.ItemDataRole.UserRole + 1, row.folder_id)
+                item.setData(0, ROLE_FOLDER_ID, row.folder_id)
             if row.file_id is not None:
-                item.setData(0, Qt.ItemDataRole.UserRole + 2, row.file_id)
-            item.setData(0, Qt.ItemDataRole.UserRole + 3, row.is_standalone)
+                item.setData(0, ROLE_FILE_ID, row.file_id)
+            item.setData(0, ROLE_STANDALONE, row.is_standalone)
+            _set_stages(item, row.stages)
             if row.is_stub:
-                font = item.font(3)
+                font = item.font(COL_TITLE)
                 font.setItalic(True)
-                item.setFont(3, font)
+                item.setFont(COL_TITLE, font)
             # Search results carry the matching passage — show it on hover.
             snippet = getattr(row, 'snippet', '')
             if snippet:
@@ -276,7 +377,7 @@ class PaperListView(QTreeWidget):
             self.addTopLevelItem(item)
 
     def _show_error(self, msg: str):
-        item = QTreeWidgetItem(['', '', '', msg])
+        item = QTreeWidgetItem(['', '', '', '', msg])
         item.setFlags(Qt.ItemFlag.NoItemFlags)
         self.clear()
         self.addTopLevelItem(item)
@@ -292,92 +393,94 @@ class PaperListView(QTreeWidget):
                 self.folder_reveal_requested.emit(folder_id)
 
     def contextMenuEvent(self, event):
+        """The menu follows the paper's place in the pipeline.
+
+        Each stage offers what moves it on — or nothing, when it is done and
+        the next stage is the one to run. OCR first: everything after it
+        reads the OCR'd text, so a pending or failed PDF only offers OCR.
+        """
         item = self.itemAt(event.pos())
         if item is None:
             return
-        paper_id = item.data(0, Qt.ItemDataRole.UserRole)
-        file_id = item.data(0, Qt.ItemDataRole.UserRole + 2)
-        is_standalone = bool(item.data(0, Qt.ItemDataRole.UserRole + 3))
-        status = item.text(0)  # column 0 DisplayRole: pending/processed/failed/review/done/none
+        paper_id = item.data(0, ROLE_PAPER_ID)
+        file_id = item.data(0, ROLE_FILE_ID)
+        is_standalone = bool(item.data(0, ROLE_STANDALONE))
+        status = item.text(COL_STATUS)  # pending/processed/failed/review/done/none
+        stages = item.data(0, ROLE_STAGES)
+        ocr = stages.ocr if stages else {'processed': 'done', 'review': 'done', 'done': 'done'}.get(status, status)
+        biblio = stages.biblio if stages else {'review': 'review', 'done': 'done'}.get(status, 'none')
+        refs = stages.refs if stages else 'none'
+        figs = stages.figs if stages else 'none'
 
         from papermeister.preferences import get_pref
         manual_biblio_enabled = bool(get_pref('manual_biblio_extract', True))
 
+        def emit(action):
+            return lambda: self.context_action.emit(action, paper_id, file_id or 0)
+
         menu = QMenu(self)
 
-        # OCR action — pending/failed always get it; standalone PDFs also get
-        # it in processed/done/review states so the user can re-trigger OCR
-        # (loads from cache) and the auto-promote hook creates a parent item.
-        if status == 'pending':
-            menu.addAction(
-                'Process OCR',
-                lambda: self.context_action.emit('process', paper_id, file_id or 0),
-            )
-        elif status == 'failed':
-            menu.addAction(
-                'Retry OCR',
-                lambda: self.context_action.emit('retry', paper_id, file_id or 0),
-            )
-        elif is_standalone and file_id:
-            menu.addAction(
-                'Process OCR (re-run + create parent item)',
-                lambda: self.context_action.emit('process', paper_id, file_id or 0),
-            )
+        # ── 1. OCR ──
+        if ocr == 'pending':
+            menu.addAction('Process OCR', emit('process'))
+        elif ocr == 'failed':
+            menu.addAction('Retry OCR', emit('retry'))
+        elif ocr == 'done' and is_standalone and file_id:
+            # Re-run from the cache: the auto-promote hook creates the parent item.
+            menu.addAction('Process OCR (re-run + create parent item)', emit('process'))
+        if ocr != 'done':
+            self._add_common(menu, emit)
+            if not menu.isEmpty():
+                menu.exec(event.globalPos())
+            return
 
-        # Status-specific other actions.
-        if status == 'processed':
-            extract_act = menu.addAction(
-                'Extract Biblio',
-                lambda: self.context_action.emit('extract_biblio', paper_id, file_id or 0),
-            )
+        # ── 2. Bibliography ──
+        if biblio == 'none':
+            act = menu.addAction('Extract Bibliography', emit('extract_biblio'))
             if not manual_biblio_enabled:
-                extract_act.setEnabled(False)
-                extract_act.setToolTip(
-                    'Disabled: turn on "Enable manual biblio extraction" in Preferences → Biblio'
-                )
-            menu.addAction(
-                'Extract References',
-                lambda: self.context_action.emit('extract_references', paper_id, file_id or 0),
-            )
-            menu.addAction('Open PDF', lambda: self.context_action.emit('open_pdf', paper_id, file_id or 0))
-        elif status == 'review':
-            menu.addAction('Review Biblio', lambda: self.context_action.emit('review_biblio', paper_id, 0))
-            menu.addAction(
-                'Extract References',
-                lambda: self.context_action.emit('extract_references', paper_id, file_id or 0),
-            )
-            menu.addAction('Open PDF', lambda: self.context_action.emit('open_pdf', paper_id, file_id or 0))
-        elif status == 'done':
-            menu.addAction(
-                'Extract References',
-                lambda: self.context_action.emit('extract_references', paper_id, file_id or 0),
-            )
-            menu.addAction('Open PDF', lambda: self.context_action.emit('open_pdf', paper_id, file_id or 0))
-        # pending/failed/none have no further actions beyond the OCR action above.
+                act.setEnabled(False)
+                act.setToolTip('Disabled: turn on "Enable manual biblio extraction" in Preferences → Biblio')
+        elif biblio in ('review', 'extracted'):
+            menu.addAction('Review Bibliography (Metadata tab)', emit('review_biblio'))
+        else:
+            menu.addAction('Re-extract Bibliography', emit('extract_biblio')).setEnabled(manual_biblio_enabled)
 
-        # Figures (P16): assemble → re-judge → captions → panels on the wrapper
-        # server. Only a processed PDF has the OCR layout this starts from.
-        if status in ('processed', 'review', 'done') and file_id:
+        # ── 3. References ──
+        if refs == 'none':
+            menu.addAction('Extract References', emit('extract_references'))
+        elif refs in ('partial', 'failed'):
+            menu.addAction('Retry References', emit('extract_references'))
+        else:
+            menu.addAction('Re-extract References', emit('extract_references'))
+
+        # ── 4. Figures (P16): assemble → re-judge → captions → panels on the
+        # wrapper server; the pipeline skips what is done, so one action
+        # serves every state and its label says what is next.
+        if file_id:
             from papermeister.figure_pipeline import server_hint
-            fig_act = menu.addAction(
-                'Process Figures',
-                lambda: self.context_action.emit('process_figures', paper_id, file_id or 0),
-            )
+            label = {'none': 'Process Figures (assemble → captions → panels)',
+                     'assembled': 'Process Figures (captions → panels)',
+                     'linked': 'Process Figures (panels)',
+                     'split': 'Process Figures (re-check)'}[figs]
+            fig_act = menu.addAction(label, emit('process_figures'))
             hint = server_hint()
             if hint:
                 fig_act.setEnabled(False)
                 fig_act.setToolTip(hint)
 
-        # Citation network — available for any paper (independent of OCR status).
-        if not menu.isEmpty():
-            menu.addSeparator()
-        menu.addAction(
-            'Show in citation network',
-            lambda: self.context_action.emit('network', paper_id, file_id or 0),
-        )
+        menu.addSeparator()
+        menu.addAction('Open PDF', emit('open_pdf'))
+        self._add_common(menu, emit)
 
         if not menu.isEmpty():
             menu.exec(event.globalPos())
+
+    @staticmethod
+    def _add_common(menu: QMenu, emit) -> None:
+        """What every paper offers, whatever its stage."""
+        if not menu.isEmpty():
+            menu.addSeparator()
+        menu.addAction('Show in citation network', emit('network'))
 
     def _on_selection_changed(self, current, _prev):
         if current is None:

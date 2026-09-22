@@ -350,6 +350,7 @@
 - ✅ (09-22) SourceNav `refresh()`가 트리 모양을 보존 — 펼침/접힘(폴더 id 기준)과 선택 폴더를 저장했다가 복원(`_tree_shape`/`_restore_shape`). Apply Biblio 뒤 트리가 초기화되던 문제. 선택 폴더는 `QTreeWidget#SourceNavTree::item:selected`로 accent 배경·볼드
 - ✅ (09-22) **"QThread: Destroyed while thread '' is still running"** 원인: `QTabWidget.clear()`는 페이지를 지우지 않아 논문을 볼 때마다 Text(OcrView)·Figures(FiguresTab) 페이지가 숨은 자식으로 남고, 각각의 렌더 스레드가 `queue.get()`에 막힌 채 살아 있다가 종료 때 Qt가 위젯 자식으로 파괴 → 경고(+스레드 누수). 고침: 워커를 위젯 자식으로 두지 않고(Python 소유) `DetailPanel._dispose_tabs()`가 논문 전환 때 워커 정지 + 페이지 `deleteLater()`, 창 닫을 때 `detail_panel.dispose()`
 - ✅ (09-22, [111](./devlog/20260922_111_Desktop_Apply_Cycle_Latency.md)) Apply 사이클 지연: 목록 행마다 3–4 쿼리(N+1) → `_RowContext`로 목록당 3쿼리(500행 457→71 ms); Apply 뒤 UI 스레드 카운팅 330→20 ms(status 인덱스 2개·SQL COUNT DISTINCT·EXISTS·`_recount_library`가 백그라운드에서 세고 `SourceNav.refresh(folders)`)
+- ✅ (09-22, [112](./devlog/20260922_112_Pipeline_Stages_Badges_And_Menu.md)) **파이프라인 4단계(OCR→Bibliography→References→Figures)를 상태로 정리**: 목록에 `OCR BIB REF FIG` 미니 배지 열(`Stages`, 진행도 정렬·툴팁), 우클릭 메뉴가 단계 상태를 따라감(OCR 전엔 OCR만; Extract/Review/Re-extract; Process Figures 라벨이 다음 할 일), Metadata 탭 PROCESSING 카드
 ### 즉시 착수 가능 (Phase 4 hookup)
 - [ ] **`extracted` 잔존분 재시도** — 실측 **10편**(2026-07-29). LLM은 끝났는데 apply를 못 하고 멈춘 것들. 해당 폴더를 다시 Process 한 번 돌리면 정리된다
 - [ ] **모드 라벨 status bar 영구 표시 여부 결정** — 지금은 Process 시작 시 한 번만 출력. 항상 표시 vs 공간 절약 트레이드오프

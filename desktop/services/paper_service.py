@@ -3,11 +3,12 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from peewee import JOIN
+from peewee import JOIN, fn
 
 from papermeister.models import (
     Author,
     CitedWork,
+    Figure,
     Folder,
     Paper,
     PaperBiblio,
@@ -37,6 +38,74 @@ class PaperRow:
     # Search-only: the best matching passage as HTML (matched terms bolded).
     # Empty for normal folder/library listings. Shown as a row tooltip.
     snippet: str = ''
+    # The pipeline after OCR, one state per stage (see `Stages`): what the
+    # list's Stages column draws and its tooltip explains.
+    stages: 'Stages | None' = None
+
+
+#: Stage states, in order of progress. `STAGE_KEYS` is the column's order.
+STAGE_KEYS = ('ocr', 'biblio', 'refs', 'figs')
+STAGE_NAMES = {'ocr': 'OCR', 'biblio': 'Bibliography', 'refs': 'References', 'figs': 'Figures'}
+
+
+@dataclass(frozen=True)
+class Stages:
+    """Where a paper is in the pipeline, per stage.
+
+    ocr:    none | pending | failed | done
+    biblio: none | extracted (an extraction exists, not applied) | review | done
+    refs:   none | partial (attempted, not checked) | failed (attempts exhausted) | done
+    figs:   none | assembled | linked | split
+    """
+    ocr: str = 'none'
+    biblio: str = 'none'
+    refs: str = 'none'
+    figs: str = 'none'
+    detail: dict = field(default_factory=dict)      # stage -> one line for the tooltip / the card
+
+    def state(self, key: str) -> str:
+        return getattr(self, key)
+
+    def tooltip(self) -> str:
+        return '\n'.join(f'{STAGE_NAMES[k]}: {self.detail.get(k) or self.state(k)}' for k in STAGE_KEYS)
+
+
+def _ocr_stage(file_status: str) -> str:
+    return {'processed': 'done', 'done': 'done', 'review': 'done', 'pending': 'pending',
+            'failed': 'failed'}.get(file_status, 'none')
+
+
+def _biblio_stage(statuses: set[str]) -> tuple[str, str]:
+    if statuses & {'applied', 'auto_committed'}:
+        return 'done', 'applied'
+    if 'needs_review' in statuses:
+        return 'review', 'extracted, needs review'
+    if statuses:
+        return 'extracted', 'extracted (' + ', '.join(sorted(statuses)) + ')'
+    return 'none', 'not extracted'
+
+
+def _refs_stage(paper: Paper, n_refs: int, n_held: int) -> tuple[str, str]:
+    from papermeister.references import MAX_REFS_ATTEMPTS
+    if paper.references_checked:
+        if n_refs:
+            return 'done', f'{n_refs} extracted, {n_held} in library'
+        return 'done', 'checked — no references section'
+    if (paper.references_attempts or 0) >= MAX_REFS_ATTEMPTS:
+        return 'failed', f'gave up after {paper.references_attempts} attempts' + (f' ({n_refs} partial)' if n_refs else '')
+    if n_refs or paper.references_attempts:
+        return 'partial', f'{n_refs} extracted so far (partial, attempt {paper.references_attempts})'
+    return 'none', 'not extracted'
+
+
+def _figs_stage(n: int, linked: int, split: int, panels: int) -> tuple[str, str]:
+    if not n:
+        return 'none', 'not assembled'
+    if split:
+        return 'split', f'{n} figures · {linked} captioned · {split} split into {panels} panels'
+    if linked:
+        return 'linked', f'{n} figures · {linked} captioned · no panels yet'
+    return 'assembled', f'{n} figures assembled · no captions yet'
 
 
 def _author_string(paper_id: int) -> str:
@@ -137,6 +206,20 @@ class _RowContext:
         for a in (Author.select(Author.paper, Author.name).where(Author.paper << ids)
                   .order_by(Author.paper, Author.order)):
             self.authors.setdefault(a.paper_id, []).append(a.name)
+        # The stages after biblio, two grouped queries: references (count,
+        # in library) and figures (count, captioned, split, panels).
+        self.refs: dict[int, tuple[int, int]] = {}
+        for r in (Reference.select(Reference.citing_paper, fn.COUNT(Reference.id).alias('n'),
+                                   fn.SUM(Reference.resolved_paper.is_null(False)).alias('held'))
+                  .where(Reference.citing_paper << ids).group_by(Reference.citing_paper).dicts()):
+            self.refs[r['citing_paper']] = (int(r['n'] or 0), int(r['held'] or 0))
+        self.figs: dict[int, tuple[int, int, int, int]] = {}
+        for r in _figure_counts_query(ids).dicts():
+            self.figs[r['paper']] = (int(r['n'] or 0), int(r['linked'] or 0), int(r['split'] or 0), int(r['panels'] or 0))
+
+    def stages(self, paper: Paper, file_status: str) -> Stages:
+        return _stages_from(paper, file_status, self.biblio_statuses(paper),
+                            self.refs.get(paper.id, (0, 0)), self.figs.get(paper.id, (0, 0, 0, 0)))
 
     def primary_file(self, paper: Paper) -> PaperFile | None:
         return _pick_primary(self.files.get(paper.id, []))
@@ -149,6 +232,48 @@ class _RowContext:
 
     def is_stub(self, paper: Paper) -> bool:
         return ((paper.title or '').strip() == '' or paper.year is None) and not self.authors.get(paper.id)
+
+
+def _figure_counts_query(ids):
+    """Per paper: figures (not folded, not placeholders), captioned, split, panels."""
+    from papermeister.figure_store import PAGE
+    from papermeister.models import FigurePanel
+    panels = (FigurePanel.select(FigurePanel.figure, fn.COUNT(FigurePanel.id).alias('k'))
+              .group_by(FigurePanel.figure).alias('pn'))
+    return (Figure.select(Figure.paper, fn.COUNT(Figure.id).alias('n'),
+                          fn.SUM(Figure.link_key != '').alias('linked'),
+                          fn.SUM(Figure.panel_key != '').alias('split'),
+                          fn.COALESCE(fn.SUM(panels.c.k), 0).alias('panels'))
+            .join(panels, JOIN.LEFT_OUTER, on=(panels.c.figure_id == Figure.id))
+            .where((Figure.paper << ids) & (Figure.dismissed == False) & (Figure.assembly != PAGE))  # noqa: E712
+            .group_by(Figure.paper))
+
+
+def _stages_from(paper: Paper, file_status: str, biblio: set[str], refs: tuple[int, int],
+                 figs: tuple[int, int, int, int]) -> Stages:
+    b_state, b_detail = _biblio_stage(biblio)
+    r_state, r_detail = _refs_stage(paper, *refs)
+    f_state, f_detail = _figs_stage(*figs)
+    o_state = _ocr_stage(file_status)
+    return Stages(ocr=o_state, biblio=b_state, refs=r_state, figs=f_state,
+                  detail={'ocr': {'done': 'processed', 'pending': 'pending', 'failed': 'failed'}.get(o_state, 'no PDF'),
+                          'biblio': b_detail, 'refs': r_detail, 'figs': f_detail})
+
+
+def load_stages(paper_id: int) -> Stages | None:
+    """One paper's pipeline stages (the Metadata tab's card; the single-row refresh)."""
+    paper = Paper.get_or_none(Paper.id == paper_id)
+    if paper is None:
+        return None
+    pfile = _primary_file(paper)
+    biblio = {b.status for b in PaperBiblio.select(PaperBiblio.status).where(PaperBiblio.paper == paper)}
+    n_refs = Reference.select().where(Reference.citing_paper == paper).count()
+    n_held = Reference.select().where((Reference.citing_paper == paper)
+                                      & Reference.resolved_paper.is_null(False)).count()
+    figs = (0, 0, 0, 0)
+    for r in _figure_counts_query([paper.id]).dicts():
+        figs = (int(r['n'] or 0), int(r['linked'] or 0), int(r['split'] or 0), int(r['panels'] or 0))
+    return _stages_from(paper, pfile.status if pfile else 'none', biblio, (n_refs, n_held), figs)
 
 
 def _pick_primary(files: list[PaperFile]) -> PaperFile | None:
@@ -207,6 +332,7 @@ def _row_from_paper(paper: Paper, source_name: str, ctx: _RowContext | None = No
         folder_id=paper.folder_id,
         status=file_status,
         is_stub=ctx.is_stub(paper) if ctx else _is_stub(paper),
+        stages=ctx.stages(paper, pfile.status if pfile else 'none') if ctx else load_stages(paper.id),
         is_standalone=is_standalone,
     )
 
