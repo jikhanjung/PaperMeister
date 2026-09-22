@@ -73,3 +73,52 @@ def test_refresh_falls_back_when_the_source_is_gone(nav):
 
     assert widget.tabs.currentIndex() == 0
     assert widget.tabs.tabText(0) == 'My Library'
+
+
+@pytest.fixture
+def nav_with_folders(qapp, monkeypatch):
+    """A Zotero source with a real collection tree (no DB), so expansion and
+    selection have something to survive."""
+    from desktop.views import source_nav as mod
+
+    def folder(fid, name, children=()):
+        return SimpleNamespace(id=fid, name=name, children=list(children))
+
+    src = SimpleNamespace(id=1, source_type='zotero', name='My Library', roots=[
+        folder(10, 'Trilobita', [folder(11, 'Cambrian', [folder(12, 'Öland')]), folder(13, 'Ordovician')]),
+        folder(20, 'Conodonta'),
+    ])
+    monkeypatch.setattr(mod.source_service, 'load_source_tree', lambda: [src])
+    monkeypatch.setattr(mod._StatusPanel, 'populate', lambda self: None)
+    widget = mod.SourceNav()
+    widget.refresh()
+    return widget
+
+
+@pytest.mark.ui
+def test_refresh_keeps_the_folders_open_and_the_one_chosen(nav_with_folders):
+    """Apply Biblio refreshes the tree (counts move). It used to fold every
+    collection back to the default and drop the selection — the user lost
+    where they were, every time."""
+    from PyQt6.QtCore import Qt
+    widget = nav_with_folders
+    tree = widget._trees[0]
+    root = tree.topLevelItem(0)                    # 'My Library'
+    trilobita = root.child(0)
+    cambrian = trilobita.child(0)
+    trilobita.setExpanded(True)
+    cambrian.setExpanded(True)
+    tree.setCurrentItem(cambrian.child(0))          # Öland
+
+    widget.refresh()
+
+    tree = widget._trees[0]
+    root = tree.topLevelItem(0)
+    trilobita, cambrian = root.child(0), root.child(0).child(0)
+    assert root.isExpanded() and trilobita.isExpanded() and cambrian.isExpanded()
+    assert not trilobita.child(1).isExpanded()          # Ordovician: never opened
+    assert tree.currentItem().data(0, Qt.ItemDataRole.UserRole) == ('folder', 12)
+    # a folder the user closed stays closed, even one open by default
+    root.setExpanded(False)
+    widget.refresh()
+    assert not widget._trees[0].topLevelItem(0).isExpanded()

@@ -189,6 +189,13 @@ QTreeView::item:selected, QTreeWidget::item:selected {{
     background-color: {c['bg.selected']};
     color: {c['text.primary']};
 }}
+/* The source tree's chosen folder is the one thing the left panel says;
+   it has to read from across the window, focus or not. */
+QTreeWidget#SourceNavTree::item:selected {{
+    background-color: {c['accent.muted']};
+    color: {c['accent.hover']};
+    font-weight: {FONT['weight.bold']};
+}}
 QTreeView::branch, QTreeWidget::branch {{
     background: transparent;
 }}

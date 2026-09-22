@@ -133,6 +133,7 @@ class SourceNav(QWidget):
 
     def _new_tree(self) -> QTreeWidget:
         t = QTreeWidget()
+        t.setObjectName('SourceNavTree')
         t.setHeaderHidden(True)
         t.setRootIsDecorated(True)
         t.setIndentation(14)
@@ -163,6 +164,11 @@ class SourceNav(QWidget):
         was the sourceless placeholder, the default first tab stands.
         """
         keep = self._tab_sources.get(self.tabs.currentIndex())
+        # What each tree looked like: which folders were open or closed, and
+        # which was selected — a rebuild after Apply must not fold the tree
+        # the user is working in back to its default (2026-09-22).
+        shape = {key: self._tree_shape(self._trees[idx]) for idx, key in self._tab_sources.items()
+                 if idx in self._trees}
 
         self.tabs.blockSignals(True)
         self.tabs.clear()
@@ -190,6 +196,8 @@ class SourceNav(QWidget):
             idx = self.tabs.addTab(tree, tab_label)
             self._trees[idx] = tree
             self._tab_sources[idx] = (src.id, src.source_type)
+            if (src.id, src.source_type) in shape:
+                self._restore_shape(tree, shape[(src.id, src.source_type)])
 
         if keep is not None:
             for idx, key in self._tab_sources.items():
@@ -199,6 +207,57 @@ class SourceNav(QWidget):
 
         self.tabs.blockSignals(False)
         self._status_panel.populate()
+
+    @staticmethod
+    def _tree_shape(tree: QTreeWidget) -> tuple[set, set, object]:
+        """(open keys, closed keys, selected key) of a tree, by item data —
+        ids survive a rebuild, item objects do not."""
+        opened, closed = set(), set()
+
+        def walk(item):
+            for i in range(item.childCount()):
+                child = item.child(i)
+                key = child.data(0, Qt.ItemDataRole.UserRole)
+                if key is not None and child.childCount():
+                    (opened if child.isExpanded() else closed).add(key)
+                walk(child)
+        walk(tree.invisibleRootItem())
+        current = tree.currentItem()
+        return opened, closed, (current.data(0, Qt.ItemDataRole.UserRole) if current else None)
+
+    @staticmethod
+    def _restore_shape(tree: QTreeWidget, shape: tuple[set, set, object]) -> None:
+        opened, closed, current = shape
+        chosen = None
+
+        def walk(item):
+            nonlocal chosen
+            for i in range(item.childCount()):
+                child = item.child(i)
+                key = child.data(0, Qt.ItemDataRole.UserRole)
+                if key in opened:
+                    child.setExpanded(True)
+                elif key in closed:
+                    child.setExpanded(False)
+                if key is not None and key == current:
+                    chosen = child
+                walk(child)
+        walk(tree.invisibleRootItem())
+        if chosen is not None:
+            # Selecting scrolls, and scrolling opens the ancestors — which
+            # would undo a fold the user just made above the chosen folder.
+            parent, hidden = chosen.parent(), False
+            while parent is not None:
+                hidden = hidden or not parent.isExpanded()
+                parent = parent.parent()
+            auto = tree.hasAutoScroll()
+            tree.setAutoScroll(False)
+            tree.blockSignals(True)
+            tree.setCurrentItem(chosen)
+            tree.blockSignals(False)
+            tree.setAutoScroll(auto)
+            if not hidden:
+                tree.scrollToItem(chosen)
 
     # ── Tab context menu ─────────────────────────────────────
 

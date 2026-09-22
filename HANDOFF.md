@@ -347,6 +347,7 @@
     아니면 논문·폴더·전체 우클릭 "Process Figures") · 서버 PDF는 먼저 존재 확인 후 없으면 업로드 · Batches API는 해당 없음
   - ocrserver에 넘길 명세는 P16 §6에 따로 정리돼 있다
 
+- ✅ (09-22) SourceNav `refresh()`가 트리 모양을 보존 — 펼침/접힘(폴더 id 기준)과 선택 폴더를 저장했다가 복원(`_tree_shape`/`_restore_shape`). Apply Biblio 뒤 트리가 초기화되던 문제. 선택 폴더는 `QTreeWidget#SourceNavTree::item:selected`로 accent 배경·볼드
 ### 즉시 착수 가능 (Phase 4 hookup)
 - [ ] **`extracted` 잔존분 재시도** — 실측 **10편**(2026-07-29). LLM은 끝났는데 apply를 못 하고 멈춘 것들. 해당 폴더를 다시 Process 한 번 돌리면 정리된다
 - [ ] **모드 라벨 status bar 영구 표시 여부 결정** — 지금은 Process 시작 시 한 번만 출력. 항상 표시 vs 공간 절약 트레이드오프
