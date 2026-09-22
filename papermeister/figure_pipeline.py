@@ -172,8 +172,10 @@ def _link(pf, pages, digest, client, prompts, notify, r: StageReport, check) -> 
     if not targets.due:
         return
     r.ran = True
-    figure_lane.ensure_workspace(client, pf, figure_link.workspace_payload(pf, pages), lambda m: notify('info', m))
     request = figure_link.link_payload(pf, pages, targets, digest, client.client_id, prompt)
+    figure_lane.ensure_workspace(client, pf, figure_link.workspace_for(pf, pages, request), lambda m: notify('info', m))
+    if request.get('reading_pages'):
+        notify('info', f'link: reading {len(request["reading_pages"])} of {len(pages)} pages')
     job = _run(client, 'link', request, notify, check)
     replies = figure_lane.results_by_key(job)
     check_ = figure_link.LinkCheck()

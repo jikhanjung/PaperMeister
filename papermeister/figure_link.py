@@ -203,20 +203,25 @@ def link_items(paper_file: PaperFile, pages: list[str], targets: LinkTargets, di
 
 def items_from_replies(paper_file: PaperFile, pages: list[str], targets: LinkTargets, digest: str,
                        prompt_version: str, replies: dict) -> list[dict]:
-    """Rebuild a job's request items from its replies, for a job whose split no
-    longer reproduces: the due set moved since submission (a row folded, a
-    row exhausted, a twin's answer copied in), so the same weight now cuts
-    into a different number of items and no key matches. The reply itself
+    """Rebuild a job's request items from its replies, for a job whose keys no
+    longer reproduce: the due set moved since submission (a row folded, a
+    row exhausted, a twin's answer copied in) or the reading set did, so no
+    key matches. The reply itself
     says which figures each item asked about (`figures[].figure_id` and
     `skipped[].figure_id`); those still due are the item's figures, and the
     locked rows go along as context, as on the way out. Items whose reply
     names nothing still due are dropped."""
-    base = f'{paper_file.hash[:12]}@{digest[:12]}@{prompt_version}'
+    # The reply is matched by file and prompt version, not by the request's
+    # digest: a reading-set digest depends on what the paper's other rows
+    # knew at submit time, which a collect in between may have changed. The
+    # text itself is checked where it matters — `validate_link_result` reads
+    # the caption off the current pages.
     due = {str(r.id): r for r in targets.due}
     context = [_figure_item(r, locked=True) for r in targets.context]
     items = []
     for key, reply in replies.items():
-        if key.split('#')[0] != base:
+        head = key.split('#')[0].split('@')
+        if len(head) != 3 or head[0] != paper_file.hash[:12] or head[2] != prompt_version:
             continue
         result = reply.get('result') if isinstance(reply.get('result'), dict) else {}
         named = [str(f.get('figure_id')) for f in (result.get('figures') or []) + (result.get('skipped') or [])]
@@ -255,22 +260,182 @@ def link_payload(paper_file: PaperFile, pages: list[str], targets: LinkTargets,
     `effort` is the model's reasoning effort; it is part of the server's
     dedup key, not of the row's `link_key`."""
     version = (prompt or {}).get('version', '')
+    # The reading set for the figures' attempt tier; the whole text at tier 2.
+    only = reading_set(pages, targets.due, reading_tier(targets.due), known_caption_pages(paper_file))
+    request_digest = reading_digest(pages, only) if only is not None else digest
     body = {
         'client_id': client_id,
         'file_hash': paper_file.hash,
-        'ocr_digest': digest,
-        'items': link_items(paper_file, pages, targets, digest, version, per_item),
+        'ocr_digest': request_digest,
+        'items': link_items(paper_file, pages, targets, request_digest, version, per_item),
         'options': {'model': 'gpt-6-astra', 'effort': effort},
     }
+    if only is not None:
+        body['reading_pages'] = only
     if prompt:
         body['prompt'] = prompt
     return body
 
 
-def workspace_payload(paper_file: PaperFile, pages: list[str]) -> dict:
-    """What the server builds the paper's workspace from — the client's cache, verbatim."""
-    return {'file_hash': paper_file.hash, 'ocr_digest': ocr_digest(pages),
-            'pages': [{'page': i, 'markdown': t or ''} for i, t in enumerate(pages)]}
+def workspace_payload(paper_file: PaperFile, pages: list[str], only: list[int] | None = None) -> dict:
+    """What the server builds the paper's workspace from — the client's cache,
+    verbatim; or, with `only`, just those pages (their own numbers kept), under
+    the digest `reading_digest` gives that selection."""
+    if only is None:
+        return {'file_hash': paper_file.hash, 'ocr_digest': ocr_digest(pages),
+                'pages': [{'page': i, 'markdown': t or ''} for i, t in enumerate(pages)]}
+    return {'file_hash': paper_file.hash, 'ocr_digest': reading_digest(pages, only),
+            'pages': [{'page': i, 'markdown': pages[i] or ''} for i in only]}
+
+
+def workspace_for(paper_file: PaperFile, pages: list[str], request: dict) -> dict:
+    """The workspace a link request expects: the reading set it names, or the whole text."""
+    return workspace_payload(paper_file, pages, request.get('reading_pages'))
+
+
+# ── the reading set ──────────────────────────────────────────────────
+#
+# Given the whole paper, the model read the whole paper — 231 pages for a
+# plate whose explanation was on the facing page, every time, ~3 minutes an
+# item of fixed cost (devlog 113). The caption is almost always close by, so
+# the first attempt gets only the pages nearest the figures; each failed
+# attempt (`explanation_not_found`, a rejection, no reply) widens the next:
+#
+#   tier 0  the figure's page ±2, and every page the rule saw a plate
+#           explanation on ("Explanation of Plate …")
+#   tier 1  tier 0, plus every page with a numbered caption and every page
+#           that mentions the figure's designation ("Pl. 3", "Fig. 15")
+#   tier 2  the whole text
+#
+# The tier is the figures' attempt count (the widest among an item's rows).
+
+READING_NEAR = 2
+#: Pages before a run of plates that tier 0 reads (a plate section's explanations).
+READING_BLOCK_BEFORE_RUN = 8
+#: Beyond this share of the paper a reading set saves nothing; send it all.
+READING_SET_MAX_SHARE = 0.6
+_PLATE_WORD = (r'(?i:\bpl\.?|\bplates?|\bplanche|\btafel|\btaf\.|\btabl\.|\bтабл(?:ица)?\.?)'
+               r'|도\s?판|圖\s?版|図\s?版|图\s?版')
+_FIG_WORD = r'(?i:\bfigs?\.?|\btext-?figs?\.?|\babb\.?|\bрис\.?)|그림|図|图'
+
+
+def reading_tier(rows: list[Figure]) -> int:
+    return min(2, max(((r.link_attempts or 0) for r in rows), default=0))
+
+
+def _designation_regex(row: Figure) -> re.Pattern | None:
+    """Where the paper talks about this figure: its plate number after a plate
+    word, or its figure number after a figure word (arabic or roman, either
+    way round — 'Pl. III' is mentioned as 'Pl. 3' as often as not)."""
+    number = row.plate
+    word = _PLATE_WORD
+    if number is None:
+        m = re.search(r'(\d{1,3}|[IVXLC]{1,6})\b', row.name or '')
+        if not m:
+            return None
+        number = m.group(1)
+        word = _PLATE_WORD if figures.PLATE_KIND == row.page_kind else _FIG_WORD
+    forms = _number_forms(number)
+    if not forms:
+        return None
+    return re.compile(r'(?:' + word + r')\s*\.?\s*(?:' + '|'.join(forms) + r')(?![\dA-Za-z])')
+
+
+def _number_forms(number) -> list[str]:
+    """'3' → ['3', 'III']; 'III' → ['III', '3']."""
+    text = str(number).strip()
+    if text.isdigit():
+        n = int(text)
+        return [text, _roman(n)] if 0 < n < 400 else [text]
+    n = _from_roman(text.upper())
+    return [re.escape(text), str(n)] if n else [re.escape(text)]
+
+
+def _roman(n: int) -> str:
+    out = ''
+    for value, sym in ((100, 'C'), (90, 'XC'), (50, 'L'), (40, 'XL'), (10, 'X'), (9, 'IX'), (5, 'V'), (4, 'IV'), (1, 'I')):
+        while n >= value:
+            out += sym
+            n -= value
+    return out
+
+
+def _from_roman(text: str) -> int:
+    values = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100}
+    if not text or any(c not in values for c in text):
+        return 0
+    total = 0
+    for i, c in enumerate(text):
+        v = values[c]
+        total += -v if i + 1 < len(text) and values[text[i + 1]] > v else v
+    return total
+
+
+def reading_set(pages: list[str], rows: list[Figure], tier: int = 0,
+                known_pages: set[int] | None = None) -> list[int] | None:
+    """The pages an item's figures can be explained on at this tier, sorted;
+    None for the whole text (tier 2, or a set that is most of the paper).
+
+    Papers keep their explanations in different places, so tier 0 follows
+    the paper's own habit where it can be seen: `known_pages` are the pages
+    this paper's already-linked figures were explained on, and a run of
+    consecutive plate pages gets the block of pages just before it (where a
+    monograph gathers the explanations of a plate section).
+    """
+    if tier >= 2 or not pages or not rows:
+        return None
+    facts = [figures.read_page(i, t or '') for i, t in enumerate(pages)]
+    plate_pages = {f.page for f in facts if f.printed}
+    chosen: set[int] = set(known_pages or ())
+    for f in facts:
+        if f.explained:
+            chosen.add(f.page)
+        elif tier >= 1 and any(r.label == 'Caption' and r.is_numbered_caption for r in f.regs):
+            chosen.add(f.page)
+    for row in rows:
+        for d in range(-READING_NEAR, READING_NEAR + 1):
+            if 0 <= row.page + d < len(pages):
+                chosen.add(row.page + d)
+        if row.page in plate_pages:
+            chosen.update(_block_before_run(row.page, plate_pages))
+        if tier >= 1:
+            pattern = _designation_regex(row)
+            if pattern is not None:
+                for i, text in enumerate(pages):
+                    if text and pattern.search(text):
+                        chosen.add(i)
+    chosen = {i for i in chosen if 0 <= i < len(pages)}
+    if len(chosen) >= READING_SET_MAX_SHARE * len(pages):
+        return None
+    return sorted(chosen)
+
+
+def _block_before_run(page: int, plate_pages: set[int]) -> set[int]:
+    """The non-plate pages just before the run of plate pages holding `page`."""
+    first = page
+    while first - 1 in plate_pages:
+        first -= 1
+    return {p for p in range(first - READING_BLOCK_BEFORE_RUN, first) if p >= 0 and p not in plate_pages}
+
+
+def known_caption_pages(paper_file: PaperFile) -> set[int]:
+    """Where this paper's already-linked figures were explained — the paper's habit."""
+    out: set[int] = set()
+    for row in Figure.select(Figure.caption_pages_json).where((Figure.paper_file == paper_file.id)
+                                                              & (Figure.link_key != '')):
+        try:
+            out.update(int(p) for p in json.loads(row.caption_pages_json or '[]'))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def reading_digest(pages: list[str], only: list[int]) -> str:
+    """The identity of a reading set: the whole text's digest and the pages kept."""
+    h = hashlib.sha256()
+    h.update(ocr_digest(pages).encode('ascii'))
+    h.update(('|' + ','.join(str(i) for i in only)).encode('ascii'))
+    return h.hexdigest()
 
 
 # ── what to believe ──────────────────────────────────────────────────

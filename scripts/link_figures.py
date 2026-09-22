@@ -288,13 +288,15 @@ def main() -> int:
             continue
         totals['papers due'] += 1
         request = figure_link.link_payload(pf, pages, targets, digest, client_id, PROMPT, args.per_item, args.effort)
-        workspace = figure_link.workspace_payload(pf, pages)
+        workspace = figure_link.workspace_for(pf, pages, request)
+        reading = request.get('reading_pages')
         if args.execute:
             if args.limit and submitted >= args.limit:
                 break
             submitted += 1
             print(f'paper {pf.paper_id}  {os.path.basename(pf.path)[:60]}  due {len(targets.due)} '
-                  f'in {len(request["items"])} item(s)')
+                  f'in {len(request["items"])} item(s)'
+                  + (f', reading {len(reading)} of {len(pages)} pages' if reading else ', whole text'))
             try:
                 figure_lane.ensure_workspace(client, pf, workspace, print)
                 job = figure_lane.run_job(client, 'link', request, print, wait=not args.no_wait)

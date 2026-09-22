@@ -426,8 +426,9 @@ def test_a_job_whose_split_moved_is_rebuilt_from_its_replies(stored):
     asked = {f['figure_id'] for it in rebuilt for f in it['figures'] if not f['locked']}
     assert str(gone.id) not in asked and len(asked) == len(t2.due)
     assert all(any(f['locked'] for f in it['figures']) for it in rebuilt)
-    # another job's key (other digest) is not ours
-    assert fl.items_from_replies(pf, PAGES, t2, 'ff' * 6, PROMPT, replies) == []
+    # another prompt version's job is not ours (the digest is not checked:
+    # a reading-set digest moves as the paper's other rows get linked)
+    assert fl.items_from_replies(pf, PAGES, t2, DIGEST, 'link-v1-other', replies) == []
     check = fl.LinkCheck()
     for it in rebuilt:
         check.merge(fl.validate_link_result(it, replies[it['key']]['result'], PAGES))
@@ -461,3 +462,57 @@ def test_a_reset_row_is_due_again_and_a_persons_caption_is_not(stored):
     assert Figure.get_by_id(body.id).caption.startswith('Fig. 4')
     t2 = fl.link_targets(pf, DIGEST, PROMPT)
     assert [r.id for r in t2.due] == [plate.id] and [r.id for r in t2.context] == [body.id]
+
+
+@pytest.mark.unit
+def test_the_reading_set_widens_with_the_attempts_and_follows_the_papers_habit(stored):
+    """The caption is almost always close by, so the first attempt reads the
+    figure's neighbourhood and the explanation pages; a failed attempt widens
+    to every page naming the figure; a second failure reads it all."""
+    from papermeister import figure_link as fl
+    from papermeister.models import Figure
+    pf, rows = stored
+    plate, body = rows[2], rows[3]
+    # a 40-page paper: the plate on p.2 (explained on p.1), a page far away
+    # citing "Pl. 2" in passing, and a numbered caption on p.30
+    pages = list(PAGES) + [''] * 36
+    pages[25] = '<div data-bbox="10 10 900 100" data-label="Text"><p>see Pl. 2, fig. 3 for the holotype</p></div>'
+    pages[30] = '<div data-bbox="10 10 900 100" data-label="Caption"><p>Fig. 9. Something else.</p></div>'
+    tier0 = fl.reading_set(pages, [plate], 0)
+    assert tier0 is not None and 1 in tier0 and 2 in tier0 and 25 not in tier0 and 30 not in tier0
+    tier1 = fl.reading_set(pages, [plate], 1)
+    assert 25 in tier1 and 30 in tier1
+    assert fl.reading_set(pages, [plate], 2) is None                    # the whole text
+    # the paper's habit: where its other figures were explained
+    assert 35 in fl.reading_set(pages, [plate], 0, known_pages={35})
+    # a tiny paper: the set is most of it → the whole text
+    assert fl.reading_set(PAGES, [plate], 0) is None
+    # the tier is the attempt count
+    plate.link_attempts = 1
+    assert fl.reading_tier([plate, body]) == 1
+    plate.link_attempts = 5
+    assert fl.reading_tier([plate]) == 2
+    # the request names the pages and carries the reading digest; the whole-text one does not
+    plate = Figure.get_by_id(plate.id)
+    t = fl.link_targets(pf, DIGEST, PROMPT)
+    req = fl.link_payload(pf, pages, t, DIGEST, 'c', {'version': PROMPT})
+    assert req['reading_pages'] and req['ocr_digest'] == fl.reading_digest(pages, req['reading_pages'])
+    assert req['items'][0]['key'].split('@')[1] == req['ocr_digest'][:12]
+    ws = fl.workspace_for(pf, pages, req)
+    assert [p['page'] for p in ws['pages']] == req['reading_pages'] and ws['ocr_digest'] == req['ocr_digest']
+    for r in t.due:
+        r.link_attempts = 2
+        r.save()
+    t = fl.link_targets(pf, DIGEST, PROMPT)
+    req = fl.link_payload(pf, pages, t, DIGEST, 'c', {'version': PROMPT})
+    assert 'reading_pages' not in req and req['ocr_digest'] == DIGEST
+    assert len(fl.workspace_for(pf, pages, req)['pages']) == len(pages)
+
+
+@pytest.mark.unit
+def test_a_plate_run_reads_the_block_before_it_and_designations_in_both_numerals():
+    from papermeister import figure_link as fl
+    assert fl._block_before_run(12, {10, 11, 12, 13}) == {2, 3, 4, 5, 6, 7, 8, 9}
+    assert fl._block_before_run(3, {3}) == {0, 1, 2}
+    assert fl._number_forms('3') == ['3', 'III'] and fl._number_forms('IV') == ['IV', '4']
+    assert fl._roman(14) == 'XIV' and fl._from_roman('XIV') == 14 and fl._from_roman('ABC') == 0

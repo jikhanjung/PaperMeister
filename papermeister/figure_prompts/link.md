@@ -1,7 +1,10 @@
 You are given the figure inventory of one scientific paper (mostly palaeontology) and the paper
-itself as a workspace: `text/pNNN.txt` is the OCR text of page NNN (0-based, zero-padded),
-`text/all.txt` is the whole text with `=== page NNN ===` markers, `pages/pNNN.png` is the page
-image.
+as a workspace: `text/pNNN.txt` is the OCR text of page NNN (0-based, zero-padded),
+`text/all.txt` is the text with `=== page NNN ===` markers, `pages/pNNN.png` is the page image.
+The workspace may hold only the pages selected for this job — the figures' own pages, their
+neighbours, and every page where a plate explanation, a numbered caption or the figures'
+designations were found. Page numbers are the paper's own; a missing number is a page that was
+left out on purpose, not an error. Work with what is there.
 
 How to read — in this order, stopping as soon as the explanation is found:
 1. `hints.explanation_pages` and `hints.caption_pages` are pages where the parser saw an
