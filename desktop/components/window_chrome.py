@@ -74,6 +74,10 @@ class TitleBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName('TopBar')
+        # A QWidget subclass paints its stylesheet background (and the
+        # bottom border) only with this attribute; a plain QWidget did it
+        # by itself, which is why the bar went flat when it became a class.
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:

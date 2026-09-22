@@ -80,14 +80,18 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
     min-height: {LAYOUT['topbar.height']}px;
     max-height: {LAYOUT['topbar.height']}px;
 }}
+/* A rule with padding makes Qt paint the label as a box, in the palette's
+   window colour — a different shade from the bar. Say transparent. */
 #TopBar QLabel#AppTitle {{
     color: {c['text.primary']};
+    background: transparent;
     font-size: {FONT['size.lg']}px;
     font-weight: {FONT['weight.bold']};
     padding-left: 14px;
 }}
 #TopBar QLabel#AppVersion {{
     color: {c['text.secondary']};
+    background: transparent;
     font-size: {FONT['size.xs']}px;
     padding-top: 3px;
 }}
