@@ -51,9 +51,17 @@ class MainWindow(EdgeResizer, QMainWindow):
         root_layout.setContentsMargins(*chrome_margins(self._frameless))
         root_layout.setSpacing(0)
 
-        root_layout.addWidget(self._build_top_bar())
-        root_layout.addWidget(self._build_body(), 1)
+        top_bar = self._build_top_bar()
+        body = self._build_body()
         self.status_bar = StatusBar()
+        for part in (top_bar, body, self.status_bar):
+            # A widget with no cursor of its own shows its ancestors' — and
+            # the window's is the resize arrow whenever the mouse was last
+            # on an edge. Pin the arrow on the three parts so the resize
+            # cursor lives only on the edge margin around them.
+            part.setCursor(Qt.CursorShape.ArrowCursor)
+        root_layout.addWidget(top_bar)
+        root_layout.addWidget(body, 1)
         root_layout.addWidget(self.status_bar)
 
         self.setCentralWidget(root)

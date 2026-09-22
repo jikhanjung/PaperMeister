@@ -70,6 +70,16 @@ def test_the_main_window_is_frameless_unless_the_preference_says_otherwise(qapp,
     assert w._frameless and bool(w.windowFlags() & Qt.WindowType.FramelessWindowHint)
     assert w.findChild(mw.WindowButtons) is not None
     assert w.findChild(mw.VersionLabel).text().startswith('v')
+    # the resize cursor set at an edge must not leak into the panels
+    from PyQt6.QtCore import QPointF
+    from PyQt6.QtGui import QMouseEvent
+    w.resize(1400, 900)
+    ev = QMouseEvent(QMouseEvent.Type.MouseMove, QPointF(2, 450), QPointF(2, 450),
+                     Qt.MouseButton.NoButton, Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier)
+    w.mouseMoveEvent(ev)
+    assert w.cursor().shape() == Qt.CursorShape.SizeHorCursor
+    for part in (w.paper_list, w.detail_panel, w.source_nav, w.status_bar):
+        assert part.cursor().shape() == Qt.CursorShape.ArrowCursor
     w.detail_panel.dispose()
     monkeypatch.setattr('papermeister.preferences.get_pref', lambda k, d=None: True if k == 'native_title_bar' else d)
     w2 = mw.MainWindow()
