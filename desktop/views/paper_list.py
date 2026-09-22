@@ -404,7 +404,7 @@ class PaperListView(QTreeWidget):
             act = menu.addAction('Extract Info', emit('extract_biblio'))
             if not manual_biblio_enabled:
                 act.setEnabled(False)
-                act.setToolTip('Disabled: turn on "Enable manual biblio extraction" in Preferences → Biblio')
+                act.setToolTip('Disabled: turn on "Enable manual info extraction" in Preferences → Info')
         elif biblio in ('review', 'extracted'):
             menu.addAction('Review Info (Metadata tab)', emit('review_biblio'))
         else:

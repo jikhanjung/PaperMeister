@@ -302,13 +302,14 @@ msgid ""
 msgstr "백엔드 선택과 자격 증명, 큐 깊이, 다른 기기가 이미 서버를 쓰고 있을 때 기다릴지 여부."
 
 #: ../../user_guide.rst:130
-msgid "Biblio"
-msgstr "Biblio"
+msgid "Info"
+msgstr "Info"
 
 #: ../../user_guide.rst:131
 msgid ""
-"Automatic and manual extraction toggles (independent), and the LLM backend."
-msgstr "자동 추출과 수동 추출 토글(서로 독립), 그리고 LLM 백엔드."
+"Bibliographic information: automatic and manual extraction toggles "
+"(independent), and the LLM backend."
+msgstr "서지정보: 자동 추출과 수동 추출 토글(서로 독립), 그리고 LLM 백엔드."
 
 #: ../../user_guide.rst:134
 msgid ""

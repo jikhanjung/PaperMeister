@@ -19,7 +19,7 @@ The first sync only fetches metadata. PDFs stay in Zotero until they are needed.
 2. Run OCR
 ----------
 
-Right-click a collection → **Process Folder (OCR → Biblio)**, or right-click
+Right-click a collection → **Process Folder (OCR → Info)**, or right-click
 *My Library* → **Process All** for the whole library.
 
 The Process window shows progress per file. Each PDF is downloaded, sent to the
@@ -53,7 +53,7 @@ Watch the status pill in the paper list:
 -----------------------------
 
 If automatic extraction is on, this follows OCR without any action. Otherwise
-right-click a paper → **Extract Biblio**.
+right-click a paper → **Extract Info**.
 
 The result is stored in a separate table, never written over your Zotero data
 directly. When the extraction agrees with what Zotero already has, or fills

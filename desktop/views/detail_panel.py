@@ -937,7 +937,7 @@ class DetailPanel(QWidget):
         hdr_paper = QLabel('Current (Zotero)')
         hdr_paper.setProperty('class', 'FieldLabel')
         grid.addWidget(hdr_paper, 0, 1)
-        hdr_biblio = QLabel('Extracted (Biblio)')
+        hdr_biblio = QLabel('Extracted (Info)')
         hdr_biblio.setProperty('class', 'FieldLabel')
         grid.addWidget(hdr_biblio, 0, 2)
 

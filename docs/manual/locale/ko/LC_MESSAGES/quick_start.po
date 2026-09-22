@@ -62,10 +62,10 @@ msgstr "2. OCR 실행"
 
 #: ../../quick_start.rst:22
 msgid ""
-"Right-click a collection → **Process Folder (OCR → Biblio)**, or right-click"
+"Right-click a collection → **Process Folder (OCR → Info)**, or right-click"
 " *My Library* → **Process All** for the whole library."
 msgstr ""
-"컬렉션 우클릭 → **Process Folder (OCR → Biblio)**, 라이브러리 전체는 *My Library* 우클릭 → "
+"컬렉션 우클릭 → **Process Folder (OCR → Info)**, 라이브러리 전체는 *My Library* 우클릭 → "
 "**Process All**."
 
 #: ../../quick_start.rst:25
@@ -153,9 +153,9 @@ msgstr "3. 서지 정보 추출"
 #: ../../quick_start.rst:55
 msgid ""
 "If automatic extraction is on, this follows OCR without any action. "
-"Otherwise right-click a paper → **Extract Biblio**."
+"Otherwise right-click a paper → **Extract Info**."
 msgstr ""
-"자동 추출이 켜져 있으면 OCR에 이어 자동으로 진행됩니다. 그렇지 않으면 논문 우클릭 → **Extract Biblio**."
+"자동 추출이 켜져 있으면 OCR에 이어 자동으로 진행됩니다. 그렇지 않으면 논문 우클릭 → **Extract Info**."
 
 #: ../../quick_start.rst:58
 msgid ""

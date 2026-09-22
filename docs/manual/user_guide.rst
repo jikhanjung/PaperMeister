@@ -127,8 +127,8 @@ OCR
    Backend selection and credentials; queue depth; whether to wait when another
    machine is already using the server.
 
-Biblio
-   Automatic and manual extraction toggles (independent), and the LLM backend.
+Info
+   Bibliographic information: automatic and manual extraction toggles (independent), and the LLM backend.
 
 Zotero
    Credentials; write-back on/off; OCR JSON upload on/off; automatic parent-item

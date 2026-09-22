@@ -37,7 +37,7 @@ class BiblioWindow(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle('Biblio Extraction')
+        self.setWindowTitle('Info Extraction')
         self.setMinimumSize(720, 460)
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.Window)
         self._total = 0
@@ -97,7 +97,7 @@ class BiblioWindow(QWidget):
             self._done = 0
             self._counts = {'applied': 0, 'review': 0, 'skip': 0, 'error': 0}
             self.log.clear()
-            self._log(f'=== Biblio extraction: {total} paper(s) ===')
+            self._log(f'=== Info extraction: {total} paper(s) ===')
         self._active = True
         self._cancelled = False
         self.progress_bar.setRange(0, self._total)

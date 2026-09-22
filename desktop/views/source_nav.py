@@ -375,7 +375,7 @@ class SourceNav(QWidget):
         if kind == 'source':
             # 'My Library' root → process the whole library (every remaining PDF
             # in any collection, plus uncollected).
-            menu.addAction('Process All (OCR → Biblio)',
+            menu.addAction('Process All (OCR → Info)',
                             lambda: self.folder_action.emit('process_source', value))
             menu.addAction('Extract References (all)',
                             lambda: self.folder_action.emit('extract_references_source', value))
@@ -385,7 +385,7 @@ class SourceNav(QWidget):
                             lambda: self.folder_action.emit('retry_failed_references', value))
             self._add_figures_action(menu, 'Process Figures (all)', 'process_figures_source', value)
         else:
-            menu.addAction('Process Folder (OCR → Biblio)',
+            menu.addAction('Process Folder (OCR → Info)',
                             lambda: self.folder_action.emit('process_folder', value))
             menu.addAction('Extract References (folder)',
                             lambda: self.folder_action.emit('extract_references_folder', value))

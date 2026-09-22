@@ -33,7 +33,7 @@ class PreferencesDialog(QDialog):
         self._tabs = QTabWidget(self)
         self._tabs.setObjectName('PrefsTabs')
         self._tabs.addTab(self._build_ocr_tab(), 'OCR')
-        self._tabs.addTab(self._build_biblio_tab(), 'Biblio')
+        self._tabs.addTab(self._build_biblio_tab(), 'Info')
         self._tabs.addTab(self._build_zotero_tab(), 'Zotero')
         self._tabs.addTab(self._build_about_tab(), 'About')
         outer.addWidget(self._tabs)
@@ -111,9 +111,9 @@ class PreferencesDialog(QDialog):
         )
         layout.addWidget(self.auto_biblio_checkbox)
 
-        self.manual_biblio_checkbox = QCheckBox('Enable manual biblio extraction (right-click → Extract Biblio)')
+        self.manual_biblio_checkbox = QCheckBox('Enable manual info extraction (right-click → Extract Info)')
         self.manual_biblio_checkbox.setToolTip(
-            'When off, the right-click "Extract Biblio" item is greyed out.'
+            'When off, the right-click "Extract Info" item is greyed out.'
         )
         layout.addWidget(self.manual_biblio_checkbox)
 
@@ -157,7 +157,7 @@ class PreferencesDialog(QDialog):
         form.addRow('API Key:', self.api_key_edit)
         layout.addLayout(form)
 
-        self.writeback_checkbox = QCheckBox('Enable Zotero write-back (Apply Biblio updates Zotero items)')
+        self.writeback_checkbox = QCheckBox('Enable Zotero write-back (Apply Info updates Zotero items)')
         self.writeback_checkbox.setToolTip(
             'When off, Apply Biblio updates only the local mirror. '
             'Requires an API key with write access on zotero.org/settings/keys.'

@@ -640,7 +640,7 @@ class MainWindow(QMainWindow):
         elif failed_ids:
             lines.append(f'OCR: retry {len(failed_ids)} failed PDF(s)')
         if biblio_targets:
-            lines.append(f'Biblio extraction: {len(biblio_targets)} OCR-completed paper(s)')
+            lines.append(f'Info extraction: {len(biblio_targets)} OCR-completed paper(s)')
         message = f'Process {scope_label}?\n' + '\n'.join(lines)
 
         resp = QMessageBox.question(
@@ -810,7 +810,7 @@ class MainWindow(QMainWindow):
 
         resp = QMessageBox.question(
             self,
-            'Extract Biblio',
+            'Extract Info',
             f'Extract bibliographic info using {engine_label}?',
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
@@ -1007,7 +1007,7 @@ class MainWindow(QMainWindow):
     def _on_biblio_failed(self, paper_id: int, msg: str):
         """task.failed handler: record the failure in the progress window and
         advance the queue (so a failed extraction doesn't look like a stall)."""
-        self.status_bar.set_task(f'Biblio failed for paper {paper_id}: {msg}')
+        self.status_bar.set_task(f'Info extraction failed for paper {paper_id}: {msg}')
         win = self._biblio_window if (self._biblio_window and self._biblio_window.isVisible()) else None
         if win:
             win.record(f'{self._biblio_title(paper_id)} — failed: {msg}', 'error')
@@ -1037,7 +1037,7 @@ class MainWindow(QMainWindow):
 
             if err:
                 self._biblio_guard.record_fail()
-                self.status_bar.set_task(f'Biblio extraction failed: {err}')
+                self.status_bar.set_task(f'Info extraction failed: {err}')
                 if win:
                     win.record(f'{self._biblio_title(paper_id)} — extraction failed', 'error')
                 return
@@ -1054,7 +1054,7 @@ class MainWindow(QMainWindow):
                 source = meta.get('biblio_source', '?')
                 self._materialize_applied_biblio(paper_id, meta)
                 self.status_bar.set_task(
-                    f'Biblio already {state} on Zotero ({source}) — skipped LLM for paper {paper_id}'
+                    f'Info already {state} on Zotero ({source}) — skipped LLM for paper {paper_id}'
                 )
                 if win:
                     win.record(f'{self._biblio_title(paper_id)} — already {state} (skipped LLM)', 'skip')
@@ -1075,13 +1075,13 @@ class MainWindow(QMainWindow):
                     try:
                         biblio_reflect.apply_single(paper_id)
                     except ZoteroWriteAccessDenied as e:
-                        self.status_bar.set_task(f'Biblio auto-apply blocked: {e}')
+                        self.status_bar.set_task(f'Info auto-apply blocked: {e}')
                         kind, line = 'error', f'{summary} — apply blocked'
                     except ZoteroPatchRejected as e:
                         self.status_bar.set_task(f'Zotero rejected biblio patch (paper {paper_id}): {e}')
                         kind, line = 'error', f'{summary} — Zotero rejected patch'
                     else:
-                        self.status_bar.set_task(f'Biblio extracted & auto-applied for paper {paper_id}')
+                        self.status_bar.set_task(f'Info extracted & auto-applied for paper {paper_id}')
                         self.paper_list.refresh_row(paper_id)
                         kind, line = 'applied', f'applied — {summary}'
                 elif decision.action == 'needs_review':
@@ -1092,7 +1092,7 @@ class MainWindow(QMainWindow):
                         biblio.review_reason = decision.reason
                         biblio.save()
                     self.status_bar.set_task(
-                        f'Biblio extracted for paper {paper_id} (needs review: {decision.reason})')
+                        f'Info extracted for paper {paper_id} (needs review: {decision.reason})')
                     kind, line = 'review', f'needs review ({decision.reason}) — {summary}'
                     self.paper_list.refresh_row(paper_id)
                 else:  # skip — already complete (Zotero already matches)
@@ -1106,17 +1106,17 @@ class MainWindow(QMainWindow):
                         biblio.review_reason = 'already_complete'
                         biblio.save()
                     self.status_bar.set_task(
-                        f'Biblio extracted for paper {paper_id} ({decision.reason})')
+                        f'Info extracted for paper {paper_id} ({decision.reason})')
                     kind, line = 'skip', f'{decision.reason} — {summary}'
                     self.paper_list.refresh_row(paper_id)
             else:
-                self.status_bar.set_task(f'Biblio extracted for paper {paper_id}')
+                self.status_bar.set_task(f'Info extracted for paper {paper_id}')
                 kind, line = 'skip', f'extracted — {summary}'
 
             if win:
                 win.record(line, kind)
         except Exception as e:
-            self.status_bar.set_task(f'Biblio error for paper {paper_id}: {e}')
+            self.status_bar.set_task(f'Info extraction error for paper {paper_id}: {e}')
             if win:
                 win.record(f'{self._biblio_title(paper_id)} — error: {e}', 'error')
         finally:
@@ -1140,7 +1140,7 @@ class MainWindow(QMainWindow):
             self._biblio_window.mark_cancelling(dropped)
         running = bool(self._biblio_task and self._biblio_task.isRunning())
         self.status_bar.set_task(
-            f'Biblio cancelled — dropped {dropped} queued'
+            f'Info extraction cancelled — dropped {dropped} queued'
             + (', finishing current paper…' if running else '.'))
         if not running and self._biblio_window and self._biblio_window.isVisible():
             self._biblio_window.finish()
@@ -1155,15 +1155,15 @@ class MainWindow(QMainWindow):
         def on_pause(remaining):
             if self._biblio_window:
                 self._biblio_window.mark_paused(
-                    remaining, 'Biblio extractions kept failing and the LLM '
+                    remaining, 'Info extractions kept failing and the LLM '
                     'server did not answer a health check.')
             self.status_bar.set_task(
-                'Biblio paused — waiting for the LLM server to recover…')
+                'Info extraction paused — waiting for the LLM server to recover…')
 
         def on_resume(remaining):
             if self._biblio_window:
                 self._biblio_window.mark_resumed(remaining)
-            self.status_bar.set_task('Biblio server back — resuming…')
+            self.status_bar.set_task('Info extraction: server back — resuming…')
 
         return ServerGuard(
             health_check=biblio_server_alive,

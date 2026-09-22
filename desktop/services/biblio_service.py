@@ -73,7 +73,7 @@ class ApplyPreview:
     biblio_id: int | None
     biblio_status: str         # extracted | needs_review | auto_committed | applied | rejected
     button_enabled: bool       # True unless skip
-    button_label: str          # 'Apply Biblio' or status-aware variant
+    button_label: str          # 'Apply Info' or status-aware variant
     tooltip: str
     diffs: list[FieldDiff] = field(default_factory=list)
     source_line: str = ''      # e.g. "llm-haiku · confidence: high · doc_type: article"
@@ -212,19 +212,19 @@ def preview_apply(paper_id: int) -> ApplyPreview:
         return ApplyPreview(
             has_biblio=False, decision_action='skip', decision_reason='paper_not_found',
             biblio_id=None, biblio_status='', button_enabled=False,
-            button_label='Apply Biblio', tooltip='Paper not found',
+            button_label='Apply Info', tooltip='Paper not found',
         )
     biblio = biblio_reflect.select_best_biblio(paper)
     if biblio is None:
         return ApplyPreview(
             has_biblio=False, decision_action='skip', decision_reason='no_biblio',
             biblio_id=None, biblio_status='', button_enabled=False,
-            button_label='Apply Biblio',
+            button_label='Apply Info',
             tooltip=_REASON_BLURB['no_biblio'],
         )
 
     decision = biblio_reflect.evaluate(biblio, paper)
-    label = 'Apply Biblio'
+    label = 'Apply Info'
     if biblio.status == 'applied':
         label = 'Applied'
     elif biblio.status == 'auto_committed':
