@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PaperMeister 0.1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-07 12:36+0900\n"
+"POT-Creation-Date: 2026-09-22 17:26+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ko\n"
@@ -51,38 +51,189 @@ msgstr ""
 msgid "[Unreleased]"
 msgstr "[미출시]"
 
-#: ../../../../CHANGELOG.md:12 ../../../../CHANGELOG.md:67
-#: ../../../../CHANGELOG.md:105 ../../../../CHANGELOG.md:167
-#: ../../../../CHANGELOG.md:185 ../../../../CHANGELOG.md:223
-#: ../../../../CHANGELOG.md:302 ../../../../CHANGELOG.md:328
-msgid "Changed"
-msgstr "변경"
+#: ../../../../CHANGELOG.md:14
+msgid "[0.2.0] - 2026-09-22"
+msgstr "[0.2.0] - 2026-09-22"
 
-#: ../../../../CHANGELOG.md:13
+#: ../../../../CHANGELOG.md:16
 msgid ""
-"**The window title says which version you are running** — \"PaperMeister "
-"v0.1.9\" rather than just the name. It is the thing you read back when "
-"something goes wrong, and until now it did not say."
+"Figures and plates become part of the library: found, captioned, split "
+"into their specimens, and shown in a tab of their own. The pipeline now "
+"has four visible stages, and the window is tidier."
 msgstr ""
-"**창 제목에 실행 중인 버전이 표시됩니다** — 이름만 있던 자리에 \"PaperMeister v0.1.9\"처럼 "
-"나옵니다. 문제가 생겼을 때 제일 먼저 확인하게 되는 값인데 지금까지는 알 수 없었습니다."
+"도판과 플레이트가 라이브러리의 일부가 됩니다: 찾아내고, 캡션을 붙이고, 표본 단위로 나누어 전용 탭에서 보여줍니다. 파이프라인은 이제 네 단계가 눈에 보이고, 창은 더 깔끔해졌습니다."
 
-#: ../../../../CHANGELOG.md:19
-msgid "[0.1.9] - 2026-08-28"
-msgstr ""
-
-#: ../../../../CHANGELOG.md:21
-msgid "The Text tab reads like the paper again."
-msgstr "Text 탭이 다시 논문처럼 읽힙니다."
-
-#: ../../../../CHANGELOG.md:23 ../../../../CHANGELOG.md:133
-#: ../../../../CHANGELOG.md:197 ../../../../CHANGELOG.md:249
-#: ../../../../CHANGELOG.md:286 ../../../../CHANGELOG.md:315
-#: ../../../../CHANGELOG.md:343
+#: ../../../../CHANGELOG.md:20 ../../../../CHANGELOG.md:92
+#: ../../../../CHANGELOG.md:202 ../../../../CHANGELOG.md:266
+#: ../../../../CHANGELOG.md:318 ../../../../CHANGELOG.md:355
+#: ../../../../CHANGELOG.md:384 ../../../../CHANGELOG.md:412
 msgid "Added"
 msgstr "추가"
 
-#: ../../../../CHANGELOG.md:24
+#: ../../../../CHANGELOG.md:21
+msgid ""
+"**Figures.** A paper's figures and plates are assembled from the OCR "
+"layout, matched to their printed captions and plate explanations, and "
+"each plate is split into its numbered specimens. Captions are cut into "
+"one entry per figure number or panel letter, with the specimen number "
+"where the text gives one. Right-click a paper, a collection or the "
+"library → **Process Figures**; the stages already done are skipped, and a"
+" progress window shows the server's worker state (a subscription pause "
+"reads as waiting, not as a hang)."
+msgstr ""
+"**도판.** 논문의 도판과 플레이트를 OCR 레이아웃에서 조립하고, 인쇄된 캡션·플레이트 설명과 연결하며, 플레이트는 번호가 붙은 표본 단위로 나눕니다. 캡션은 도판 번호나 패널 글자마다 항목 하나로 잘리고, 본문에 표본번호가 있으면 함께 담깁니다. 논문·컬렉션·라이브러리를 우클릭 → **Process Figures**; 이미 끝난 단계는 건너뛰고, 진행 창이 서버 워커의 상태를 보여줍니다(구독 한도로 멈춘 것은 멈춤이 아니라 대기로 표시됩니다)."
+
+#: ../../../../CHANGELOG.md:29
+msgid ""
+"The three model stages run on the institution's wrapper server "
+"(Preferences → OCR → Wrapper API); without it the action is disabled with"
+" the reason, and figures found on another machine still show. Results "
+"ride in the paper's OCR JSON — and its Zotero sibling attachment, when "
+"upload is on — so a second machine sees them without running anything, "
+"and a sibling another machine replaced is refetched at sync."
+msgstr ""
+"모델이 하는 세 단계는 기관의 래퍼 서버(Preferences → OCR → Wrapper API)에서 돕니다. 서버가 없으면 메뉴는 이유와 함께 비활성화되고, 다른 머신이 찾아둔 도판은 그대로 보입니다. 결과는 논문의 OCR JSON에 — 업로드가 켜져 있으면 Zotero 형제 첨부에도 — 실려 다니므로 두 번째 머신은 아무것도 돌리지 않고도 보게 되며, 다른 머신이 교체한 형제 첨부는 동기화 때 다시 받아옵니다."
+
+#: ../../../../CHANGELOG.md:35
+msgid ""
+"**The Figures tab.** Between Text and References: each figure or plate at"
+" the panel's width, a quiet box on every specimen the split found, and "
+"under it the caption as entries (or as printed, on a second small tab). "
+"Hover a box and its entry lights; hover an entry and its box does. Only "
+"the figures near the viewport are rendered, so a 120-plate volume scrolls"
+" without holding it all in memory."
+msgstr ""
+"**Figures 탭.** Text와 References 사이: 도판·플레이트를 패널 폭에 맞춰 보여주고, 분할이 찾은 표본마다 옅은 상자를 그리며, 그 아래에 캡션을 항목별로(또는 두 번째 작은 탭에서 인쇄된 원문 그대로) 보여줍니다. 상자에 커서를 올리면 항목이, 항목에 올리면 상자가 켜집니다. 뷰포트 근처의 도판만 렌더하므로 플레이트 120장짜리 책도 메모리에 다 담지 않고 스크롤됩니다."
+
+#: ../../../../CHANGELOG.md:41
+msgid ""
+"**Where each paper is in the pipeline.** OCR → Info (bibliographic "
+"information) → References → Figures. The list's Status badge names the "
+"stage a paper is on or must run next (`OCR wait`, `INFO rev`, `REF part`,"
+" `FIG cap`, … `done`), hovering it lists all four with what each "
+"produced, and the context menu offers what moves the paper on. The "
+"Metadata tab has a PROCESSING card with the same."
+msgstr ""
+"**논문이 파이프라인의 어디에 있는지.** OCR → Info(서지정보) → References → Figures. 목록의 Status 배지는 논문이 진행 중이거나 다음에 돌려야 할 단계를 이름으로 보여주고(`OCR wait`, `INFO rev`, `REF part`, `FIG cap`, … `done`), 커서를 올리면 네 단계와 각 산출물이 나열되며, 우클릭 메뉴는 그 논문을 다음 단계로 보낼 항목을 내놓습니다. Metadata 탭에도 같은 내용의 PROCESSING 카드가 있습니다."
+
+#: ../../../../CHANGELOG.md:47
+msgid ""
+"**PDF tab controls.** Previous / next / typed page, zoom in and out with "
+"a percentage, and a **Fit width** toggle; Ctrl+wheel zooms, "
+"PageUp/PageDown move a page. Pages fit the panel's width by default, each"
+" page on its own — a single landscape page no longer narrows every "
+"portrait one."
+msgstr ""
+"**PDF 탭 컨트롤.** 이전/다음/페이지 입력, 퍼센트가 표시되는 줌 인/아웃, **Fit width** 토글; Ctrl+휠로 줌, PageUp/PageDown으로 페이지 이동. 기본은 페이지마다 패널 폭에 맞춤 — 가로 페이지 한 장 때문에 세로 페이지 전부가 좁아지는 일이 없습니다."
+
+#: ../../../../CHANGELOG.md:51
+msgid "**Ctrl+F** (⌘F on macOS) focuses the search box from anywhere."
+msgstr ""
+"**Ctrl+F**(macOS는 ⌘F)로 어디서든 검색창에 포커스가 갑니다."
+
+#: ../../../../CHANGELOG.md:53 ../../../../CHANGELOG.md:136
+#: ../../../../CHANGELOG.md:174 ../../../../CHANGELOG.md:236
+#: ../../../../CHANGELOG.md:254 ../../../../CHANGELOG.md:292
+#: ../../../../CHANGELOG.md:371 ../../../../CHANGELOG.md:397
+msgid "Changed"
+msgstr "변경"
+
+#: ../../../../CHANGELOG.md:54
+msgid ""
+"**No OS title bar.** The top bar is the title bar: drag it to move the "
+"window, double-click to maximize, and the minimize / maximize / close "
+"buttons sit at its right; the version is shown beside the name. The "
+"window resizes by its edges as before. (`native_title_bar: true` in "
+"preferences gives the OS frame back.)"
+msgstr ""
+"**OS 타이틀바 없음.** 상단 바가 타이틀바입니다: 끌어서 창을 옮기고, 더블클릭으로 최대화하며, 최소화/최대화/닫기 버튼이 오른쪽에 있습니다. 버전은 이름 옆에 표시됩니다. 창 크기는 전처럼 가장자리에서 조절합니다. (설정에 `native_title_bar: true`를 두면 OS 프레임으로 돌아갑니다.)"
+
+#: ../../../../CHANGELOG.md:59
+msgid ""
+"**\"Info\", not \"Biblio\"**, wherever a person sees the bibliographic- "
+"information stage: menus, the Apply button, the extraction window, the "
+"Preferences tab."
+msgstr ""
+"**\\"Biblio\\" 대신 \\"Info\\"** — 서지정보 단계가 사용자에게 보이는 모든 곳: 메뉴, Apply 버튼, 추출 창, Preferences 탭."
+
+#: ../../../../CHANGELOG.md:62
+msgid ""
+"**The Text tab is the text again.** A plate the OCR cut into its "
+"photographs is shown once, as the plate; every other detail about figures"
+" moved to the Figures tab."
+msgstr ""
+"**Text 탭은 다시 본문입니다.** OCR이 사진 단위로 잘라낸 플레이트는 한 장의 플레이트로 한 번만 보이고, 도판에 관한 나머지 정보는 모두 Figures 탭으로 옮겼습니다."
+
+#: ../../../../CHANGELOG.md:65
+msgid ""
+"**Info comparison table.** The radio sits in the cell's corner beside the"
+" value on every row, the Extracted editor is as tall as its wrapped text "
+"(no scrollbar), clicking the current value picks it, the × button says "
+"what it does, and Apply shows a wait cursor until the write-back reports."
+msgstr ""
+"**Info 비교 표.** 모든 행에서 라디오 버튼이 값 옆 구석에 자리하고, Extracted 편집란은 감긴 텍스트 높이만큼 늘어나며(스크롤바 없음), 현재 값을 클릭하면 그쪽이 선택되고, × 버튼이 하는 일을 툴팁으로 말하며, Apply 중에는 write-back이 끝날 때까지 대기 커서가 보입니다."
+
+#: ../../../../CHANGELOG.md:69
+msgid ""
+"**The panels share the window's width** as it grows, not only the paper "
+"list."
+msgstr ""
+"**창을 넓히면 패널들이 폭을 나눠 가집니다** — 논문 목록만 늘어나지 않습니다."
+
+#: ../../../../CHANGELOG.md:72 ../../../../CHANGELOG.md:105
+#: ../../../../CHANGELOG.md:144 ../../../../CHANGELOG.md:272
+#: ../../../../CHANGELOG.md:311 ../../../../CHANGELOG.md:330
+msgid "Fixed"
+msgstr "수정"
+
+#: ../../../../CHANGELOG.md:73
+msgid ""
+"**Apply felt slow.** A 500-row list was ~1,500 queries (four per row) and"
+" every Apply re-counted the whole library twice on the UI thread. Lists "
+"are three queries now (457 → 71 ms), the counts are indexed and run off "
+"the UI thread (330 → 20 ms after an Apply)."
+msgstr ""
+"**Apply가 느리게 느껴지던 문제.** 500행 목록이 ~1,500 쿼리(행당 4개)였고 Apply마다 UI 스레드에서 라이브러리 전체를 두 번 셌습니다. 이제 목록은 쿼리 3개(457 → 71 ms), 카운트는 인덱스를 타고 UI 스레드 밖에서 돕니다(Apply 뒤 330 → 20 ms)."
+
+#: ../../../../CHANGELOG.md:77
+msgid ""
+"**The left tree kept folding.** Apply rebuilt the source tree and lost "
+"the open folders and the chosen one; both are kept now, and the chosen "
+"folder is highlighted."
+msgstr ""
+"**왼쪽 트리가 자꾸 접히던 문제.** Apply가 소스 트리를 다시 만들면서 펼친 폴더와 선택 폴더를 잃었습니다. 이제 둘 다 유지되고, 선택된 폴더는 강조됩니다."
+
+#: ../../../../CHANGELOG.md:80
+msgid ""
+"**The list row updates after every Apply**, including one that changed no"
+" field — the badge still moves from review to done."
+msgstr ""
+"**Apply 뒤에는 목록 행이 항상 갱신됩니다** — 바뀐 필드가 없어도 배지는 review에서 done으로 넘어가기 때문입니다."
+
+#: ../../../../CHANGELOG.md:82
+msgid ""
+"**\"QThread: Destroyed while thread is still running\" at exit.** Every "
+"paper viewed left its Text and Figures pages behind with a render thread;"
+" they are stopped and dropped when switching papers and on close."
+msgstr ""
+"**종료 시 \\"QThread: Destroyed while thread is still running\\".** 논문을 볼 때마다 Text·Figures 페이지가 렌더 스레드와 함께 남아 있었습니다. 이제 논문을 바꾸거나 창을 닫을 때 멈추고 정리합니다."
+
+#: ../../../../CHANGELOG.md:85
+msgid ""
+"**OCR refuses a fragment** — a result with far fewer pages than the PDF "
+"is not stored as the paper's text."
+msgstr ""
+"**OCR이 조각 결과를 거부합니다** — PDF보다 페이지가 훨씬 적은 결과는 논문의 본문으로 저장하지 않습니다."
+
+#: ../../../../CHANGELOG.md:88
+msgid "[0.1.9] - 2026-08-28"
+msgstr "[0.1.9] - 2026-08-28"
+
+#: ../../../../CHANGELOG.md:90
+msgid "The Text tab reads like the paper again."
+msgstr "Text 탭이 다시 논문처럼 읽힙니다."
+
+#: ../../../../CHANGELOG.md:93
 msgid ""
 "**The Text tab shows the paper's structure, and its figures.** OCR does "
 "not return flat text — it returns each block of the page along with what "
@@ -97,7 +248,7 @@ msgstr ""
 "섹션 헤더는 헤딩으로, 캡션은 캡션으로 보이고, 표는 행을 유지하며, 그림은 OCR이 기록해 둔 자리에서 PDF를 잘라내 제자리에 "
 "나타납니다."
 
-#: ../../../../CHANGELOG.md:31
+#: ../../../../CHANGELOG.md:100
 msgid ""
 "Figures are fetched only once you scroll to them, and the space for one "
 "is reserved before it arrives, so nothing shifts under you while reading "
@@ -109,13 +260,7 @@ msgstr ""
 "않고, 긴 도판 합본을 열어도 멈추지 않습니다. 지금 모델 이전에 OCR한 논문은 예전처럼 보이며, 다시 처리하면 새 레이아웃이 "
 "적용됩니다."
 
-#: ../../../../CHANGELOG.md:36 ../../../../CHANGELOG.md:75
-#: ../../../../CHANGELOG.md:203 ../../../../CHANGELOG.md:242
-#: ../../../../CHANGELOG.md:261
-msgid "Fixed"
-msgstr "수정"
-
-#: ../../../../CHANGELOG.md:37
+#: ../../../../CHANGELOG.md:106
 msgid ""
 "**OCR keeps the server busier.** The OCR server divides its capacity "
 "between the machines using it, and PaperMeister was leaving part of its "
@@ -131,7 +276,7 @@ msgstr ""
 "못했고, 처리가 끝난 논문을 저장하는 동안에는 서버에 새 작업을 넣지 않았습니다 — 저장은 서버가 기다려주는 일이 아닌데도요. 이제"
 " 진행하면서 자기 몫을 다시 읽고, 저장보다 큐 채우기를 먼저 합니다. 환경설정에서 큐 깊이를 직접 지정하면 그 값이 우선입니다."
 
-#: ../../../../CHANGELOG.md:45
+#: ../../../../CHANGELOG.md:114
 msgid ""
 "**Re-processing a paper no longer forgets that its bibliography was "
 "applied.** The OCR cache carries a marker saying the biblio for that "
@@ -145,7 +290,7 @@ msgstr ""
 " 지워졌고, 그래서 다시 처리한 논문이 LLM 추출 대상으로 되살아나 검토 목록에 다시 나타날 수 있었습니다. 이제 덮어써도 표시가"
 " 남습니다."
 
-#: ../../../../CHANGELOG.md:51
+#: ../../../../CHANGELOG.md:120
 msgid ""
 "**Messages no longer say \"RunPod\" when OCR is going somewhere else.** "
 "Two of the three OCR backends are servers you host, but the prompts and "
@@ -163,15 +308,15 @@ msgstr ""
 "나간다고 말하는 셈이니까요. 이제 모든 메시지가 실제로 쓰는 백엔드의 이름을 말하고, 워커 수(\"2 idle, 1 "
 "running\")는 워커 풀이 실제로 있는 RunPod에서만 보여줍니다 — 나머지 백엔드에서 그 숫자는 지어낸 상수였습니다."
 
-#: ../../../../CHANGELOG.md:63
+#: ../../../../CHANGELOG.md:132
 msgid "[0.1.8] - 2026-08-28"
-msgstr ""
+msgstr "[0.1.8] - 2026-08-28"
 
-#: ../../../../CHANGELOG.md:65
+#: ../../../../CHANGELOG.md:134
 msgid "Certificates, on a network that inspects them."
 msgstr "TLS를 가로채는 네트워크에서, 인증서 검증을 제대로 했습니다."
 
-#: ../../../../CHANGELOG.md:68
+#: ../../../../CHANGELOG.md:137
 msgid ""
 "**Each OCR backend's settings now sit under the backend they belong to.**"
 " The Endpoint ID and API Key are RunPod's alone — a self-hosted server "
@@ -185,7 +330,7 @@ msgstr ""
 "입력란을 한꺼번에 늘어놓고 있어서 지금 고른 백엔드의 설정처럼 읽혔습니다. 이제 각 입력란은 그것을 쓰는 선택지 밑에 들여쓰여 "
 "있습니다."
 
-#: ../../../../CHANGELOG.md:76
+#: ../../../../CHANGELOG.md:145
 msgid ""
 "**Zotero sync no longer fails with a certificate error on networks that "
 "inspect TLS.** Such a network re-signs every connection with its own root"
@@ -203,7 +348,7 @@ msgstr ""
 " 매번 ``CERTIFICATE_VERIFY_FAILED: self-signed certificate in certificate "
 "chain``\\ 으로 끝났습니다. 이제 인증서는 그 인증기관이 실제로 들어 있는 운영체제의 신뢰 저장소를 기준으로 검증합니다."
 
-#: ../../../../CHANGELOG.md:85
+#: ../../../../CHANGELOG.md:154
 msgid ""
 "This replaces an older workaround that switched certificate verification "
 "off altogether, for every host — and which had in any case stopped "
@@ -215,7 +360,7 @@ msgstr ""
 "pyzotero가 아래쪽 HTTP 라이브러리를 바꾼 뒤로 Zotero 동기화를 더는 거치지 않고 있었습니다. 이제 연결은 다시 "
 "검증되며, 그 임시방편이 조용히 검증을 약화시키고 있던 평범한 네트워크에서도 그렇습니다."
 
-#: ../../../../CHANGELOG.md:90
+#: ../../../../CHANGELOG.md:159
 msgid ""
 "**Code spans in the Korean manual are code again.** Sphinx re-parses each"
 " translated string as reStructuredText, where a single-backtick span is a"
@@ -232,15 +377,15 @@ msgstr ""
 " 빠진 채로 나왔고 ``--execute``\\ 는 en dash가 됐습니다. 한국어 매뉴얼을 보고 경로나 플래그를 옮겨 적은 "
 "사람은 동작하지 않는 것을 옮겨 적은 셈입니다. 영문 매뉴얼은 영향이 없었습니다."
 
-#: ../../../../CHANGELOG.md:101
+#: ../../../../CHANGELOG.md:170
 msgid "[0.1.7] - 2026-08-13"
-msgstr ""
+msgstr "[0.1.7] - 2026-08-13"
 
-#: ../../../../CHANGELOG.md:103
+#: ../../../../CHANGELOG.md:172
 msgid "Off the AGPL, by replacing the PDF engine."
 msgstr "PDF 엔진을 교체해 AGPL에서 벗어났습니다."
 
-#: ../../../../CHANGELOG.md:106
+#: ../../../../CHANGELOG.md:175
 msgid ""
 "**PaperMeister is now distributed under the GPL-3.0**, down from the "
 "AGPL-3.0 it carried in 0.1.6. Nothing you may do with it has narrowed — "
@@ -250,7 +395,7 @@ msgstr ""
 "**PaperMeister는 이제 GPL-3.0으로 배포됩니다**\\ — 0.1.6의 AGPL-3.0에서 내려온 것입니다. 사용자가"
 " 할 수 있는 일이 줄어들지는 않았습니다. 둘 중 약한 쪽이며, 방침이 바뀐 것이 아니라 구성요소를 교체한 결과입니다."
 
-#: ../../../../CHANGELOG.md:110
+#: ../../../../CHANGELOG.md:179
 msgid ""
 "**PDF rendering and metadata now go through pypdfium2** (BSD-3-Clause / "
 "Apache-2.0) instead of PyMuPDF (AGPL-3.0), which is what made the licence"
@@ -261,7 +406,7 @@ msgstr ""
 "기존의 PyMuPDF(AGPL-3.0)를 대체한 것이며, 이것이 라이선스 변경을 가능하게 했습니다. AGPL 구성요소는 "
 "PyMuPDF뿐이었고, 이제는 PyQt6(GPL-3.0)가 조건을 정합니다."
 
-#: ../../../../CHANGELOG.md:115
+#: ../../../../CHANGELOG.md:184
 msgid ""
 "The two were compared on the live library before the swap: page counts "
 "and encryption detection matched on every file tested, and pages rendered"
@@ -278,7 +423,7 @@ msgstr ""
 "않았습니다. 이미 추출된 텍스트는 영향을 받지 않습니다 — OCR 결과는 파일 단위로 캐시되고, OCR 서버는 자체적으로 PDF를 "
 "렌더링합니다."
 
-#: ../../../../CHANGELOG.md:122
+#: ../../../../CHANGELOG.md:191
 msgid ""
 "**Non-ASCII titles in PDF metadata are repaired.** pypdfium2 hands back "
 "some metadata decoded byte-per-character, turning `Systême silurien` into"
@@ -290,17 +435,17 @@ msgstr ""
 "때문에 ``Systême silurien``\\ 이 ``SystÃªme silurien``\\ 으로 깨지는데, 이를 감지해 "
 "되돌립니다. 로컬 폴더에서 가져온 PDF에만 해당하며, Zotero 항목은 메타데이터를 API에서 받습니다."
 
-#: ../../../../CHANGELOG.md:129
+#: ../../../../CHANGELOG.md:198
 msgid "[0.1.6] - 2026-08-13"
-msgstr ""
+msgstr "[0.1.6] - 2026-08-13"
 
-#: ../../../../CHANGELOG.md:131
+#: ../../../../CHANGELOG.md:200
 msgid ""
 "References extraction gets faster, and stops re-trying the papers it "
 "cannot read."
 msgstr "참고문헌 추출이 빨라지고, 읽지 못하는 논문을 반복해서 재시도하지 않습니다."
 
-#: ../../../../CHANGELOG.md:134
+#: ../../../../CHANGELOG.md:203
 msgid ""
 "**References extraction now parses several papers at once**, four by "
 "default. A single request to the model generates its answer one token at "
@@ -318,7 +463,7 @@ msgstr ""
 "``preferences.json``\\ 의 ``refs_workers``\\ 로 조정할 수 있고, 1로 두면 이전 동작으로 "
 "돌아갑니다. 로컬 Qwen 서버에만 적용됩니다 — Claude 백엔드에는 그렇게 요청을 묶어 주는 서버가 없기 때문입니다."
 
-#: ../../../../CHANGELOG.md:142
+#: ../../../../CHANGELOG.md:211
 msgid ""
 "**A progress bar for each paper being parsed**, with its title and how "
 "many references of the total are done. With several papers running, a "
@@ -330,7 +475,7 @@ msgstr ""
 "도는 상황에서 공용 진행바 하나는 서로 무관한 숫자 사이를 오가게 되고, \"Parsing 4 papers…\"라고만 나오는 배치 "
 "화면은 한 편씩 처리하던 이전보다 정보가 적었습니다."
 
-#: ../../../../CHANGELOG.md:146
+#: ../../../../CHANGELOG.md:215
 msgid ""
 "**Papers that repeatedly fail to parse are set aside** instead of being "
 "attempted first every single run. A partial parse is deliberately left "
@@ -348,7 +493,7 @@ msgstr ""
 "실행에서 빠집니다. \"My Library\"를 우클릭해 **Retry Failed References…**\\ 로 다시 시도할 수"
 " 있으며, 파싱에 성공한 논문은 횟수가 초기화됩니다."
 
-#: ../../../../CHANGELOG.md:154
+#: ../../../../CHANGELOG.md:223
 msgid ""
 "**`PAPERMEISTER_CONFIG_DIR` names where settings go**, alongside the "
 "existing `PAPERMEISTER_DATA_DIR` for the library. The two are "
@@ -358,7 +503,7 @@ msgstr ""
 "``PAPERMEISTER_DATA_DIR``\\ 와 나란히 동작하며, 둘은 서로 독립적이라 설정과 데이터를 다른 볼륨에 둘 수 "
 "있습니다."
 
-#: ../../../../CHANGELOG.md:157
+#: ../../../../CHANGELOG.md:226
 msgid ""
 "**The References window now says when the LLM server goes away.** A 502 "
 "means the model container is restarting, which takes minutes — the app "
@@ -372,7 +517,7 @@ msgstr ""
 "아무 말 없이 해서 멈춘 것처럼 보였습니다. 이제 장애와 복구가 창과 상태바에 기록됩니다. 현재 논문 안의 진행률(파싱한 참고문헌 "
 "수/전체)도 함께 표시됩니다."
 
-#: ../../../../CHANGELOG.md:164
+#: ../../../../CHANGELOG.md:233
 msgid ""
 "**PaperMeister now states its licence.** Preferences → About shows the "
 "version, the licence, and every third-party component with the licence it"
@@ -381,7 +526,7 @@ msgstr ""
 "**PaperMeister가 이제 라이선스를 명시합니다.** Preferences → About 탭에서 버전과 라이선스, 그리고 각"
 " 서드파티 구성요소가 어떤 라이선스로 배포되는지 확인할 수 있습니다."
 
-#: ../../../../CHANGELOG.md:168
+#: ../../../../CHANGELOG.md:237
 msgid ""
 "**Updated peewee (4.3.0), PyMuPDF (1.28.2), pyzotero (1.13.5) and "
 "platformdirs.** Each was exercised against the parts of it PaperMeister "
@@ -392,7 +537,7 @@ msgstr ""
 "업데이트했습니다.** 각 버전을 받아들이기 전에, PaperMeister가 실제로 사용하는 부분 — 전문 검색, 인용 테이블, "
 "PDF 렌더링과 메타데이터, 그리고 모든 Zotero 호출 — 에 대해 직접 실행해 확인했습니다."
 
-#: ../../../../CHANGELOG.md:172
+#: ../../../../CHANGELOG.md:241
 msgid ""
 "**The project is distributed under the AGPL-3.0**, and now carries a "
 "`LICENSE` file saying so. It always effectively was: the released builds "
@@ -406,15 +551,15 @@ msgstr ""
 "조건이 애플리케이션 전체에 적용되기 때문입니다. PaperMeister를 어떻게 사용할 수 있는지는 달라지지 않았습니다 — 같은 "
 "소프트웨어에 정확한 표기가 붙었을 뿐입니다. 전체 소스는 이전과 같이 이 저장소에 있습니다."
 
-#: ../../../../CHANGELOG.md:181
+#: ../../../../CHANGELOG.md:250
 msgid "[0.1.5] - 2026-07-29"
-msgstr ""
+msgstr "[0.1.5] - 2026-07-29"
 
-#: ../../../../CHANGELOG.md:183
+#: ../../../../CHANGELOG.md:252
 msgid "Where your data lives, and what happens when it is not there."
 msgstr "데이터가 어디에 있는지, 그리고 거기 없을 때 어떻게 되는지."
 
-#: ../../../../CHANGELOG.md:186
+#: ../../../../CHANGELOG.md:255
 msgid ""
 "**Settings moved out of the library folder** into the OS location for "
 "them — `%LOCALAPPDATA%\\PaleoBytes\\PaperMeister` on Windows, "
@@ -429,7 +574,7 @@ msgstr ""
 "둡니다. 설정은 머신마다 다른 값이고 API 키가 들어 있으므로, 옮기거나 다른 머신으로 복사할 수 있는 라이브러리와 함께 다녀서는"
 " 안 됩니다."
 
-#: ../../../../CHANGELOG.md:192
+#: ../../../../CHANGELOG.md:261
 msgid ""
 "**The Windows installer now targets "
 "`%LOCALAPPDATA%\\Programs\\PaleoBytes\\PaperMeister`** — under Programs, "
@@ -442,7 +587,7 @@ msgstr ""
 "사용자 단위 설치가 있어야 할 Programs 아래이면서, 다른 PaleoBytes 도구들과 함께 묶입니다. 기존 설치는 있던 "
 "자리에서 그대로 업그레이드되고, 새 경로는 신규 설치에만 적용됩니다."
 
-#: ../../../../CHANGELOG.md:198
+#: ../../../../CHANGELOG.md:267
 msgid ""
 "**The references window now shows progress within the paper being "
 "parsed**, not just how many papers are left. Bibliographies vary "
@@ -454,7 +599,7 @@ msgstr ""
 " 최근 배치의 한 논문은 2,091개였고 보통 논문은 서른 개 남짓입니다. 그래서 오래 걸리는 논문이 몇 시간 동안 멈춘 것과 "
 "똑같이 보였습니다."
 
-#: ../../../../CHANGELOG.md:204
+#: ../../../../CHANGELOG.md:273
 msgid ""
 "**A data directory that has gone missing now stops startup instead of "
 "being recreated empty.** If you point `PAPERMEISTER_DATA_DIR` at an "
@@ -470,7 +615,7 @@ msgstr ""
 " 어느 위치에 닿지 못했는지 알리고 멈춥니다. 기본 위치는 해당되지 않습니다. 새로 설치할 때 기본 위치는 지금처럼 자동으로 "
 "만들어집니다."
 
-#: ../../../../CHANGELOG.md:210
+#: ../../../../CHANGELOG.md:279
 msgid ""
 "**The database backup script follows the data directory.** It still "
 "pointed at the pre-0.1.4 location, so scheduled backups had been failing "
@@ -484,17 +629,17 @@ msgstr ""
 "있는지를 앱에 물어보고, 그 자리에 없는 데이터베이스는 빈 파일로 내보내는 대신 스냅샷을 거부합니다. 서버에 이미 있던 백업이 "
 "위험했던 적은 없습니다."
 
-#: ../../../../CHANGELOG.md:218
+#: ../../../../CHANGELOG.md:287
 msgid "[0.1.4] - 2026-07-28"
-msgstr ""
+msgstr "[0.1.4] - 2026-07-28"
 
-#: ../../../../CHANGELOG.md:220
+#: ../../../../CHANGELOG.md:289
 msgid ""
 "Data and installation now follow the PaleoBytes layout shared with Modan2"
 " and CTHarvester."
 msgstr "데이터와 설치 위치가 Modan2·CTHarvester와 공유하는 PaleoBytes 배치를 따릅니다."
 
-#: ../../../../CHANGELOG.md:224
+#: ../../../../CHANGELOG.md:293
 msgid ""
 "**The Windows installer now installs to "
 "`%LOCALAPPDATA%\\Programs\\PaleoBytes\\PaperMeister`** and appears under "
@@ -509,7 +654,7 @@ msgstr ""
 "ID도 갖게 되어, 다음 버전이 옆에 따로 설치되지 않고 제자리에서 업그레이드됩니다. 라이브러리는 설치·제거의 영향을 받지 않습니다"
 " — ``%USERPROFILE%\\PaleoBytes\\PaperMeister``\\ 에 있습니다."
 
-#: ../../../../CHANGELOG.md:230
+#: ../../../../CHANGELOG.md:299
 msgid ""
 "**User data now lives in `~/PaleoBytes/PaperMeister/`**, the layout "
 "shared with Modan2 and CTHarvester, instead of `~/.papermeister/`. If you"
@@ -522,15 +667,15 @@ msgstr ""
 "있다면 앱을 닫고 ``python scripts/migrate_data_dir.py --execute``\\ 를 "
 "실행하세요(``--copy``\\ 를 붙이면 원본을 남깁니다). 앱이 시작할 때 발견하면 알려줍니다."
 
-#: ../../../../CHANGELOG.md:238
+#: ../../../../CHANGELOG.md:307
 msgid "[0.1.3] - 2026-07-28"
-msgstr ""
+msgstr "[0.1.3] - 2026-07-28"
 
-#: ../../../../CHANGELOG.md:240
+#: ../../../../CHANGELOG.md:309
 msgid "Keeps a paper's work when the model server restarts under it."
 msgstr "모델 서버가 도중에 재기동돼도 그 논문의 작업이 날아가지 않습니다."
 
-#: ../../../../CHANGELOG.md:243
+#: ../../../../CHANGELOG.md:312
 msgid ""
 "**A restarting model server no longer costs a paper's work.** When the "
 "container behind the LLM dies, extraction now waits for it to come back "
@@ -543,7 +688,7 @@ msgstr ""
 "배치를 이어서 합니다. 예전에는 논문을 실패 처리하고 이미 파싱한 참고문헌을 전부 버렸습니다. 기존 재시도는 20초 만에 포기했는데"
 " 컨테이너 재기동은 분 단위라, 단 한 번도 성공한 적이 없었습니다."
 
-#: ../../../../CHANGELOG.md:250
+#: ../../../../CHANGELOG.md:319
 msgid ""
 "**Language switcher in the manual.** Every page links to its counterpart "
 "in the other language, keeping you on the same page rather than sending "
@@ -552,17 +697,17 @@ msgstr ""
 "**매뉴얼에 언어 전환 링크.** 각 페이지가 다른 언어의 같은 페이지로 연결됩니다 — 목차로 되돌아가지 않고 보던 자리를 "
 "유지합니다. 문서 사이트에 이미 반영돼 있습니다."
 
-#: ../../../../CHANGELOG.md:256
+#: ../../../../CHANGELOG.md:325
 msgid "[0.1.2] - 2026-07-28"
-msgstr ""
+msgstr "[0.1.2] - 2026-07-28"
 
-#: ../../../../CHANGELOG.md:258
+#: ../../../../CHANGELOG.md:327
 msgid ""
 "References extraction that reports what went wrong and recovers from most"
 " of it, plus a documentation site."
 msgstr "참고문헌 추출이 무엇이 잘못됐는지 알려주고 대부분 스스로 복구합니다. 그리고 문서 사이트가 생겼습니다."
 
-#: ../../../../CHANGELOG.md:262
+#: ../../../../CHANGELOG.md:331
 msgid ""
 "**The Windows installer is attached to releases again.** It was built and"
 " checksummed but never uploaded — it sat deeper in the artifact tree than"
@@ -572,7 +717,7 @@ msgstr ""
 "**Windows 설치본이 다시 릴리스에 첨부됩니다.** 빌드되고 체크섬까지 계산됐는데 업로드되지 않고 있었습니다 — 아티팩트 "
 "트리에서 릴리스 단계의 파일 패턴이 닿는 것보다 깊은 곳에 있었고, 그래서 v0.1.1은 포터블 zip만 나갔습니다."
 
-#: ../../../../CHANGELOG.md:265
+#: ../../../../CHANGELOG.md:334
 msgid ""
 "**References extraction no longer loses work silently.** A batch that hit"
 " a truncated model response, a crash-looping OCR/LLM server, or a "
@@ -584,29 +729,29 @@ msgstr ""
 " 없는 문서를 만나면 해당 참고문헌을 버리거나, 경우에 따라 아무것도 저장하지 않은 채 논문을 영구히 완료로 표시했습니다. 이제 "
 "각각은 복구되거나 재시도 대상으로 남습니다:"
 
-#: ../../../../CHANGELOG.md:270
+#: ../../../../CHANGELOG.md:339
 msgid ""
 "a response cut off at the token limit is retried with more room, then "
 "split, before anything is given up on"
 msgstr "토큰 상한에 걸려 잘린 응답은 더 넉넉한 예산으로 재시도하고, 그다음 배치를 쪼갠 뒤에야 포기합니다"
 
-#: ../../../../CHANGELOG.md:272
+#: ../../../../CHANGELOG.md:341
 msgid "a server that restarts mid-request is ridden through with a short retry"
 msgstr "요청 도중 재기동하는 서버는 짧은 재시도로 넘어갑니다"
 
-#: ../../../../CHANGELOG.md:273
+#: ../../../../CHANGELOG.md:342
 msgid ""
 "a paper that genuinely has no bibliography (a letter, plates, front "
 "matter) is recorded as checked rather than retried forever"
 msgstr "정말로 참고문헌이 없는 논문(편지, 도판, 앞부속)은 영원히 재시도하지 않고 확인 완료로 기록합니다"
 
-#: ../../../../CHANGELOG.md:275
+#: ../../../../CHANGELOG.md:344
 msgid ""
 "a paper that *does* have one but returns nothing stays unchecked, so a "
 "later run tries again"
 msgstr "참고문헌이 *있는데도* 아무것도 나오지 않은 논문은 미확인으로 남겨 다음 실행에서 다시 시도합니다"
 
-#: ../../../../CHANGELOG.md:277
+#: ../../../../CHANGELOG.md:346
 msgid ""
 "**Batches no longer stall on an unsplittable request.** A request too "
 "large to finish was re-sent unchanged until the batch controller bottomed"
@@ -618,7 +763,7 @@ msgstr ""
 "보냈고, 논문당 약 25분이 걸렸습니다. 이제 첫 재시도에서 요청을 줄이고, 읽기 타임아웃을 480초로 올려 서버가 실제로 끝낸 "
 "작업을 9초 차이로 버리지 않습니다."
 
-#: ../../../../CHANGELOG.md:282
+#: ../../../../CHANGELOG.md:351
 msgid ""
 "**The source tab stays put.** Switching to another source and then having"
 " the Zotero sync finish (or applying biblio) no longer snaps the tab bar "
@@ -628,7 +773,7 @@ msgstr ""
 "**소스 탭이 그대로 유지됩니다.** 다른 소스로 옮긴 뒤 Zotero 동기화가 끝나거나 서지 정보를 적용해도 탭 바가 첫 탭으로 "
 "되돌아가지 않습니다. 예전에는 선택된 탭과 표시된 논문 목록이 서로 어긋났습니다."
 
-#: ../../../../CHANGELOG.md:287
+#: ../../../../CHANGELOG.md:356
 msgid ""
 "**Released builds are now launched before being published.** Every "
 "platform's frozen executable is started headless and has to reach a live "
@@ -640,7 +785,7 @@ msgstr ""
 "종료해야 하며, 그러지 못하면 빌드가 실패합니다. 번들에서 빠진 파일이나 네이티브 라이브러리처럼 **소스에서는 되는데 패키징하면 "
 "죽는** 부류를 잡아냅니다 — 소스 트리 테스트로는 볼 수 없는 것들입니다."
 
-#: ../../../../CHANGELOG.md:292
+#: ../../../../CHANGELOG.md:361
 msgid ""
 "**Documentation site.** A full manual in English and Korean at "
 "https://jikhanjung.github.io/PaperMeister/ — installation, a quick start "
@@ -650,7 +795,7 @@ msgstr ""
 "**문서 사이트.** https://jikhanjung.github.io/PaperMeister/ 에 영어·한국어 전체 매뉴얼 — "
 "설치, 전체 파이프라인을 훑는 빠른 시작, 사용자 안내서, FAQ, 실제 장애로 구성한 문제 해결, 개발자 안내서."
 
-#: ../../../../CHANGELOG.md:296
+#: ../../../../CHANGELOG.md:365
 msgid ""
 "**Diagnosable extraction.** A partial result now says why it was partial "
 "(truncated response, no JSON array, timeout) instead of just \"server?\","
@@ -662,7 +807,7 @@ msgstr ""
 "\"server?\" 대신입니다. ``~/.papermeister/logs/biblio_YYYYMMDD.log``\\ 에 문제가 된"
 " 응답을 포함한 배치별 상세가 남습니다. 진행 창의 시각에 날짜가 붙어, 며칠에 걸친 실행의 로그 발췌도 모호하지 않습니다."
 
-#: ../../../../CHANGELOG.md:303
+#: ../../../../CHANGELOG.md:372
 msgid ""
 "Dependencies updated to current versions (peewee 4, pyzotero 1.13, "
 "PyMuPDF 1.28); Zotero write-back handles both the old and new pyzotero "
@@ -671,17 +816,17 @@ msgstr ""
 "의존성을 최신 버전으로 갱신(peewee 4, pyzotero 1.13, PyMuPDF 1.28). Zotero 반영은 예전·새 "
 "pyzotero의 에러 클래스와 HTTP 백엔드를 모두 처리합니다."
 
-#: ../../../../CHANGELOG.md:310
+#: ../../../../CHANGELOG.md:379
 msgid "[0.1.1] - 2026-07-24"
-msgstr ""
+msgstr "[0.1.1] - 2026-07-24"
 
-#: ../../../../CHANGELOG.md:312
+#: ../../../../CHANGELOG.md:381
 msgid ""
 "Citation-network visualization, installers for all three desktop "
 "platforms, and dependency-security hardening."
 msgstr "인용 네트워크 시각화, 세 데스크톱 플랫폼 모두를 위한 설치본, 의존성 보안 강화."
 
-#: ../../../../CHANGELOG.md:316
+#: ../../../../CHANGELOG.md:385
 msgid ""
 "**Citation network graph.** Right-click a paper → an interactive ego-"
 "network of its citations: the papers it cites, the papers that cite it, "
@@ -695,7 +840,7 @@ msgstr ""
 "보유했는지·PDF 없이 보유했는지·외부 문헌(인용만)인지를 나타냅니다. 노드를 클릭하면 그 노드를 중심으로 다시 그리며 그래프를 "
 "따라갈 수 있습니다."
 
-#: ../../../../CHANGELOG.md:322
+#: ../../../../CHANGELOG.md:391
 msgid ""
 "**Installers for every platform.** In addition to the Windows portable "
 "zip, releases now include a Windows installer (Inno Setup), a Linux "
@@ -705,13 +850,13 @@ msgstr ""
 "**모든 플랫폼용 설치본.** Windows 포터블 zip에 더해, 이제 릴리스에 Windows 설치본(Inno Setup), "
 "Linux **AppImage**, macOS **DMG** 가 포함됩니다 — 모두 태그를 붙이면 CI가 빌드해 발행합니다."
 
-#: ../../../../CHANGELOG.md:325
+#: ../../../../CHANGELOG.md:394
 msgid ""
 "**Global crash handler.** An unexpected error now surfaces as a dialog "
 "and is logged, instead of silently closing the window."
 msgstr "**전역 크래시 핸들러.** 예기치 못한 오류가 창을 조용히 닫는 대신 다이얼로그로 표시되고 로그에 기록됩니다."
 
-#: ../../../../CHANGELOG.md:329
+#: ../../../../CHANGELOG.md:398
 msgid ""
 "The references (Qwen) read timeout was raised from 240 s to 360 s and "
 "made adjustable via a preference, so an occasional busy-GPU spike no "
@@ -720,11 +865,11 @@ msgstr ""
 "참고문헌 추출(Qwen)의 읽기 타임아웃을 240초에서 360초로 올리고 설정으로 조절할 수 있게 했습니다. GPU가 일시적으로 "
 "바빠도 작업이 중단되지 않습니다."
 
-#: ../../../../CHANGELOG.md:333
+#: ../../../../CHANGELOG.md:402
 msgid "Security"
 msgstr "보안"
 
-#: ../../../../CHANGELOG.md:334
+#: ../../../../CHANGELOG.md:403
 msgid ""
 "Removed the unused `python-dotenv` dependency and updated Pillow (→ 12.3)"
 " and requests (→ 2.33) to versions without known advisories; CI now runs "
@@ -733,15 +878,15 @@ msgstr ""
 "사용하지 않던 ``python-dotenv`` 의존성을 제거하고, Pillow(→ 12.3)와 requests(→ 2.33)를 "
 "알려진 취약점이 없는 버전으로 올렸습니다. CI가 push마다, 그리고 주간으로 ``pip-audit``\\ 을 실행합니다."
 
-#: ../../../../CHANGELOG.md:339
+#: ../../../../CHANGELOG.md:408
 msgid "[0.1.0] - 2026-07-23"
-msgstr ""
+msgstr "[0.1.0] - 2026-07-23"
 
-#: ../../../../CHANGELOG.md:341
+#: ../../../../CHANGELOG.md:410
 msgid "Initial tagged release of the PaperMeister desktop app."
 msgstr "PaperMeister 데스크톱 앱의 첫 태그 릴리스."
 
-#: ../../../../CHANGELOG.md:344
+#: ../../../../CHANGELOG.md:413
 msgid ""
 "Turn a PDF paper collection into a searchable knowledge base: PDF library"
 " with Zotero sync, OCR (RunPod / Chandra2), LLM bibliographic extraction,"
@@ -751,7 +896,7 @@ msgstr ""
 "PDF 논문 모음을 검색 가능한 지식 베이스로 — Zotero 동기화가 되는 PDF 라이브러리, OCR(RunPod / "
 "Chandra2), LLM 서지 정보 추출, 제목 가중치 순위와 일치 부분 강조를 갖춘 전문 검색(FTS5)."
 
-#: ../../../../CHANGELOG.md:347
+#: ../../../../CHANGELOG.md:416
 msgid ""
 "**References & citation network.** Parse each paper's reference list, "
 "resolve citations to held papers, and normalize external cited works into"
@@ -760,7 +905,7 @@ msgstr ""
 "**참고문헌과 인용 네트워크.** 각 논문의 참고문헌 목록을 파싱하고, 보유 중인 논문으로 인용을 해소하며, 외부 인용 문헌을 대표"
 " 노드로 정규화합니다 — 인용 네트워크의 토대입니다."
 
-#: ../../../../CHANGELOG.md:350
+#: ../../../../CHANGELOG.md:419
 msgid ""
 "**Server-outage resilience.** References / biblio / OCR batches pause and"
 " auto-resume when the LLM or OCR server goes down, instead of failing "
@@ -769,11 +914,11 @@ msgstr ""
 "**서버 장애 복원력.** LLM이나 OCR 서버가 내려가면 참고문헌·서지·OCR 작업이 남은 항목을 모두 실패 처리하는 대신 "
 "일시정지했다가 자동으로 재개합니다."
 
-#: ../../../../CHANGELOG.md:353
+#: ../../../../CHANGELOG.md:422
 msgid "CJK author names shown surname-first joined (정직한) in the paper list."
 msgstr "논문 목록에서 CJK 저자명을 성-이름 순으로 붙여 표시(예: 정직한)."
 
-#: ../../../../CHANGELOG.md:354
+#: ../../../../CHANGELOG.md:423
 msgid ""
 "Windows portable build (PyInstaller) produced by CI, with a cross-"
 "platform test suite (ruff + mypy + pytest on Linux and Windows)."
@@ -824,4 +969,17 @@ msgstr ""
 
 #~ msgid "[Unreleased]"
 #~ msgstr ""
+
+#~ msgid ""
+#~ "**The window title says which version"
+#~ " you are running** — \"PaperMeister "
+#~ "v0.1.9\" rather than just the name. "
+#~ "It is the thing you read back "
+#~ "when something goes wrong, and until "
+#~ "now it did not say."
+#~ msgstr ""
+#~ "**창 제목에 실행 중인 버전이 표시됩니다** — "
+#~ "이름만 있던 자리에 \"PaperMeister v0.1.9\"처럼 "
+#~ "나옵니다. 문제가 생겼을 때 제일 먼저 확인하게 "
+#~ "되는 값인데 지금까지는 알 수 없었습니다."
 

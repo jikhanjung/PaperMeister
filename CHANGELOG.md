@@ -9,12 +9,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **The window title says which version you are running** — "PaperMeister
-  v0.1.9" rather than just the name. It is the thing you read back when
-  something goes wrong, and until now it did not say.
-
 ---
+
+## [0.2.0] - 2026-09-22
+
+Figures and plates become part of the library: found, captioned, split into
+their specimens, and shown in a tab of their own. The pipeline now has four
+visible stages, and the window is tidier.
+
+### Added
+- **Figures.** A paper's figures and plates are assembled from the OCR layout,
+  matched to their printed captions and plate explanations, and each plate is
+  split into its numbered specimens. Captions are cut into one entry per figure
+  number or panel letter, with the specimen number where the text gives one.
+  Right-click a paper, a collection or the library → **Process Figures**; the
+  stages already done are skipped, and a progress window shows the server's
+  worker state (a subscription pause reads as waiting, not as a hang).
+
+  The three model stages run on the institution's wrapper server (Preferences
+  → OCR → Wrapper API); without it the action is disabled with the reason,
+  and figures found on another machine still show. Results ride in the
+  paper's OCR JSON — and its Zotero sibling attachment, when upload is on — so
+  a second machine sees them without running anything, and a sibling another
+  machine replaced is refetched at sync.
+- **The Figures tab.** Between Text and References: each figure or plate at
+  the panel's width, a quiet box on every specimen the split found, and under
+  it the caption as entries (or as printed, on a second small tab). Hover a
+  box and its entry lights; hover an entry and its box does. Only the figures
+  near the viewport are rendered, so a 120-plate volume scrolls without
+  holding it all in memory.
+- **Where each paper is in the pipeline.** OCR → Info (bibliographic
+  information) → References → Figures. The list's Status badge names the stage
+  a paper is on or must run next (`OCR wait`, `INFO rev`, `REF part`,
+  `FIG cap`, … `done`), hovering it lists all four with what each produced,
+  and the context menu offers what moves the paper on. The Metadata tab has a
+  PROCESSING card with the same.
+- **PDF tab controls.** Previous / next / typed page, zoom in and out with a
+  percentage, and a **Fit width** toggle; Ctrl+wheel zooms, PageUp/PageDown
+  move a page. Pages fit the panel's width by default, each page on its own —
+  a single landscape page no longer narrows every portrait one.
+- **Ctrl+F** (⌘F on macOS) focuses the search box from anywhere.
+
+### Changed
+- **No OS title bar.** The top bar is the title bar: drag it to move the
+  window, double-click to maximize, and the minimize / maximize / close
+  buttons sit at its right; the version is shown beside the name. The window
+  resizes by its edges as before. (`native_title_bar: true` in preferences
+  gives the OS frame back.)
+- **"Info", not "Biblio"**, wherever a person sees the bibliographic-
+  information stage: menus, the Apply button, the extraction window, the
+  Preferences tab.
+- **The Text tab is the text again.** A plate the OCR cut into its
+  photographs is shown once, as the plate; every other detail about figures
+  moved to the Figures tab.
+- **Info comparison table.** The radio sits in the cell's corner beside the
+  value on every row, the Extracted editor is as tall as its wrapped text
+  (no scrollbar), clicking the current value picks it, the × button says what
+  it does, and Apply shows a wait cursor until the write-back reports.
+- **The panels share the window's width** as it grows, not only the paper
+  list.
+
+### Fixed
+- **Apply felt slow.** A 500-row list was ~1,500 queries (four per row) and
+  every Apply re-counted the whole library twice on the UI thread. Lists are
+  three queries now (457 → 71 ms), the counts are indexed and run off the UI
+  thread (330 → 20 ms after an Apply).
+- **The left tree kept folding.** Apply rebuilt the source tree and lost the
+  open folders and the chosen one; both are kept now, and the chosen folder
+  is highlighted.
+- **The list row updates after every Apply**, including one that changed no
+  field — the badge still moves from review to done.
+- **"QThread: Destroyed while thread is still running" at exit.** Every paper
+  viewed left its Text and Figures pages behind with a render thread; they
+  are stopped and dropped when switching papers and on close.
+- **OCR refuses a fragment** — a result with far fewer pages than the PDF is
+  not stored as the paper's text.
 
 ## [0.1.9] - 2026-08-28
 

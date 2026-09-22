@@ -160,20 +160,21 @@ class FigureCanvas(QWidget):
         sx = target.width() / max(1, self._image.width())
         sy = target.height() / max(1, self._image.height())
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        # Only the active box changes; the others stay exactly as they are —
+        # fading them made the plate flicker as the cursor moved (2026-09-22).
         active = self._hover if self._hover is not None else self._lit
         for index, (rect, label, colour) in enumerate(self._boxes):
             r = QRectF(target.x() + rect.x() * sx, target.y() + rect.y() * sy, rect.width() * sx, rect.height() * sy)
             lit = active == index
-            faded = active is not None and not lit
             pen_colour = QColor(HIGHLIGHT if lit else colour)
-            pen_colour.setAlpha(60 if faded else (255 if lit else 170))
+            pen_colour.setAlpha(255 if lit else 170)
             painter.setPen(QPen(pen_colour, 2.5 if lit else 1))
             if lit:
                 fill = QColor(HIGHLIGHT)
                 fill.setAlpha(50)
                 painter.fillRect(r, fill)
             painter.drawRect(r)
-            if label and (lit or not faded):
+            if label:
                 tag = QColor(pen_colour)
                 tag.setAlpha(255 if lit else 150)
                 painter.fillRect(QRectF(r.x(), r.y(), min(r.width(), 6 * len(label) + 8), 13), tag)
