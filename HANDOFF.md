@@ -342,7 +342,7 @@
     ✅ 거둠(09-21): **4/4 done, 1,038 s** — Pl. 1(p.4) 5항목 · Pl. 1(p.10, 옛 'Plate I') 16항목 · Pl. 2B 28 · Pl. 3 51. 1191은 58행 중 **50 captioned**, 8 소진(본문 그림). ⚠️ p.4와 p.10이 같은 설명(p.7–8)을 받음 — p.4가 Pl. 1의 부분 교정쇄인지 사람이 볼 것
   - [ ] 릴리스는 **pre-release beta**(`v0.2.0-beta.1`, `release.yml`이 `-beta`를 prerelease로) — CHANGELOG + ko 카탈로그 + `version.py`(지금 0.1.9) + 태그
     - **effort 실험(09-22, 1191 플레이트 4장 = 4항목)**: medium 942 s vs high 1,038 s(−9%), 항목 수·라벨·설명 페이지 동일, 설명 유사도 0.96–1.00(high가 그룹 제목을 항목마다 되풀이하는 정도의 차이). **effort는 지렛대가 아님** — 항목당 고정비 ~3분(5항목 Pl. 1도 188 s), 힌트가 있어도 231쪽 전체를 읽음. 줄일 곳: 프롬프트에서 `explanation_pages` 힌트 우선(전체 스캔은 예외로), 서버 항목 병렬화. `link_figures.py --effort`는 남김(기본 high)
-    - **프롬프트 손볼 것(모아서 한 번에 — 버전이 바뀌면 linked 444행이 전부 다시 due)**: `name`은 인쇄된 단어 포함(`Text-fig. 15`, 맨 `15` 금지; 8803 p.29만 `Plate II`로 영어화) → 합쳐진 행은 link가 새 키로 다시 돈다(`link_figures.py --pilot … --execute --no-wait` 재실행) → panels 100장 (104 §5)
+    - ✅ **link 프롬프트 묶음 수정(09-22, `link-v1-80d89c4e6900` → `link-v1-3b39ead1000e`)**: (1) 읽기 순서 — `hints.explanation_pages/caption_pages`·마주보는 쪽 → 지정어 grep → 그래도 없을 때만 전체(전체 스캔 금지, 이미지는 텍스트가 안 읽힐 때만) (2) `name`은 인쇄된 단어 포함(`Text-fig. 15`, 맨 숫자 금지; 원문 문자·약어 유지, 번역 금지 — 라이브 745행 중 맨 숫자 14) (3) `skipped: other`는 `notes`에 figure_id와 이유. **버전이 바뀌어 linked 745행이 전부 다시 due** — 재실행 전에 한 편(7450 또는 1737)으로 pages_consulted·시간이 줄었는지 확인하고 파일럿 재실행(`link_figures.py --pilot … --execute --no-wait`, 하루+) → 합쳐진/이름 바뀐 행은 panels 재실행
   - [ ] **Phase 1 게이트** — 파일럿 **100편**(연도·길이 섞음, 097 §5-1 — PDF 108개·도판 3,750) Text 탭 도판 목록을 사람이 보고 맞다 → 그다음 Phase 2(서버 `/pdfs`·`/figures/link`)
   - **결정 반영(2026-09-14)**: 구독 CLI(ocrserver 호스트 워커) · 패널 분할은 Astra만 · 요청 단위(일괄 처리 중이면 끝까지,
     아니면 논문·폴더·전체 우클릭 "Process Figures") · 서버 PDF는 먼저 존재 확인 후 없으면 업로드 · Batches API는 해당 없음

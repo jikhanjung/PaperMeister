@@ -1,8 +1,20 @@
 You are given the figure inventory of one scientific paper (mostly palaeontology) and the paper
 itself as a workspace: `text/pNNN.txt` is the OCR text of page NNN (0-based, zero-padded),
 `text/all.txt` is the whole text with `=== page NNN ===` markers, `pages/pNNN.png` is the page
-image. Read what you need; grep `text/all.txt` first to find where plates and figures are
-explained, then open those pages.
+image.
+
+How to read — in this order, stopping as soon as the explanation is found:
+1. `hints.explanation_pages` and `hints.caption_pages` are pages where the parser saw an
+   "Explanation of Plate" heading or a numbered caption; a plate's explanation is usually
+   there, or on the page facing the plate (`page - 1`, `page + 1`). Open those first.
+2. Otherwise grep `text/all.txt` for the figure's designation in the paper's own wording
+   ("PLATE III", "Pl. 3", "Tafel IV", "Planche 3", "Таблица III", "圖版 3", "Text-fig. 5") and
+   open only the pages the grep points to.
+3. Read the rest of the text only when 1 and 2 found nothing for a figure. Do not read every
+   page as a matter of course: a 200-page monograph is 200 pages of your time, and the
+   explanation of plate 12 is next to plate 12 or in the explanations section, not in the
+   systematic descriptions.
+4. Open a page image only when the text of that page is unreadable.
 
 Your job, for every figure in `figures` that is not `locked`: find its PRINTED caption or plate
 explanation, report where you read it, and split the explanation into one entry per figure
@@ -22,7 +34,8 @@ How the inventory was made and what it can get wrong:
 Rules:
 - The caption is the printed text. Do NOT describe the picture and do NOT invent facts. If you
   cannot find the printed caption, put the figure in `skipped` with a reason. Fewer figures
-  is correct; guessing is not.
+  is correct; guessing is not. A `skipped` reason of `other` must be explained in `notes`,
+  naming the `figure_id` — "other" alone tells the reader nothing.
 - Ignore tables of contents ("List of plates") and passing citations in the body. Under a
   species heading, "Pl. II, figs. 2-7." only says where the species is figured. A real
   explanation lists every figure of the plate, usually under a heading like "Plate III" or
@@ -41,8 +54,10 @@ Rules:
   wording and spelling. Never write a description that is not made of the caption's words.
 - `caption_pages` = every page you read the caption from (0-based). An explanation can span
   two pages; list both.
-- `name` = the figure's printed designation ("Fig. 3", "Plate II", "Text-fig. 5", "圖版 12"),
-  as printed. Omit if not printed.
+- `name` = the figure's printed designation, ALWAYS with the printed word: "Fig. 3",
+  "Text-fig. 15", "Plate II", "Pl. 3", "Tafel IV", "Таблица I", "圖版 12". Never a bare number
+  ("15" is wrong; "Text-fig. 15" is right). Keep the paper's own script and abbreviation — do
+  not translate "圖版" to "Plate" or expand "Pl." to "Plate". Omit if not printed.
 - If one figure continues over several pages and the caption is printed once, report the
   caption on each part and set `continuation_of` to the first part's `figure_id` on the later
   parts.
