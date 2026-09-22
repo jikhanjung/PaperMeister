@@ -13,6 +13,13 @@ from PyQt6.QtWidgets import (
 from desktop.components.search_bar import SearchBar
 from desktop.components.sidebar import Rail
 from desktop.components.status_bar import StatusBar
+from desktop.components.window_chrome import (
+    EdgeResizer,
+    TitleBar,
+    VersionLabel,
+    WindowButtons,
+    chrome_margins,
+)
 from desktop.services import library as library_svc
 from desktop.theme.tokens import LAYOUT, SPACING
 from desktop.views.detail_panel import DetailPanel
@@ -21,16 +28,27 @@ from desktop.views.source_nav import SourceNav
 from papermeister import about
 
 
-class MainWindow(QMainWindow):
+class MainWindow(EdgeResizer, QMainWindow):
+    _frameless = False        # read by event handlers that Qt calls during __init__
+
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(about.window_title())
+        self.setWindowTitle(about.window_title())      # the taskbar and alt-tab still read it
         self.resize(1500, 900)
         self.setMinimumSize(LAYOUT['window.min.width'], LAYOUT['window.min.height'])
+        # No OS title bar: the top bar is the title bar (window_chrome). The
+        # preference gives the native frame back for anyone who wants it.
+        from papermeister.preferences import get_pref
+        self._frameless = not bool(get_pref('native_title_bar', False))
+        if self._frameless:
+            self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
+            self.setMouseTracking(True)
 
         root = QWidget()
+        root.setObjectName('WindowRoot')
+        root.setMouseTracking(True)
         root_layout = QVBoxLayout(root)
-        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setContentsMargins(*chrome_margins(self._frameless))
         root_layout.setSpacing(0)
 
         root_layout.addWidget(self._build_top_bar())
@@ -68,15 +86,16 @@ class MainWindow(QMainWindow):
     # ── Top bar ──────────────────────────────────────────────
 
     def _build_top_bar(self) -> QWidget:
-        bar = QWidget()
+        bar = TitleBar() if self._frameless else QWidget()
         bar.setObjectName('TopBar')
         layout = QHBoxLayout(bar)
-        layout.setContentsMargins(SPACING['md'], 0, SPACING['md'], 0)
+        layout.setContentsMargins(SPACING['md'], 0, 0 if self._frameless else SPACING['md'], 0)
         layout.setSpacing(SPACING['md'])
 
         title = QLabel('PaperMeister')
         title.setObjectName('AppTitle')
         layout.addWidget(title)
+        layout.addWidget(VersionLabel(about.APP_VERSION), 0, Qt.AlignmentFlag.AlignVCenter)
 
         layout.addSpacing(SPACING['lg'])
 
@@ -84,7 +103,36 @@ class MainWindow(QMainWindow):
         self.search_bar.setMinimumWidth(420)
         layout.addWidget(self.search_bar, 1)
 
+        if self._frameless:
+            layout.addSpacing(SPACING['lg'])
+            self._window_buttons = WindowButtons(self)
+            layout.addWidget(self._window_buttons, 0, Qt.AlignmentFlag.AlignTop)
+            bar.double_clicked.connect(self._window_buttons.toggle_maximize)
         return bar
+
+    # ── Frameless chrome: edges resize, the state changes the button ──
+
+    def mouseMoveEvent(self, event):
+        if self._frameless:
+            self.edge_move(event)
+        super().mouseMoveEvent(event)
+
+    def mousePressEvent(self, event):
+        if self._frameless and self.edge_press(event):
+            return
+        super().mousePressEvent(event)
+
+    def leaveEvent(self, event):
+        if self._frameless:
+            self.edge_leave()
+        super().leaveEvent(event)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if self._frameless and event.type() == event.Type.WindowStateChange and hasattr(self, '_window_buttons'):
+            self._window_buttons.refresh()
+            # Maximized: the resize border would be dead space at the screen's edge.
+            self.centralWidget().layout().setContentsMargins(*chrome_margins(not self.isMaximized()))
 
     # ── Body ─────────────────────────────────────────────────
 

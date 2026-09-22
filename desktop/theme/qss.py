@@ -86,6 +86,30 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
     font-weight: {FONT['weight.bold']};
     padding-left: 14px;
 }}
+#TopBar QLabel#AppVersion {{
+    color: {c['text.secondary']};
+    font-size: {FONT['size.xs']}px;
+    padding-top: 3px;
+}}
+/* The window's own buttons on a frameless window (window_chrome). */
+QToolButton#WindowButton {{
+    color: {c['text.secondary']};
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    font-size: {FONT['size.md']}px;
+}}
+QToolButton#WindowButton:hover {{
+    background-color: {c['bg.hover']};
+    color: {c['text.primary']};
+}}
+QToolButton#WindowButton#WindowClose:hover {{
+    background-color: #c0392b;
+    color: white;
+}}
+#WindowRoot {{
+    background-color: {c['bg.panel']};
+}}
 
 /* ── Search bar ───────────────────────────────────────────── */
 #SearchBar {{
