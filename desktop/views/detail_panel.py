@@ -296,6 +296,38 @@ class _LazyPdfView(QScrollArea):
         self._rendered[idx] = True
 
 
+class _GrowingTextEdit(QPlainTextEdit):
+    """A text area as tall as its wrapped text, never scrolling.
+
+    The Extracted column is narrower than Current (a radio on the left, × on
+    the right), so a caption that fits Current in two lines wraps to three
+    here; sizing by newline count left a scrollbar on most long fields.
+    Height follows the document's laid-out line count, re-measured when the
+    text or the width changes.
+    """
+
+    def __init__(self, text: str = '', parent=None):
+        super().__init__(parent)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
+        self.setPlainText(text)
+        self.textChanged.connect(self._fit)
+        self._fit()
+
+    def _fit(self):
+        lines = max(2, int(self.document().documentLayout().documentSize().height()))
+        margins = self.contentsMargins()
+        doc_margin = int(self.document().documentMargin())
+        height = (lines * self.fontMetrics().lineSpacing() + 2 * doc_margin + 2 * self.frameWidth()
+                  + margins.top() + margins.bottom() + 2)
+        if height != self.height():
+            self.setFixedHeight(height)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._fit()
+
+
 class _ClickLabel(QLabel):
     """A label that reports a click — the read-only side of a biblio row,
     so choosing "keep the current value" is a click on the value, not a hunt
@@ -994,10 +1026,7 @@ class DetailPanel(QWidget):
 
         if editable:
             if use_textarea:
-                edit = QPlainTextEdit()
-                edit.setPlainText(value)
-                line_count = max(value.count('\n') + 1, 2)
-                edit.setFixedHeight(line_count * 20 + 12)
+                edit = _GrowingTextEdit(value)
                 clear = lambda e=edit: e.setPlainText('')  # noqa: E731
             else:
                 edit = QLineEdit(value)

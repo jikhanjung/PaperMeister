@@ -26,6 +26,27 @@ def test_a_long_field_keeps_the_radio_beside_the_text_not_above_it(panel):
 
 
 @pytest.mark.ui
+def test_the_extracted_editor_grows_with_its_wrapped_text_instead_of_scrolling(qapp, panel):
+    from PyQt6.QtCore import Qt
+    group = QButtonGroup()
+    long_title = ('Trilobites of the post-Sardic (Upper Ordovician) sequence of southern Sardinia, '
+                  'with a revision of the genera and a note on their stratigraphic distribution')
+    cell = panel._build_radio_cell('title', long_title, group, radio_id=1, editable=True, css_class='ConflictValue')
+    cell.resize(320, 200)
+    cell.show()
+    qapp.processEvents()
+    edit = panel._field_edits['title']
+    assert edit.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    wrapped = int(edit.document().documentLayout().documentSize().height())
+    assert wrapped >= 3                                     # it wraps at this width
+    assert edit.height() >= wrapped * edit.fontMetrics().lineSpacing()
+    narrow = edit.height()
+    cell.resize(900, 200)
+    qapp.processEvents()
+    assert edit.height() < narrow                           # wider: fewer lines, shorter box
+
+
+@pytest.mark.ui
 def test_clicking_the_current_value_picks_its_radio(panel):
     from PyQt6.QtCore import QPointF, Qt
     from PyQt6.QtGui import QMouseEvent
