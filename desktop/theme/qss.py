@@ -85,15 +85,16 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
 #TopBar QLabel#AppTitle {{
     color: {c['text.primary']};
     background: transparent;
-    font-size: {FONT['size.lg']}px;
+    font-size: {FONT['size.xxl']}px;
     font-weight: {FONT['weight.bold']};
+    letter-spacing: 0.5px;
     padding-left: 14px;
 }}
 #TopBar QLabel#AppVersion {{
     color: {c['text.secondary']};
     background: transparent;
-    font-size: {FONT['size.xs']}px;
-    padding-top: 3px;
+    font-size: {FONT['size.sm']}px;
+    padding-top: 6px;
 }}
 /* The window's own buttons on a frameless window (window_chrome). */
 QToolButton#WindowButton {{
