@@ -95,3 +95,18 @@ Full suite: **537 passed**.
 - The Process window's OCR flow does not chain into figures; figures
   remain an explicit action (decision 2026-09-14: request-scoped).
 - Beta pre-release (`v0.2.0-beta.1`) after the live check.
+
+## Addendum (2026-09-22): a job the closed app left behind
+
+Closing the app while a paper's job is out left the job finishing on the
+server and nothing to land it — the app only wrote what it waited for, and
+the lanes' `--collect` was a script. `figure_pipeline.collect_finished()`
+is the lanes' collect in the library: every finished link / panels job of
+this client is read, replies matched to rows (`items_from_replies` for
+link, the `<figure id>@<panel_key>` item key for panels) and applied with
+the same validation; a reply already applied is unchanged. The main window
+runs it **at startup** and **before a Process Figures run** (so a paper cut
+short last time is not re-asked), off the UI thread, and re-reads the
+badges of the papers it touched. Test: a client that raises `Cancelled`
+during the wait, then a collect that lands the caption, then a normal run
+that only needs panels.
