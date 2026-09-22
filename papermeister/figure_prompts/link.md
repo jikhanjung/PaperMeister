@@ -28,6 +28,12 @@ How the inventory was made and what it can get wrong:
 - `page_kind: "plate"` is a plate page: photographs whose explanation is printed elsewhere —
   on the facing page, the page before, the page after, or in an "Explanation of Plates" section
   at the end of the paper, possibly thirty pages away. Look for it there.
+- When plates come as a run of consecutive pages (`hints.plate_pages` shows the run), their
+  explanations are almost always gathered in one block **immediately before the first plate
+  of the run** — a section of "Plate 1 … Plate 2 … Plate N" headings, each with its figure
+  list — or, in older monographs, printed on the page facing each plate. Find that block once
+  (start at the pages just before `min(plate_pages)`), then take for each plate the part under
+  its own heading; do not search the whole paper plate by plate.
 - A `locked` figure already has its caption and entries. They are given so you do not attach
   that text to a neighbour. Do not report locked figures.
 
