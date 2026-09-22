@@ -931,7 +931,8 @@ class MainWindow(QMainWindow):
         ok = report is not None and not report.error
         detail = error or (report.error if report and report.error else report.summary() if report else '')
         self._figures_window.record(title, ok, detail)
-        # The Text tab's figure list reads the DB: repaint if this paper is open.
+        self.paper_list.refresh_row(paper_id)       # the FIG badge moves
+        # The Figures tab and the PROCESSING card read the DB: repaint if this paper is open.
         if self.detail_panel._current_paper_id == paper_id:
             self.detail_panel.show_paper(paper_id)
         self._drain_figures_queue()
@@ -1623,6 +1624,7 @@ class MainWindow(QMainWindow):
         finish window + drop the resolution index when the batch is idle."""
         if self.detail_panel._current_paper_id == paper_id:
             self.detail_panel.show_paper(paper_id)  # repopulate References tab
+        self.paper_list.refresh_row(paper_id)       # the REF badge moves
         self._refs_tasks.pop(paper_id, None)   # done — free its slot before refilling
         if self._refs_window and self._refs_window.isVisible():
             self._refs_window.end_item(paper_id)

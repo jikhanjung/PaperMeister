@@ -114,12 +114,28 @@ def test_the_menu_follows_the_stages(paper_list, monkeypatch):
         return [a[0] for a in captured['actions']]
 
     fresh = labels(Stages(ocr='done'))
-    assert fresh[:3] == ['Extract Bibliography', 'Extract References', 'Process Figures (assemble → captions → panels)']
+    assert fresh[:3] == ['Extract Info', 'Extract References', 'Process Figures (assemble → captions → panels)']
     assert 'Open PDF' in fresh and 'Show in citation network' in fresh
     mid = labels(Stages(ocr='done', biblio='review', refs='partial', figs='linked'))
-    assert mid[:3] == ['Review Bibliography (Metadata tab)', 'Retry References', 'Process Figures (panels)']
+    assert mid[:3] == ['Review Info (Metadata tab)', 'Retry References', 'Process Figures (panels)']
     finished = labels(Stages(ocr='done', biblio='done', refs='done', figs='split'))
-    assert finished[:3] == ['Re-extract Bibliography', 'Re-extract References', 'Process Figures (re-check)']
+    assert finished[:3] == ['Re-extract Info', 'Re-extract References', 'Process Figures (re-check)']
     # before OCR, only OCR
     item.setText(0, 'failed')
     assert labels(Stages(ocr='failed')) == ['Retry OCR', 'Show in citation network']
+
+
+@pytest.mark.ui
+def test_the_status_cell_names_the_stage_to_run_next_and_lists_all_on_hover(qapp):
+    from desktop.services.paper_service import Stages
+    from desktop.views import paper_list as mod
+    assert mod.badge_text(Stages(ocr='pending')) == 'OCR wait'
+    assert mod.badge_text(Stages(ocr='failed')) == 'OCR err'
+    assert mod.badge_text(Stages(ocr='done')) == 'INFO'                       # next to run
+    assert mod.badge_text(Stages(ocr='done', biblio='review')) == 'INFO rev'
+    assert mod.badge_text(Stages(ocr='done', biblio='done', refs='partial')) == 'REF part'
+    assert mod.badge_text(Stages(ocr='done', biblio='done', refs='done', figs='linked')) == 'FIG cap'
+    assert mod.badge_text(Stages(ocr='done', biblio='done', refs='done', figs='split')) == 'done'
+    tip = mod.stages_tooltip_html(Stages(ocr='done', biblio='review', refs='none', figs='none',
+                                         detail={'biblio': 'extracted, needs review'}))
+    assert '✓ OCR' in tip and '· INFO' in tip and 'needs review' in tip and '· FIG' in tip

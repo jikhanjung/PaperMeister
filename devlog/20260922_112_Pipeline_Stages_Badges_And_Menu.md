@@ -56,3 +56,17 @@ paints from it, the menu reads it, and the sort text is a rank string.
 Tests: the menu's labels per stage combination and the OCR-first rule
 (`test_figures_action.py`); batched and single-row stages agree and the
 tooltip reads right (`test_list_rows_batched.py`). **561 passed**.
+
+## Addendum (same day): one badge, named Status; Info
+
+Reviewing it, the user wanted one badge, not four — the stage the paper
+is on or must run next — and no separate Status column beside it, since
+the two said the same thing. So the old Status pill is gone and the Stages
+column is now **Status**: `OCR wait` / `OCR err` / `INFO` (to run) /
+`INFO rev` / `REF part` / `FIG cap` / … / `done`, coloured by that
+stage's state. **Hovering** shows all four stages as a small table —
+✓ / ✗ / · per stage with what it produced. The bibliography stage is
+called **Info** (badge `INFO`, menu *Extract Info* / *Review Info* /
+*Re-extract Info*). The row's badge is refreshed when references
+extraction or figure processing finishes for that paper, as it already
+was after Apply.

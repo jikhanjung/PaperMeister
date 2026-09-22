@@ -45,7 +45,7 @@ class PaperRow:
 
 #: Stage states, in order of progress. `STAGE_KEYS` is the column's order.
 STAGE_KEYS = ('ocr', 'biblio', 'refs', 'figs')
-STAGE_NAMES = {'ocr': 'OCR', 'biblio': 'Bibliography', 'refs': 'References', 'figs': 'Figures'}
+STAGE_NAMES = {'ocr': 'OCR', 'biblio': 'Info', 'refs': 'References', 'figs': 'Figures'}
 
 
 @dataclass(frozen=True)
