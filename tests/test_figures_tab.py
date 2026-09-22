@@ -168,3 +168,26 @@ def test_figures_fit_the_tab_width_and_refit_on_resize(qapp, paper, white_pdf):
     tab._refit()
     assert first.width() == tab.figure_width() and first.width() > 900
     tab._stop_worker()
+
+
+@pytest.mark.ui
+def test_switching_papers_stops_the_previous_render_thread_and_drops_the_page(qapp, paper, white_pdf):
+    """Every paper viewed used to leave its Figures page behind as a hidden
+    child with a thread blocked on its queue; at exit Qt destroyed them
+    running. The panel now stops the worker and deletes the page."""
+    from desktop.views.detail_panel import DetailPanel
+    from papermeister.models import PaperFile
+    paper_id, _ = paper
+    pdf = tempfile.NamedTemporaryFile(suffix='.pdf', delete=False)     # exists: the tab starts a worker
+    pdf.close()
+    PaperFile.update(path=pdf.name).where(PaperFile.paper == paper_id).execute()
+    panel = DetailPanel()
+    panel.show_paper(paper_id)
+    panel._tabs.setCurrentIndex(3)
+    tab = panel._figures_tab
+    assert tab is not None and tab._worker is not None and tab._worker.isRunning()
+    assert tab._worker.parent() is None                 # Python-owned, not a Qt child
+    panel.show_paper(paper_id)                          # another paper (or the same again)
+    assert tab._worker is None                          # stopped and let go
+    assert panel._figures_tab is None or panel._figures_tab is not tab
+    panel.dispose()

@@ -426,6 +426,7 @@ class DetailPanel(QWidget):
         self._metadata_host: QWidget | None = None
         self._biblio_host: QWidget | None = None
         self._ocr_browser: QTextBrowser | None = None
+        self._figures_tab = None
 
         self._current_paper_id: int | None = None
         self._current_detail = None
@@ -533,6 +534,7 @@ class DetailPanel(QWidget):
         except (TypeError, RuntimeError):
             pass
 
+        self._dispose_tabs()
         self._tabs.clear()
         self._pdf_built = False
         self._text_built = False
@@ -562,6 +564,34 @@ class DetailPanel(QWidget):
         # setCurrentIndex doesn't fire currentChanged if the index is unchanged,
         # so force a build check for the active tab.
         self._on_tab_changed(self._tabs.currentIndex())
+
+    def _dispose_tabs(self) -> None:
+        """Let go of the previous paper's tab pages.
+
+        `QTabWidget.clear()` removes pages without deleting them, so every
+        paper viewed left its Text and Figures pages behind as hidden
+        children — each with a render thread blocked on its queue. At exit
+        Qt destroyed them all: "QThread: Destroyed while thread is still
+        running", once per lingering page. Stop the workers, then delete
+        the pages.
+        """
+        for widget in (self._ocr_browser, self._figures_tab):
+            if widget is not None and hasattr(widget, 'dispose'):
+                try:
+                    widget.dispose()
+                except RuntimeError:
+                    pass                      # already gone on the C++ side
+        self._ocr_browser = None
+        self._figures_tab = None
+        for wrapper in (self._pdf_wrapper, self._text_wrapper, self._figures_wrapper, self._refs_wrapper):
+            if wrapper is not None:
+                wrapper.deleteLater()
+        self._pdf_wrapper = self._text_wrapper = self._figures_wrapper = self._refs_wrapper = None
+
+    def dispose(self) -> None:
+        """For the window closing: stop every render thread before Qt tears
+        the widgets down."""
+        self._dispose_tabs()
 
     @staticmethod
     def _make_lazy_wrapper() -> QWidget:
@@ -992,7 +1022,8 @@ class DetailPanel(QWidget):
         btn = QPushButton('×')
         btn.setFixedSize(20, 20)
         btn.setProperty('class', 'ClearBtn')
-        btn.setToolTip('Clear')
+        btn.setToolTip('Clear this value. With this side selected, Apply then empties the field '
+                       '(in Zotero too, when write-back is on).')
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         return btn
 
@@ -1076,6 +1107,7 @@ class DetailPanel(QWidget):
         from desktop.views.figures_tab import FiguresTab
         tab = FiguresTab()
         tab.set_paper(d.paper_id, self._local_pdf_path(d))
+        self._figures_tab = tab
         return tab
 
     def _build_references_tab(self, d) -> QWidget:

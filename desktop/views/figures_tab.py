@@ -296,7 +296,7 @@ class FiguresTab(QScrollArea):
             self._layout.addWidget(block)
         self._layout.addStretch()
         if pdf_path:
-            self._worker = CropWorker(pdf_path, self)
+            self._worker = CropWorker(pdf_path)       # Python-owned, not a child: see OcrView
             self._worker.ready.connect(self._crop_ready)
             self._worker.start()
         self._fitted_width = 0
@@ -387,6 +387,10 @@ class FiguresTab(QScrollArea):
         self._worker.stop()
         self._worker.wait(2000)
         self._worker = None
+
+    def dispose(self):
+        """Stop the worker; for the owner about to drop this tab."""
+        self._stop_worker()
 
     def closeEvent(self, event):
         self._stop_worker()

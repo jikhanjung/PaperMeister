@@ -170,7 +170,12 @@ class OcrView(QTextBrowser):
         # a request that arrives with no worker to take it is simply dropped.
         html = ocr_layout.document_html(pages, sizer=self._slot_size, unions=self._unions)
         if self._slots and pdf_path:
-            self._worker = _FigureWorker(pdf_path, self)
+            # Not a child of the view: Qt deleting the view's children would
+            # destroy a thread still blocked on its queue ("QThread:
+            # Destroyed while thread is still running"). Python owns it and
+            # `_stop_worker` ends it — on the next set_pages, on dispose(),
+            # on close, or when the view is collected.
+            self._worker = _FigureWorker(pdf_path)
             self._worker.ready.connect(self._figure_ready)
             self._worker.start()
         self._built_width = self._available_width()
@@ -279,6 +284,10 @@ class OcrView(QTextBrowser):
         self._worker.stop()
         self._worker.wait(2000)
         self._worker = None
+
+    def dispose(self):
+        """Stop the worker; for the owner about to drop this view."""
+        self._stop_worker()
 
     def closeEvent(self, event):
         self._stop_worker()

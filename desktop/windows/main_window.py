@@ -935,6 +935,14 @@ class MainWindow(QMainWindow):
             self.detail_panel.show_paper(paper_id)
         self._drain_figures_queue()
 
+    def closeEvent(self, event):
+        # Render threads must end before Qt tears their widgets down.
+        try:
+            self.detail_panel.dispose()
+        except Exception:
+            pass
+        super().closeEvent(event)
+
     def _biblio_title(self, paper_id: int) -> str:
         from papermeister.models import Paper
         p = Paper.get_or_none(Paper.id == paper_id)
