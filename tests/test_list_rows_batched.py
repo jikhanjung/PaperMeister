@@ -18,7 +18,15 @@ def db(monkeypatch):
 
 @pytest.fixture
 def library(db):
-    from papermeister.models import Author, Folder, Paper, PaperBiblio, PaperFile, PaperFolder, Source
+    from papermeister.models import (
+        Author,
+        Folder,
+        Paper,
+        PaperBiblio,
+        PaperFile,
+        PaperFolder,
+        Source,
+    )
     src = Source.create(name='Papers', source_type='directory', path='/x')
     folder = Folder.create(source=src, name='root', path='/x')
     made = []

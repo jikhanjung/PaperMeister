@@ -14,6 +14,7 @@ Stub banner sits above the tab bar so it is visible regardless of tab.
 """
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QFrame,
     QGridLayout,
@@ -1059,6 +1060,10 @@ class DetailPanel(QWidget):
             return
         self._apply_btn.setEnabled(False)
         self._apply_btn.setText('Applying…')
+        # The write-back goes over the network; the pointer says so until
+        # the worker reports back (either way), so a click that seems to do
+        # nothing is not repeated.
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
 
         if self._field_groups and self._biblio_id is not None:
             values = self._collect_values()
@@ -1078,6 +1083,7 @@ class DetailPanel(QWidget):
         task.start()
 
     def _on_apply_done(self, result):
+        QApplication.restoreOverrideCursor()
         pid = self._current_paper_id
         if isinstance(result, tuple) and len(result) == 3:
             _, changed, _ = result
@@ -1093,6 +1099,7 @@ class DetailPanel(QWidget):
             self.show_paper(pid)
 
     def _on_apply_failed(self, message: str):
+        QApplication.restoreOverrideCursor()
         if self._apply_btn is not None:
             self._apply_btn.setText('Failed')
             self._apply_btn.setToolTip(message)

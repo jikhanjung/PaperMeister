@@ -39,3 +39,44 @@ def test_clicking_the_current_value_picks_its_radio(panel):
     label.mouseReleaseEvent(ev)
     assert group.checkedId() == 0
     assert biblio.layout().count() == 3 and paper.layout().count() == 2
+
+
+@pytest.mark.ui
+def test_apply_shows_the_wait_cursor_until_the_worker_reports(qapp, panel, monkeypatch):
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QApplication, QPushButton
+
+    from desktop.views import detail_panel as mod
+
+    class Task:
+        def __init__(self, fn, *a, **k):
+            self.done = _Sig()
+            self.failed = _Sig()
+
+        def start(self):
+            pass
+
+    class _Sig:
+        def __init__(self):
+            self.slots = []
+
+        def connect(self, fn):
+            self.slots.append(fn)
+
+        def emit(self, *a):
+            for fn in self.slots:
+                fn(*a)
+
+    monkeypatch.setattr(mod, 'BackgroundTask', Task)
+    panel._current_paper_id = 1
+    panel._apply_btn = QPushButton('Apply')
+    panel._field_groups = {}
+    panel._on_apply_clicked()
+    assert QApplication.overrideCursor() is not None
+    assert QApplication.overrideCursor().shape() == Qt.CursorShape.WaitCursor
+    monkeypatch.setattr(panel, 'show_paper', lambda pid: None)
+    panel._apply_task.done.emit(('applied', False, ''))
+    assert QApplication.overrideCursor() is None
+    panel._on_apply_clicked()
+    panel._apply_task.failed.emit('boom')
+    assert QApplication.overrideCursor() is None and panel._apply_btn.text() == 'Failed'
