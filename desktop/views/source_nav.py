@@ -71,12 +71,15 @@ class _StatusPanel(QWidget):
 
         self._expanded = True
 
-    def populate(self):
+    def populate(self, folders=None):
+        """Fill the status rows; `folders` (LibraryFolder list) when the
+        caller counted already — off the UI thread, after an Apply."""
         self._tree.clear()
-        try:
-            folders = library_svc.load_library_folders()
-        except Exception:
-            folders = []
+        if folders is None:
+            try:
+                folders = library_svc.load_library_folders()
+            except Exception:
+                folders = []
         for folder in folders:
             item = QTreeWidgetItem([f'  {folder.title}    {folder.count:,}'])
             item.setData(0, Qt.ItemDataRole.UserRole, ('library', folder.key))
@@ -148,9 +151,10 @@ class SourceNav(QWidget):
 
     # ── Refresh ──────────────────────────────────────────────
 
-    def refresh(self):
+    def refresh(self, folders=None):
         """Rebuild all tabs from scratch. Cheap — runs on startup and on
-        `apply_completed` (counts may have shifted).
+        `apply_completed` (counts may have shifted). `folders`: status counts
+        already computed (see `_StatusPanel.populate`).
 
         Keeps the user on the tab they were looking at. This matters most on
         startup: the Zotero sync finishes seconds later and refreshes, and
@@ -186,7 +190,7 @@ class SourceNav(QWidget):
             idx = self.tabs.addTab(tree, 'Library')
             self._trees[idx] = tree
             self.tabs.blockSignals(False)
-            self._status_panel.populate()
+            self._status_panel.populate(folders)
             return
 
         for src in sources:

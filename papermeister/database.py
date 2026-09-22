@@ -180,6 +180,13 @@ def _migrate(database):
             "CREATE INDEX IF NOT EXISTS reference_resolved_work_id "
             "ON reference (resolved_work_id)")
 
+    # The status counts the left panel shows after every Apply filter on
+    # these; without indexes each is a table scan (paperfile 20k rows,
+    # paperbiblio 9k) — 300 ms of counting on the UI thread per Apply.
+    for name, table, column in (('paperfile_status', 'paperfile', 'status'),
+                                ('paperbiblio_status', 'paperbiblio', 'status')):
+        database.execute_sql(f'CREATE INDEX IF NOT EXISTS {name} ON {table} ({column})')
+
     # trashed_at on Paper and PaperFile (Zotero trash flag, NULL = not trashed)
     cursor = database.execute_sql("PRAGMA table_info('paper')").fetchall()
     columns = {row[1] for row in cursor}

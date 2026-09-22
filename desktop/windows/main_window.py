@@ -55,6 +55,7 @@ class MainWindow(QMainWindow):
         self._figures_task = None     # the one in flight
         self._figures_window = None   # progress window (lazy)
         self._figures_cancel = False
+        self._recount_task = None     # status counts after Apply, off the UI thread
         self._cited_works_window = None  # Cited Works browser (lazy)
         self._network_window = None  # citation-network ego view (lazy)
         self._sync_worker = None  # ZoteroSyncWorker
@@ -1687,13 +1688,6 @@ class MainWindow(QMainWindow):
             self.status_bar.set_task('Idle')
 
     def _on_apply_completed(self, paper_id: int, changed: bool, action: str):
-        # Refresh counts and the library tree (needs_review bucket may change).
-        try:
-            total, pending, review = library_svc.corpus_counts()
-            self.status_bar.set_counts(total, pending, review)
-        except Exception:
-            pass
-        self.source_nav.refresh()
         # The row's status pill moves (review → done) even when no field
         # changed — the biblio is marked applied either way — so the row is
         # re-read every time, not only after a change.
@@ -1701,6 +1695,27 @@ class MainWindow(QMainWindow):
         self.status_bar.set_task(
             f'Applied paper #{paper_id} ({action})' if changed else f'No changes for paper #{paper_id}'
         )
+        # Counts and the library tree (needs_review bucket may change) — the
+        # counting is seven queries over the whole library, ~150 ms, so it
+        # runs off the UI thread; the widgets are updated when it is back.
+        self._recount_library()
+
+    def _recount_library(self):
+        from desktop.workers.background import BackgroundTask
+
+        def _count():
+            return library_svc.corpus_counts(), library_svc.load_library_folders()
+
+        task = BackgroundTask(_count)
+        task.done.connect(self._on_recounted)
+        task.failed.connect(lambda _msg: self.source_nav.refresh())
+        self._recount_task = task
+        task.start()
+
+    def _on_recounted(self, result):
+        (total, pending, review), folders = result
+        self.status_bar.set_counts(total, pending, review)
+        self.source_nav.refresh(folders)
 
     def _on_reference_navigate(self, paper_id: int):
         """A 'in library' reference badge was clicked → open that cited paper.

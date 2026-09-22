@@ -5,6 +5,8 @@ These return counts/IDs only; the view layer turns them into widgets.
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from peewee import fn
+
 from papermeister.models import Paper, PaperBiblio, PaperFile
 
 
@@ -66,19 +68,24 @@ def _count_all() -> int:
 
 
 def _count_status(status: str) -> int:
-    """Count distinct non-trashed papers that have at least one PaperFile with this status."""
-    return (
-        Paper.select()
-        .join(PaperFile, on=(PaperFile.paper == Paper.id))
-        .where((PaperFile.status == status) & (Paper.trashed_at.is_null()))
-        .distinct()
-        .count()
-    )
+    """Count non-trashed papers that have at least one PaperFile with this
+    status. EXISTS rather than JOIN + DISTINCT: a paper with a PDF and a JSON
+    sibling is two joined rows, and de-duplicating 18k of them was 55 ms."""
+    exists = PaperFile.select(PaperFile.id).where((PaperFile.paper == Paper.id) & (PaperFile.status == status))
+    return Paper.select().where(Paper.trashed_at.is_null() & fn.EXISTS(exists)).count()
 
 
 def _count_needs_review() -> int:
-    """Papers whose best biblio is flagged needs_review (P08 §5)."""
-    return len(needs_review_paper_ids())
+    """Papers whose best biblio is flagged needs_review (P08 §5) — the
+    same set `needs_review_paper_ids` lists, counted in SQL (the Python
+    walk was 90 ms of every status refresh)."""
+    return (
+        PaperBiblio
+        .select(fn.COUNT(fn.DISTINCT(PaperBiblio.paper)))
+        .join(Paper, on=(PaperBiblio.paper == Paper.id))
+        .where((PaperBiblio.status == 'needs_review') & (Paper.trashed_at.is_null()))
+        .scalar()
+    ) or 0
 
 
 def _count_recent() -> int:

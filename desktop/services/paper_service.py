@@ -90,7 +90,10 @@ def _author_cite(paper_id: int) -> str:
         .where(Author.paper == paper_id)
         .order_by(Author.order)
     )
-    names = [a.name for a in authors]
+    return _cite_names([a.name for a in authors])
+
+
+def _cite_names(names: list[str]) -> str:
     if not names:
         return ''
     cites = [_cite_name(n) for n in names]
@@ -111,14 +114,44 @@ def _is_stub(paper: Paper) -> bool:
     ) and Author.select().where(Author.paper == paper).count() == 0
 
 
-def _primary_file(paper) -> PaperFile | None:
-    """Return the best PaperFile for a paper.
+class _RowContext:
+    """What every row of a list needs, fetched for the whole list at once.
 
-    Prefer an actual PDF (the OCR target) so a paper's pill reflects its PDF,
-    not a skipped supplementary (.txt/.doc) or a derived JSON sibling. Falls
-    back to any non-JSON, then the first file.
+    Per row the list used to ask the DB three or four times — files, biblio
+    statuses, authors, and a stub check — so a 500-row list was ~1,500
+    queries and half a second on the UI thread, felt at every click on a
+    folder. Three queries over the list's paper ids replace them.
     """
-    files = list(PaperFile.select().where(PaperFile.paper == paper).order_by(PaperFile.id))
+
+    def __init__(self, papers: list[Paper]):
+        ids = [p.id for p in papers]
+        self.files: dict[int, list[PaperFile]] = {}
+        self.biblio: dict[int, set[str]] = {}
+        self.authors: dict[int, list[str]] = {}
+        if not ids:
+            return
+        for f in PaperFile.select().where(PaperFile.paper << ids).order_by(PaperFile.id):
+            self.files.setdefault(f.paper_id, []).append(f)
+        for b in PaperBiblio.select(PaperBiblio.paper, PaperBiblio.status).where(PaperBiblio.paper << ids):
+            self.biblio.setdefault(b.paper_id, set()).add(b.status)
+        for a in (Author.select(Author.paper, Author.name).where(Author.paper << ids)
+                  .order_by(Author.paper, Author.order)):
+            self.authors.setdefault(a.paper_id, []).append(a.name)
+
+    def primary_file(self, paper: Paper) -> PaperFile | None:
+        return _pick_primary(self.files.get(paper.id, []))
+
+    def biblio_statuses(self, paper: Paper) -> set[str]:
+        return self.biblio.get(paper.id, set())
+
+    def author_cite(self, paper: Paper) -> str:
+        return _cite_names(self.authors.get(paper.id, []))
+
+    def is_stub(self, paper: Paper) -> bool:
+        return ((paper.title or '').strip() == '' or paper.year is None) and not self.authors.get(paper.id)
+
+
+def _pick_primary(files: list[PaperFile]) -> PaperFile | None:
     if not files:
         return None
     for f in files:
@@ -130,15 +163,26 @@ def _primary_file(paper) -> PaperFile | None:
     return files[0]  # all JSON — return first
 
 
-def _row_from_paper(paper: Paper, source_name: str) -> PaperRow:
-    pfile = _primary_file(paper)
+def _primary_file(paper) -> PaperFile | None:
+    """Return the best PaperFile for a paper.
+
+    Prefer an actual PDF (the OCR target) so a paper's pill reflects its PDF,
+    not a skipped supplementary (.txt/.doc) or a derived JSON sibling. Falls
+    back to any non-JSON, then the first file.
+    """
+    return _pick_primary(list(PaperFile.select().where(PaperFile.paper == paper).order_by(PaperFile.id)))
+
+
+def _row_from_paper(paper: Paper, source_name: str, ctx: _RowContext | None = None) -> PaperRow:
+    """One list row. With `ctx` (a whole list) nothing here touches the DB;
+    without it (one row, `row_for_paper`) the same facts are queried."""
+    pfile = ctx.primary_file(paper) if ctx else _primary_file(paper)
     file_status = pfile.status if pfile else 'none'
     if file_status == 'processed':
         # Derive a richer pill from the paper's biblio state: applied/committed
         # → 'done', else a needs_review extraction → 'review' (distinct from a
-        # plain OCR'd paper). One small query per processed row (same N+1 shape
-        # as before).
-        biblio_statuses = {
+        # plain OCR'd paper).
+        biblio_statuses = ctx.biblio_statuses(paper) if ctx else {
             b.status for b in
             PaperBiblio.select(PaperBiblio.status).where(PaperBiblio.paper == paper)
         }
@@ -156,13 +200,13 @@ def _row_from_paper(paper: Paper, source_name: str) -> PaperRow:
         paper_id=paper.id,
         file_id=pfile.id if pfile else None,
         title=display_title,
-        authors=_author_cite(paper.id),
+        authors=ctx.author_cite(paper) if ctx else _author_cite(paper.id),
         year=paper.year,
         journal=paper.journal or '',
         source_name=source_name,
         folder_id=paper.folder_id,
         status=file_status,
-        is_stub=_is_stub(paper),
+        is_stub=ctx.is_stub(paper) if ctx else _is_stub(paper),
         is_standalone=is_standalone,
     )
 
@@ -255,13 +299,15 @@ def list_by_library(key: str, limit: int = 500) -> list[PaperRow]:
     else:
         return rows
 
-    for paper in query:
+    papers = list(query)
+    ctx = _RowContext(papers)
+    for paper in papers:
         source_name = ''
         if paper.folder_id is not None and paper.folder is not None:
             src = paper.folder.source
             if src is not None:
                 source_name = src.name
-        rows.append(_row_from_paper(paper, source_name))
+        rows.append(_row_from_paper(paper, source_name, ctx))
     return rows
 
 
@@ -280,7 +326,9 @@ def list_by_folder(folder_id: int, limit: int = 500) -> list[PaperRow]:
     )
     folder = Folder.get_or_none(Folder.id == folder_id)
     source_name = folder.source.name if (folder and folder.source) else ''
-    return [_row_from_paper(p, source_name) for p in query]
+    papers = list(query)
+    ctx = _RowContext(papers)
+    return [_row_from_paper(p, source_name, ctx) for p in papers]
 
 
 def list_by_source(source_id: int, limit: int = 500) -> list[PaperRow]:
@@ -294,9 +342,11 @@ def list_by_source(source_id: int, limit: int = 500) -> list[PaperRow]:
         .limit(limit)
     )
     rows: list[PaperRow] = []
-    for p in query:
+    papers = list(query)
+    ctx = _RowContext(papers)
+    for p in papers:
         source_name = p.folder.source.name if (p.folder and p.folder.source) else ''
-        rows.append(_row_from_paper(p, source_name))
+        rows.append(_row_from_paper(p, source_name, ctx))
     return rows
 
 
