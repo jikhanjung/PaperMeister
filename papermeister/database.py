@@ -293,6 +293,11 @@ def init_db(db_path=None):
     real_db = peewee.SqliteDatabase(path, pragmas={
         'journal_mode': 'wal',
         'foreign_keys': 1,
+        # SQLite takes one writer. Without a busy timeout the loser of a
+        # race fails at once ("database is locked"): the app saving a row
+        # while a lane script writes, which is the normal state of affairs
+        # during a long figure run. Wait instead.
+        'busy_timeout': 15000,
     })
     db.initialize(real_db)
     db.create_tables(ALL_TABLES)

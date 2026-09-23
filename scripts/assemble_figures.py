@@ -409,14 +409,86 @@ def _require_migrated(database) -> None:
                  'Open the app once, or run `python cli.py list papers -n 1`, to migrate; then retry.')
 
 
+def add_scope_arguments(parser) -> None:
+    """The scope every figure lane takes: papers, a pilot list, or a Zotero
+    collection — plus the guard that keeps one huge PDF from eating a queue."""
+    parser.add_argument('--paper-ids', help='comma-separated paper ids')
+    parser.add_argument('--pilot', help='the papers in a pilot list written by --pilot-out')
+    parser.add_argument('--collection', help="a Zotero collection: its Folder id, or part of its name. "
+                                             "Its sub-collections come with it, in tree order")
+    parser.add_argument('--max-pages', type=int, default=0,
+                        help='skip a PDF whose OCR cache has more pages than this — an abstract volume is '
+                             'a day of server time and few real figures (0 = no limit)')
+
+
+def collection_files(name_or_id: str) -> list:
+    """The processed PDFs of a Zotero collection and its sub-collections, in
+    tree order (the collection itself first, then each child by name)."""
+    from papermeister.models import Folder, Paper, PaperFile, PaperFolder
+    root = None
+    if str(name_or_id).isdigit():
+        root = Folder.get_or_none(Folder.id == int(name_or_id))
+    if root is None:
+        matches = [f for f in Folder.select().order_by(Folder.name) if name_or_id.lower() in (f.name or '').lower()]
+        if not matches:
+            raise SystemExit(f'no collection matches {name_or_id!r}')
+        if len(matches) > 1 and not any(f.name.lower() == name_or_id.lower() for f in matches):
+            raise SystemExit('several collections match: ' + ', '.join(f'{f.id} {f.name}' for f in matches[:10]))
+        root = next((f for f in matches if f.name.lower() == name_or_id.lower()), matches[0])
+    order: list[int] = []
+
+    def walk(folder):
+        order.append(folder.id)
+        for child in Folder.select().where(Folder.parent == folder.id).order_by(Folder.name):
+            walk(child)
+    walk(root)
+    seen, files = set(), []
+    for fid in order:
+        for pf in (PaperFile.select()
+                   .join(Paper).join(PaperFolder, on=(PaperFolder.paper == Paper.id))
+                   .where((PaperFolder.folder == fid) & (PaperFile.status == 'processed')
+                          & (PaperFile.hash != '') & PaperFile.trashed_at.is_null()
+                          & PaperFile.path.endswith('.pdf'))
+                   .order_by(Paper.id)):
+            if pf.id not in seen:
+                seen.add(pf.id)
+                files.append(pf)
+    return files
+
+
+def _within_page_limit(pf, limit: int) -> bool:
+    if not limit:
+        return True
+    from papermeister.figure_share import cache_path
+    path = cache_path(pf)
+    if not os.path.isfile(path):
+        return True
+    try:
+        with open(path, encoding='utf-8') as f:
+            return len(json.load(f).get('pages') or []) <= limit
+    except (OSError, ValueError):
+        return True
+
+
 def target_files(args) -> list:
-    """The PDF files to assemble: of the given papers, or of the pilot list."""
+    """The PDF files a lane works on: of the given papers, of a collection,
+    or of the pilot list — minus any the page limit excludes."""
     from papermeister.models import PaperFile
     pdfs = PaperFile.select().where(
         (PaperFile.hash != '') & PaperFile.trashed_at.is_null() & ~PaperFile.path.endswith('.json'))
+    limit = getattr(args, 'max_pages', 0) or 0
+
+    def keep(files):
+        out = [pf for pf in files if _within_page_limit(pf, limit)]
+        if limit and len(out) < len(files):
+            print(f'  skipping {len(files) - len(out)} PDF(s) over {limit} pages')
+        return out
+
     if args.paper_ids:
         ids = [int(x) for x in args.paper_ids.split(',') if x.strip()]
-        return list(pdfs.where(PaperFile.paper.in_(ids)).order_by(PaperFile.paper, PaperFile.id))
+        return keep(list(pdfs.where(PaperFile.paper.in_(ids)).order_by(PaperFile.paper, PaperFile.id)))
+    if getattr(args, 'collection', None):
+        return keep(collection_files(args.collection))
     with open(args.pilot, encoding='utf-8') as f:
         pilot = json.load(f)
     files = []
@@ -429,7 +501,7 @@ def target_files(args) -> list:
         if not found:
             print(f"  skip  {entry['file']}  (no PDF in the library has this hash)")
         files.extend(found)
-    return files
+    return keep(files)
 
 
 def store_mode(args) -> int:
@@ -515,8 +587,7 @@ def main():
     parser.add_argument('--pilot-out', help='survey: write the pilot paper list (JSON) here')
     parser.add_argument('--pilot-size', type=int, default=PILOT_SIZE, help='survey: papers in the pilot')
     parser.add_argument('--report-out', help='survey: write the summary (JSON) here')
-    parser.add_argument('--paper-ids', help='store: comma-separated paper ids')
-    parser.add_argument('--pilot', help='store: the papers in a pilot list written by --pilot-out')
+    add_scope_arguments(parser)
     parser.add_argument('--execute', action='store_true', help='store: write to the database')
     args = parser.parse_args()
 

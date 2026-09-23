@@ -214,8 +214,8 @@ def collect(client, args, index) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--paper-ids')
-    parser.add_argument('--pilot')
+    from scripts.assemble_figures import add_scope_arguments
+    add_scope_arguments(parser)
     parser.add_argument('--cache-dir', default=OCR_JSON_DIR)
     parser.add_argument('--dump', help='write workspace_<id>.json and link_<id>.json per paper here')
     parser.add_argument('--retry-errors', action='store_true')
@@ -233,8 +233,8 @@ def main() -> int:
                         help=f'answer weight per request item — a plate counts {figure_link.PLATE_WEIGHT}, a body figure 1 '
                              f'(default {figure_link.MAX_ITEM_WEIGHT}; smaller for a paper whose sessions drop)')
     args = parser.parse_args()
-    if not args.paper_ids and not args.pilot and not args.collect and not args.relink:
-        parser.error('give --paper-ids or --pilot (or --collect, --relink)')
+    if not args.paper_ids and not args.pilot and not args.collection and not args.collect and not args.relink:
+        parser.error('give --paper-ids, --collection or --pilot (or --collect, --relink)')
     if args.recheck and not (args.paper_ids or args.pilot):
         parser.error('--recheck needs --paper-ids or --pilot')
 

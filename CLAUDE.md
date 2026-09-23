@@ -188,6 +188,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 | `assemble_figures.py` | (P16) 대상 없으면 조사(전 캐시 도판·플레이트·조각 도판·분할 후보 수 + `--pilot-out`/`--pilot-size`, 파일럿은 층별 몫 안에서 연도·길이 구간을 고르게), `--paper-ids`/`--pilot`이면 `Figure` 저장(`--execute`). 판정은 `figures.py` 한 곳, 저장 규칙은 `figure_store.py`(안 나오면 접고 지우지 않음). **dry run은 DB를 읽기 전용으로 연다** |
 | `link_figures.py` | (P16 ②) 캡션 연결 레인. `--execute/--no-wait/--collect/--recheck/--per-item`(항목 무게: 플레이트 8·본문 1). **`--relink IDS`**: 검사는 통과했지만 틀린 답(또는 나쁜 세션이 소진시킨 행)의 캡션 결과·항목·시도를 지워 다시 due로(사람 캡션은 거부) |
 | `split_panels.py` | (P16 ③) 패널 분할 레인. `--execute/--no-wait/--collect/--rematch`. 검사에서 거부된 답(`duplicate_caption_index` 등)을 다시 받으려면 **`--figure-ids N --force`** — 같은 키는 서버가 캐시된(같은) 답을 돌려주므로 `force` 없이는 재제출이 무의미 |
+| `figure_queue.py` | (P16 운영) **며칠짜리 무인 실행** — 끝난 답 수거 → panels → link 순으로 서버 큐를 `--max-queue`(기본 120항목) 근처로 유지하며 **Zotero 컬렉션을 트리 순서로** 하나씩 처리. `--collections`, `--days`, `--max-pages`(기본 200, 초록집 제외), `--status`, `--stop-file`, `--execute`. 진행 위치는 `<data>/figure_queue.json`에 남아 재시작하면 이어감. **앱을 닫고 실행**(DB writer 하나) |
 | `panel_sheet.py` | (P16 ③) 패널 결과 시각 검수 시트 — 도판 crop에 패널 상자·라벨, 옆에 매칭된 항목. `--paper-ids`, read-only |
 | `verify_image.py` | OCR 이미지 경로(Pillow) 1-커맨드 검증 |
 | `migrate_data_dir.py` | 데이터 디렉터리 `~/.papermeister` → `~/PaleoBytes/PaperMeister` 이동 (`--execute`, `--copy`). **앱을 닫고 실행** |

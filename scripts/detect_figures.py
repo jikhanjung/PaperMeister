@@ -98,8 +98,8 @@ def collect(client, args, index) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--paper-ids')
-    parser.add_argument('--pilot')
+    from scripts.assemble_figures import add_scope_arguments
+    add_scope_arguments(parser)
     parser.add_argument('--cache-dir', default=OCR_JSON_DIR)
     parser.add_argument('--dump', help='write detect_<file id>.json here')
     parser.add_argument('--retry-errors', action='store_true')
@@ -108,8 +108,8 @@ def main() -> int:
     parser.add_argument('--no-wait', action='store_true')
     parser.add_argument('--collect', action='store_true', help='apply finished jobs from earlier runs')
     args = parser.parse_args()
-    if not args.paper_ids and not args.pilot and not args.collect:
-        parser.error('give --paper-ids or --pilot (or --collect)')
+    if not args.paper_ids and not args.pilot and not args.collection and not args.collect:
+        parser.error('give --paper-ids, --collection or --pilot (or --collect)')
 
     open_database(write=args.execute)
     from papermeister.preferences import get_client_id
