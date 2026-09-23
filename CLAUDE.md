@@ -155,6 +155,12 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 - **SVG 아이콘**: `desktop/theme/icons/*.svg`는 `stroke="currentColor"`로 작성하고 `icons.rail_icon()` 헬퍼가 런타임에 색을 치환해서 3-state QIcon(idle/checked/hover) 생성. 다크/라이트 테마 스왑도 같은 메커니즘으로 확장 가능
 - **QSS**: `desktop/theme/qss.py::build_stylesheet(colors)`가 `desktop/theme/tokens.py::COLORS_DARK`를 받아 풀 스타일시트 생성. QTree branch chevron SVG 경로는 `_icon_url()`이 `Path.as_posix()`로 Windows forward-slash 경로 주입
 
+## 도판 파이프라인 (P16)
+
+**먼저 [`docs/figure_pipeline_guide.md`](./docs/figure_pipeline_guide.md)를 읽을 것** — 단계 구성(assemble → detect → link → panels),
+작업 폴더(workspace)로 단계를 잇는 방식과 읽기 범위(reading set), 키를 커서로 쓰는 재개, 제출/수거 분리,
+검증에서 거부 vs 검토의 기준, 무인 운영에서 겪은 사고까지 한 문서에 있다. 서버 계약은 [`docs/figure_server_spec_v2.md`](./docs/figure_server_spec_v2.md).
+
 ## Scripts (scripts/ 디렉토리)
 
 **관례**: 변경을 가하는 스크립트는 모두 **`--execute`** 플래그를 쓴다 (플래그 없으면 dry-run 미리보기가 기본). 옛 `--dry-run` 관례(=실행이 기본)는 폐기·통일됨.
