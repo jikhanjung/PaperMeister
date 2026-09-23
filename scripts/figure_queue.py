@@ -44,8 +44,14 @@ from papermeister import (  # noqa: E402
     figure_share,
 )
 from papermeister.database import init_db  # noqa: E402
+from papermeister.nettls import install_system_trust  # noqa: E402
 from papermeister.paths import DATA_DIR, OCR_JSON_DIR  # noqa: E402
 from scripts.assemble_figures import collection_files  # noqa: E402
+
+# The institution's network intercepts TLS; its root CA is in the OS store,
+# not in certifi. Without this every Zotero call raises
+# CERTIFICATE_VERIFY_FAILED — which is what ended the first overnight run.
+install_system_trust()
 
 STATE_PATH = os.path.join(DATA_DIR, 'figure_queue.json')
 #: A pass that finds nothing to do waits this long before looking again.
@@ -222,16 +228,28 @@ def run(args) -> int:
             log('time budget spent — stopping')
             break
 
-        # 1. land what finished
-        from papermeister.figure_pipeline import collect_finished
-        report = collect_finished(client)
+        # 1. land what finished. A pass that throws (the server away, a
+        # Zotero hiccup) must not end a run that has days to go.
+        from papermeister.figure_pipeline import CollectReport, collect_finished
+        try:
+            report = collect_finished(client)
+        except Exception as exc:
+            log(f'collect failed: {type(exc).__name__}: {exc}')
+            totals['errors'] += 1
+            report = CollectReport()
         if report.jobs:
             log(f'collected {report.summary()}')
             totals['captions'] += report.link_written
             totals['panels'] += report.panels_written
 
         # 2. top the queue up
-        depth = queue_depth(client)
+        try:
+            depth = queue_depth(client)
+        except Exception as exc:
+            log(f'server unreachable: {type(exc).__name__}: {exc} — retrying after the sleep')
+            totals['errors'] += 1
+            time.sleep(max(args.sleep, IDLE_SLEEP))
+            continue
         submitted = 0
         if depth < args.max_queue:
             room = args.max_queue - depth

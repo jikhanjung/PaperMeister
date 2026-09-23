@@ -194,3 +194,28 @@ def test_a_changed_json_is_landed_once_per_export_an_unchanged_one_not_at_all(db
     with open(path, 'w', encoding='utf-8') as f:
         json.dump({'pages': []}, f)
     assert fs.import_from_cache_if_new(src, {}) is None
+
+
+@pytest.mark.unit
+def test_a_failed_zotero_push_does_not_lose_the_local_write(db, monkeypatch):
+    """The cache file is the record; the Zotero copy is a courtesy. A TLS
+    or network failure there must not take the caller down (2026-09-23:
+    CERTIFICATE_VERIFY_FAILED ended an overnight run)."""
+    from papermeister import figure_share as fs
+    from papermeister import text_extract
+    from papermeister.paths import OCR_JSON_DIR
+    from papermeister.text_extract import ocr_json_filename
+    src = make_file('A', 'a.pdf')
+    processed(src)
+    os.makedirs(OCR_JSON_DIR, exist_ok=True)
+    path = os.path.join(OCR_JSON_DIR, ocr_json_filename(src))
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump({'pages': [{'page': i, 'markdown': t} for i, t in enumerate(PAGES)]}, f)
+
+    def boom(*a, **k):
+        raise OSError('[SSL: CERTIFICATE_VERIFY_FAILED] self-signed certificate in certificate chain')
+
+    monkeypatch.setattr(text_extract, 'push_sibling_json', boom)
+    assert fs.write_to_cache(src) is None                 # no exception
+    with open(path, encoding='utf-8') as f:
+        assert len(json.load(f)['figures']['rows']) == 3  # and the figures are in the cache

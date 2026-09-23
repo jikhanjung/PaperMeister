@@ -21,12 +21,15 @@ from __future__ import annotations
 
 import datetime
 import json
+import logging
 import os
 
 from . import figure_link, figure_store
 from .figure_store import protection
 from .models import Figure, FigureEntry, FigurePanel, PaperFile, db
 from .paths import OCR_JSON_DIR
+
+logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
 
@@ -95,7 +98,14 @@ def write_to_cache(paper_file: PaperFile, push: bool = True) -> str | None:
     write_ocr_json(path, data)
     if not push:
         return None
-    return push_sibling_json(paper_file.paper, ocr_json_filename(paper_file), path)
+    # The cache file is written; the Zotero copy is a courtesy. A network
+    # that is down, or a TLS-intercepting one before `install_system_trust`,
+    # must not take the caller down with it (2026-09-23: it ended a run).
+    try:
+        return push_sibling_json(paper_file.paper, ocr_json_filename(paper_file), path)
+    except Exception as exc:
+        logger.warning('figures not pushed to the Zotero sibling for %s: %s', paper_file.hash[:12], exc)
+        return None
 
 
 class ImportReport:
