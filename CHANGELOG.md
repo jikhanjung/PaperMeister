@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.1] - 2026-09-23
+
+Figures keep working while you are away, and the window behaves.
+
+### Added
+- **What the server finished reaches you anyway.** Closing the app while a
+  paper's figures are being worked on used to leave that work stranded: the
+  server finished the job and nothing landed it. The app now collects
+  finished replies at startup and before each new run, so a paper you
+  interrupted is complete when you come back, and is not asked for twice.
+- **The caption stage reads the figure's neighbourhood first.** Given a
+  whole monograph, the model read the whole monograph for every figure —
+  minutes each, for an explanation printed on the facing page. It now gets
+  the pages that can hold the answer (the figure's own pages, the
+  "Explanation of Plates" pages, the block before a run of plates, and
+  where this paper's other figures were explained), and widens only when
+  that fails.
+
+### Fixed
+- **The resize cursor stayed on after leaving the window's edge**, because
+  the panels inherited it. It lives on the edge now.
+- **The title bar's own background.** The app name and version were drawn
+  on a slightly different shade than the bar behind them.
+- **The app name is larger**, and the search box takes the right half of
+  the bar rather than most of it.
+
+---
+
 ## [0.2.0] - 2026-09-22
 
 Figures and plates become part of the library: found, captioned, split into
