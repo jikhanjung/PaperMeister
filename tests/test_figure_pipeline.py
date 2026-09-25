@@ -195,10 +195,33 @@ def test_a_job_left_on_the_server_by_a_closed_app_is_collected_later(paper):
     assert Figure.get(Figure.paper_file == paper.id).caption.startswith('PLATE 2')
     assert any('collected captions' in m for m in log)
     # collecting again finds nothing new; then a full run only needs panels
-    assert fp.collect_finished(client).jobs == 0
+    again = fp.collect_finished(client)
+    assert again.jobs == 0 and again.settled                 # read, wrote nothing: settled
+    assert fp.collect_finished(client, skip_jobs=again.settled).settled == set()   # and not read again
     reopened = FakeClient()                      # the app open again, waiting normally
     reopened.submitted = client.submitted
     report = fp.process_file(paper, reopened, lambda k, m: None)
     assert report.error == '' and [k for k, _ in reopened.submitted] == ['link', 'panels']
     assert FigurePanel.select().where(FigurePanel.figure == Figure.get(Figure.paper_file == paper.id).id).count() == 2
     assert fp.collect_finished(reopened).jobs == 0
+
+
+@pytest.mark.unit
+def test_the_queue_runner_never_submits_what_is_already_waiting(paper):
+    """2026-09-24/25: a figure whose split was queued stayed 'due' in the DB,
+    and every five-minute pass submitted it again — fifty jobs for two
+    figures, a full queue, and nothing else got in."""
+    from papermeister import figure_pipeline as fp
+    from papermeister import figure_prompts
+    from scripts import figure_queue as fq
+
+    client = FakeClient()
+    fp.process_file(paper, client, lambda k, m: None, stages=('assemble', 'link'))
+    fp.collect_finished(client)
+    prompt = figure_prompts.load('panels')
+    outstanding: set[str] = set()
+    assert fq.submit_panels(client, paper, prompt, outstanding) == 1
+    assert fq.submit_panels(client, paper, prompt, outstanding) == 0       # same pass: already out
+    fresh_view = {it['key'] for k, b in client.submitted if k == 'panels' for it in b['items']}
+    assert fq.submit_panels(client, paper, prompt, set(fresh_view)) == 0    # next pass, read off the server
+    assert [k for k, _ in client.submitted].count('panels') == 1

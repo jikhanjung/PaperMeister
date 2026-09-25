@@ -85,6 +85,14 @@ class FigureClient:
             raise FigureServerError(f'GET /figures/{kind}/{job_id}: HTTP {r.status_code}')
         return _json(r, f'GET /figures/{kind}/{job_id}')
 
+    def cancel(self, kind: str, job_id: str) -> dict:
+        """`POST /figures/{kind}/{job_id}/cancel` — queued and running items
+        become `cancelled` (idempotent)."""
+        r = self.http.post(f'{self.base}/figures/{kind}/{job_id}/cancel', json={'client_id': self.client_id}, timeout=30)
+        if r.status_code not in (200, 202):
+            raise FigureServerError(f'POST /figures/{kind}/{job_id}/cancel: HTTP {r.status_code}')
+        return _json(r, f'POST /figures/{kind}/{job_id}/cancel')
+
     def jobs(self, kind: str | None = None, status: str | None = None) -> list[dict]:
         params = {'client_id': self.client_id}
         if kind:

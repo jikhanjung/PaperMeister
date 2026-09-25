@@ -140,15 +140,18 @@ def assemble(pf, pages) -> int:
     return Figure.select().where(Figure.paper_file == pf.id).count()
 
 
-def submit_link(client, pf, pages, prompt, per_item: int) -> int:
+def submit_link(client, pf, pages, prompt, per_item: int, outstanding: set[str]) -> int:
     """Ask for this paper's captions. Returns the items submitted."""
     digest = figure_link.ocr_digest(pages)
     targets = figure_link.link_targets(pf, digest, prompt['version'])
     if not targets.due:
         return 0
     request = figure_link.link_payload(pf, pages, targets, digest, client.client_id, prompt, per_item)
+    if any(it['key'] in outstanding for it in request['items']):
+        return 0                      # this paper's captions are already being asked for
     figure_lane.ensure_workspace(client, pf, figure_link.workspace_for(pf, pages, request), lambda m: None)
     reply = client.submit('link', request)
+    outstanding.update(it['key'] for it in request['items'])
     reading = request.get('reading_pages')
     log(f'  link   paper {pf.paper_id:>6}  {len(targets.due):>3} figure(s) in {len(request["items"])} item(s)'
         + (f', reading {len(reading)}/{len(pages)} pages' if reading else ', whole text')
@@ -156,17 +159,20 @@ def submit_link(client, pf, pages, prompt, per_item: int) -> int:
     return len(request['items'])
 
 
-def submit_panels(client, pf, prompt) -> int:
-    """Ask for the splits this paper's captioned figures are now due."""
+def submit_panels(client, pf, prompt, outstanding: set[str]) -> int:
+    """Ask for the splits this paper's captioned figures are now due —
+    except those already waiting on the server."""
     targets = figure_panels.split_targets(pf, prompt['version'])
     for row in targets.rematch:
         figure_panels.rematch(row)
     if targets.rematch:
         figure_share.write_to_cache(pf)
-    if not targets.due:
+    items = [figure_panels.panel_item(row, prompt['version']) for row in targets.due]
+    items = [it for it in items if it['key'] not in outstanding]
+    if not items:
         return 0
     figure_lane.ensure_pdf(client, pf, lambda m: None)
-    items = [figure_panels.panel_item(row, prompt['version']) for row in targets.due]
+    outstanding.update(it['key'] for it in items)
     body = {'client_id': client.client_id, 'file_hash': pf.hash, 'items': items, 'prompt': prompt,
             'options': {'model': 'gpt-6-astra', 'effort': 'high', 'dpi': figure_panels.RENDER_DPI}}
     reply = client.submit('panels', body)
@@ -181,17 +187,44 @@ def queue_depth(client) -> int:
                for j in client.jobs() if j.get('status') in ('queued', 'processing'))
 
 
+def outstanding_keys(client) -> set[str]:
+    """Item keys already waiting on the server. A figure whose split is
+    queued is still "due" in the DB until the reply lands — without this
+    check every pass submitted it again (2026-09-24/25: one paper's two
+    figures, fifty times, and the queue full of them starved everything)."""
+    keys: set[str] = set()
+    for job in client.jobs():
+        if job.get('status') not in ('queued', 'processing'):
+            continue
+        for item in client.job(job['kind'], job['job_id']).get('items', []):
+            if item.get('status') in ('queued', 'processing') and 'key' in item:
+                keys.add(item['key'])
+    return keys
+
+
 def panels_candidates(paper_ids: list[int], prompt_version: str, limit: int) -> list:
-    """Files whose captioned figures are due for splitting, papers first come."""
-    from papermeister.models import PaperFile
-    out = []
+    """Files whose captioned figures are due for splitting: the papers this
+    run linked first, then any other file with captioned, unsplit figures
+    (the pilot's re-link left hundreds). Each file once."""
+    from papermeister.models import Figure, PaperFile
+    order: list[int] = []
     for pid in paper_ids:
-        for pf in PaperFile.select().where((PaperFile.paper == pid) & (PaperFile.status == 'processed')
-                                           & PaperFile.path.endswith('.pdf')):
-            targets = figure_panels.split_targets(pf, prompt_version)
-            if targets.due or targets.rematch:
-                out.append(pf)
-                break
+        order.extend(pf.id for pf in PaperFile.select(PaperFile.id).where(
+            (PaperFile.paper == pid) & (PaperFile.status == 'processed') & PaperFile.path.endswith('.pdf')))
+    order.extend(r.paper_file_id for r in Figure.select(Figure.paper_file).where(
+        (Figure.link_key != '') & (Figure.panel_key == '') & (Figure.dismissed == False)  # noqa: E712
+        & (Figure.panel_attempts < figure_panels.MAX_ATTEMPTS)).distinct())
+    out, seen = [], set()
+    for fid in order:
+        if fid in seen:
+            continue
+        seen.add(fid)
+        pf = PaperFile.get_or_none(PaperFile.id == fid)
+        if pf is None:
+            continue
+        targets = figure_panels.split_targets(pf, prompt_version)
+        if targets.due or targets.rematch:
+            out.append(pf)
         if len(out) >= limit:
             break
     return out
@@ -231,8 +264,11 @@ def run(args) -> int:
         # 1. land what finished. A pass that throws (the server away, a
         # Zotero hiccup) must not end a run that has days to go.
         from papermeister.figure_pipeline import CollectReport, collect_finished
+        settled = set(state.get('settled_jobs', []))
         try:
-            report = collect_finished(client)
+            report = collect_finished(client, skip_jobs=settled)
+            settled |= report.settled
+            state['settled_jobs'] = sorted(settled)[-5000:]
         except Exception as exc:
             log(f'collect failed: {type(exc).__name__}: {exc}')
             totals['errors'] += 1
@@ -253,13 +289,19 @@ def run(args) -> int:
         submitted = 0
         if depth < args.max_queue:
             room = args.max_queue - depth
+            try:
+                outstanding = outstanding_keys(client)
+            except Exception as exc:
+                log(f'could not read the queue: {type(exc).__name__}: {exc}')
+                time.sleep(max(args.sleep, IDLE_SLEEP))
+                continue
             # panels first: those papers are further along, and a split is
             # the last thing a paper needs.
             for pf in panels_candidates(touched, panels_prompt['version'], limit=8):
                 if submitted >= room:
                     break
                 try:
-                    submitted += submit_panels(client, pf, panels_prompt)
+                    submitted += submit_panels(client, pf, panels_prompt, outstanding)
                 except Exception as exc:
                     log(f'  panels paper {pf.paper_id}: {type(exc).__name__}: {exc}')
                     totals['errors'] += 1
@@ -273,7 +315,7 @@ def run(args) -> int:
                     continue
                 try:
                     assemble(pf, pages)
-                    n = submit_link(client, pf, pages, link_prompt, args.per_item)
+                    n = submit_link(client, pf, pages, link_prompt, args.per_item, outstanding)
                 except Exception as exc:
                     log(f'  link   paper {pf.paper_id}: {type(exc).__name__}: {exc}')
                     totals['errors'] += 1

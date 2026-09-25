@@ -239,6 +239,10 @@ class CollectReport:
     panels_written: int = 0
     papers: set = field(default_factory=set)      # paper ids touched
     skipped: int = 0                              # replies nothing here was waiting for
+    #: Finished jobs that wrote nothing and never will (every row they name
+    #: is applied, or gone): a caller may pass them back as `skip_jobs`, so
+    #: a long run does not re-read the same job bodies every pass.
+    settled: set = field(default_factory=set)
 
     def summary(self) -> str:
         if not self.jobs:
@@ -247,7 +251,8 @@ class CollectReport:
                 f'landed on {len(self.papers)} paper(s)')
 
 
-def collect_finished(client: FigureClient, notify: Notify | None = None) -> CollectReport:
+def collect_finished(client: FigureClient, notify: Notify | None = None,
+                     skip_jobs: set | None = None) -> CollectReport:
     """Land the replies of finished link and panels jobs this client left on
     the server — a paper whose Process Figures was cut short by closing the
     app, or one run by the lane scripts elsewhere. Same code path as the
@@ -258,27 +263,31 @@ def collect_finished(client: FigureClient, notify: Notify | None = None) -> Coll
     link_prompt = figure_prompts.load('link')
     panels_prompt = figure_prompts.load('panels')
 
+    skip = skip_jobs or set()
     for job in client.jobs(kind='link'):
-        if job.get('status') not in ('done', 'done_with_errors'):
+        if job.get('status') not in ('done', 'done_with_errors') or job['job_id'] in skip:
             continue
         replies = figure_lane.results_by_key(client.job('link', job['job_id']))
         pf = _file_of_replies(replies)
         if pf is None:
             report.skipped += 1
+            report.settled.add(job['job_id'])
             continue
         pages = _pages_of(pf)
         if pages is None:
             report.skipped += 1
+            report.settled.add(job['job_id'])
             continue
         digest = figure_link.ocr_digest(pages)
         targets = figure_link.link_targets(pf, digest, link_prompt['version'])
         if not targets.due:
+            report.settled.add(job['job_id'])
             continue
         items = figure_link.items_from_replies(pf, pages, targets, digest, link_prompt['version'], replies)
         if not items:
             report.skipped += 1
+            report.settled.add(job['job_id'])
             continue
-        report.jobs += 1
         check = figure_link.LinkCheck()
         existing = {str(x.id): x for x in targets.due}
         model = 'gpt-6-astra'
@@ -289,13 +298,19 @@ def collect_finished(client: FigureClient, notify: Notify | None = None) -> Coll
                 model = reply.get('model') or model
         applied = figure_link.apply_link(targets, check, {}, digest, link_prompt['version'], model)
         figure_link.propagate_link(pf)
+        if not applied.written:
+            # The same reply read again (skipped rows stay due without a new
+            # attempt): nothing will change until a new reply arrives.
+            report.settled.add(job['job_id'])
+            continue
+        report.jobs += 1
         report.link_written += applied.written
         report.papers.add(pf.paper_id)
         figure_share.write_to_cache(pf)
         say('info', f'collected captions for paper {pf.paper_id}: {applied.written} written')
 
     for job in client.jobs(kind='panels'):
-        if job.get('status') not in ('done', 'done_with_errors'):
+        if job.get('status') not in ('done', 'done_with_errors') or job['job_id'] in skip:
             continue
         replies = figure_lane.results_by_key(client.job('panels', job['job_id']))
         rows, items = [], []
@@ -310,6 +325,7 @@ def collect_finished(client: FigureClient, notify: Notify | None = None) -> Coll
             rows.append(row)
             items.append(item)
         if not rows:
+            report.settled.add(job['job_id'])
             continue
         report.jobs += 1
         pf = PaperFile.get_by_id(rows[0].paper_file_id)
