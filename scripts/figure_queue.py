@@ -257,7 +257,10 @@ def batch_state(batch: Batch, state, outstanding: set[str], prompt_version: str)
     cursor = (state.get('cursor') or {}).get(batch.key, 0)
     waiting = outstanding_hashes(outstanding)
     link_out = panels_due = 0
-    for fid in batch.file_ids[:cursor]:
+    # Every file of the batch, not only the walked ones: a file has splits due
+    # only if its captions are in, which is true of the pilot's files before
+    # the walk reaches them (their link ran long ago).
+    for fid in batch.file_ids:
         pf = PaperFile.get_or_none(PaperFile.id == fid)
         if pf is None:
             continue
@@ -374,9 +377,8 @@ def fill_queue(client, batches, state, done: set, outstanding: set, room: int,
 
 def submit_batch_panels(client, batch, state, prompt, outstanding, room, totals) -> int:
     from papermeister.models import PaperFile
-    cursor = (state.get('cursor') or {}).get(batch.key, 0)
     submitted = 0
-    for fid in batch.file_ids[:cursor]:
+    for fid in batch.file_ids:
         if submitted >= room:
             break
         pf = PaperFile.get_or_none(PaperFile.id == fid)
