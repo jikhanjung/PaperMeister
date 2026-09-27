@@ -9,10 +9,16 @@ in tree order — a collection, then its sub-collections, then the next.
     python scripts/figure_queue.py --collections 1,78 --execute  # these collections only
     python scripts/figure_queue.py --status                      # what it would do, and where it is
 
-Per pass, in this order:
+Work goes in **batches** — the pilot list, then each collection in tree order —
+and a batch's stages are kept together: its captions (link), then its splits
+(panels), and only when both are asked for does the next batch's link start.
+The server works first in, first out; a batch's splits must not end up
+behind the next batch's captions.
+
+Per pass:
   1. collect — finished link / panels replies land in the DB (and the cache JSON)
-  2. panels  — figures whose captions are cut into entries go for splitting
-  3. link    — the next papers of the plan are assembled and their captions asked for
+  2. for the first unfinished batch: submit the splits its landed captions made due,
+     then more of its link; a batch whose link and splits are all asked for is done
 
 The queue is kept near `--max-queue` items, not filled to the brim: a
 shorter queue is easier to abandon, and a reply that lands changes what the
@@ -202,32 +208,69 @@ def outstanding_keys(client) -> set[str]:
     return keys
 
 
-def panels_candidates(paper_ids: list[int], prompt_version: str, limit: int) -> list:
-    """Files whose captioned figures are due for splitting: the papers this
-    run linked first, then any other file with captioned, unsplit figures
-    (the pilot's re-link left hundreds). Each file once."""
-    from papermeister.models import Figure, PaperFile
-    order: list[int] = []
-    for pid in paper_ids:
-        order.extend(pf.id for pf in PaperFile.select(PaperFile.id).where(
-            (PaperFile.paper == pid) & (PaperFile.status == 'processed') & PaperFile.path.endswith('.pdf')))
-    order.extend(r.paper_file_id for r in Figure.select(Figure.paper_file).where(
-        (Figure.link_key != '') & (Figure.panel_key == '') & (Figure.dismissed == False)  # noqa: E712
-        & (Figure.panel_attempts < figure_panels.MAX_ATTEMPTS)).distinct())
-    out, seen = [], set()
-    for fid in order:
-        if fid in seen:
-            continue
-        seen.add(fid)
+# ── batches ──────────────────────────────────────────────────────────
+#
+# A batch is the pilot list or one collection. Batches are strictly ordered
+# by stage: a batch's captions are asked for, they land, its splits are
+# asked for — and only then does the next batch's link start. The server
+# is first in, first out, so submitting the next batch's link before this
+# batch's splits would put every split behind a day of captions (it did:
+# the pilot's splits waited behind collection 1's link for four days).
+
+class Batch:
+    def __init__(self, key: str, name: str, file_ids: list[int]):
+        self.key, self.name, self.file_ids = key, name, file_ids
+
+
+def plan_batches(args, state) -> list[Batch]:
+    from scripts.assemble_figures import target_files
+    batches: list[Batch] = []
+    cache = state.setdefault('files_cache', {})
+    if args.pilot and os.path.isfile(args.pilot):
+        if 'pilot' not in cache:
+            class _A:
+                pilot = args.pilot
+                paper_ids = None
+                collection = None
+                # The pilot was chosen by hand and its long monographs are the
+                # point of it (the 231- and 291-page plate volumes) — no cap.
+                max_pages = 0
+            cache['pilot'] = [pf.id for pf in target_files(_A)]
+        batches.append(Batch('pilot', 'pilot', cache['pilot']))
+    for folder in plan_collections(args.collections):
+        key = str(folder.id)
+        if key not in cache:
+            cache[key] = [pf.id for pf in collection_files(key) if _within_pages(pf, args.max_pages)]
+        batches.append(Batch(key, folder.name, cache[key]))
+    return batches
+
+
+def outstanding_hashes(outstanding: set[str]) -> set[str]:
+    """File-hash prefixes with a link item waiting (key `hash12@digest12@version#i/n`)."""
+    return {k.split('@')[0] for k in outstanding if k.count('@') == 2}
+
+
+def batch_state(batch: Batch, state, outstanding: set[str], prompt_version: str) -> dict:
+    """What a batch still needs: link papers not yet asked for, link replies
+    not yet landed, splits not yet asked for."""
+    from papermeister.models import PaperFile
+    cursor = (state.get('cursor') or {}).get(batch.key, 0)
+    waiting = outstanding_hashes(outstanding)
+    link_out = panels_due = 0
+    for fid in batch.file_ids[:cursor]:
         pf = PaperFile.get_or_none(PaperFile.id == fid)
         if pf is None:
             continue
+        if pf.hash[:12] in waiting:
+            link_out += 1
+            continue
         targets = figure_panels.split_targets(pf, prompt_version)
-        if targets.due or targets.rematch:
-            out.append(pf)
-        if len(out) >= limit:
-            break
-    return out
+        # A split already waiting on the server is asked for: it is ahead of
+        # anything submitted after it, which is all the ordering needs.
+        if targets.rematch or any(figure_panels.panel_item(r, prompt_version)['key'] not in outstanding
+                                  for r in targets.due):
+            panels_due += 1
+    return {'link_left': max(0, len(batch.file_ids) - cursor), 'link_out': link_out, 'panels_due': panels_due}
 
 
 def run(args) -> int:
@@ -237,18 +280,21 @@ def run(args) -> int:
     link_prompt = figure_prompts.load('link')
     panels_prompt = figure_prompts.load('panels')
 
-    collections = plan_collections(args.collections)
     state = load_state()
-    done_collections = set(state.get('done_collections', []))
-    touched = list(state.get('touched_papers', []))          # papers whose link was asked for
-    log(f'plan: {len(collections)} collection(s), {len(done_collections)} already walked; '
-        f'queue cap {args.max_queue} items, page cap {args.max_pages or "none"}')
+    batches = plan_batches(args, state)
+    done = set(state.get('done_batches', []))
+    log(f'plan: {len(batches)} batch(es), {len(done)} done; queue cap {args.max_queue} items, '
+        f'page cap {args.max_pages or "none"}')
     if args.status:
-        depth = queue_depth(client)
-        log(f'server queue: {depth} item(s) outstanding')
-        for folder in collections:
-            mark = 'done' if folder.id in done_collections else '    '
-            log(f'  {mark} {folder.id:>5} {folder.name[:50]}')
+        log(f'server queue: {queue_depth(client)} item(s) outstanding')
+        outstanding = outstanding_keys(client)
+        for batch in batches[:12]:
+            if batch.key in done:
+                log(f'  done   {batch.key:>6} {batch.name[:44]}')
+                continue
+            st = batch_state(batch, state, outstanding, panels_prompt['version'])
+            log(f'  {batch.key:>12} {batch.name[:40]:<40} link left {st["link_left"]:>4}  '
+                f'link waiting {st["link_out"]:>3}  splits due {st["panels_due"]:>3}')
         return 0
 
     deadline = datetime.now() + timedelta(days=args.days) if args.days else None
@@ -275,57 +321,21 @@ def run(args) -> int:
             report = CollectReport()
         if report.jobs:
             log(f'collected {report.summary()}')
-            totals['captions'] += report.link_written
-            totals['panels'] += report.panels_written
 
-        # 2. top the queue up
+        # 2. top the queue up, batch by batch
         try:
             depth = queue_depth(client)
+            outstanding = outstanding_keys(client)
         except Exception as exc:
             log(f'server unreachable: {type(exc).__name__}: {exc} — retrying after the sleep')
             totals['errors'] += 1
             time.sleep(max(args.sleep, IDLE_SLEEP))
             continue
-        submitted = 0
-        if depth < args.max_queue:
-            room = args.max_queue - depth
-            try:
-                outstanding = outstanding_keys(client)
-            except Exception as exc:
-                log(f'could not read the queue: {type(exc).__name__}: {exc}')
-                time.sleep(max(args.sleep, IDLE_SLEEP))
-                continue
-            # panels first: those papers are further along, and a split is
-            # the last thing a paper needs.
-            for pf in panels_candidates(touched, panels_prompt['version'], limit=8):
-                if submitted >= room:
-                    break
-                try:
-                    submitted += submit_panels(client, pf, panels_prompt, outstanding)
-                except Exception as exc:
-                    log(f'  panels paper {pf.paper_id}: {type(exc).__name__}: {exc}')
-                    totals['errors'] += 1
-            while submitted < room:
-                pf = next_paper(collections, done_collections, state, args)
-                if pf is None:
-                    break
-                pages = pages_of(pf)
-                if pages is None:
-                    totals['no structured OCR'] += 1
-                    continue
-                try:
-                    assemble(pf, pages)
-                    n = submit_link(client, pf, pages, link_prompt, args.per_item, outstanding)
-                except Exception as exc:
-                    log(f'  link   paper {pf.paper_id}: {type(exc).__name__}: {exc}')
-                    totals['errors'] += 1
-                    continue
-                submitted += n
-                if n and pf.paper_id not in touched:
-                    touched.append(pf.paper_id)
-            state['touched_papers'] = touched[-2000:]
-            state['done_collections'] = sorted(done_collections)
-            save_state(state)
+        room = max(0, args.max_queue - depth)
+        submitted = fill_queue(client, batches, state, done, outstanding, room,
+                               link_prompt, panels_prompt, args, totals)
+        state['done_batches'] = sorted(done)
+        save_state(state)
 
         if submitted:
             log(f'queue now ~{depth + submitted} item(s) ({submitted} submitted this pass)')
@@ -337,30 +347,72 @@ def run(args) -> int:
     return 0
 
 
-def next_paper(collections, done_collections, state, args):
-    """The next paper of the plan, walking collections in order."""
-    cursor = state.get('cursor') or {}
-    for folder in collections:
-        if folder.id in done_collections:
+def fill_queue(client, batches, state, done: set, outstanding: set, room: int,
+               link_prompt, panels_prompt, args, totals) -> int:
+    """One pass's submissions, batch by batch. Returns the items submitted."""
+    submitted = 0
+    for batch in batches:
+        if batch.key in done:
             continue
-        files = state.get('files_cache', {}).get(str(folder.id))
-        if files is None:
-            pdfs = collection_files(str(folder.id))
-            files = [pf.id for pf in pdfs if _within_pages(pf, args.max_pages)]
-            state.setdefault('files_cache', {})[str(folder.id)] = files
-            log(f'collection {folder.id} {folder.name[:40]}: {len(files)} PDF(s) within the page cap')
-        index = cursor.get(str(folder.id), 0)
-        while index < len(files):
-            from papermeister.models import PaperFile
-            pf = PaperFile.get_or_none(PaperFile.id == files[index])
-            index += 1
-            cursor[str(folder.id)] = index
-            state['cursor'] = cursor
-            if pf is not None:
-                return pf
-        done_collections.add(folder.id)
-        log(f'collection {folder.id} {folder.name[:40]}: walked')
-    return None
+        st = batch_state(batch, state, outstanding, panels_prompt['version'])
+        # splits of this batch go in as soon as its captions land
+        if st['panels_due'] and room > submitted:
+            submitted += submit_batch_panels(client, batch, state, panels_prompt, outstanding,
+                                             room - submitted, totals)
+        if st['link_left'] and room > submitted:
+            submitted += submit_batch_link(client, batch, state, link_prompt, outstanding,
+                                           room - submitted, args, totals)
+        st = batch_state(batch, state, outstanding, panels_prompt['version'])
+        if not st['link_left'] and not st['link_out'] and not st['panels_due']:
+            done.add(batch.key)
+            log(f'batch {batch.key} {batch.name[:40]}: captions and splits all asked for — next batch')
+            continue
+        # this batch is not finished: the next batch's link waits for it
+        break
+    return submitted
+
+
+def submit_batch_panels(client, batch, state, prompt, outstanding, room, totals) -> int:
+    from papermeister.models import PaperFile
+    cursor = (state.get('cursor') or {}).get(batch.key, 0)
+    submitted = 0
+    for fid in batch.file_ids[:cursor]:
+        if submitted >= room:
+            break
+        pf = PaperFile.get_or_none(PaperFile.id == fid)
+        if pf is None:
+            continue
+        try:
+            submitted += submit_panels(client, pf, prompt, outstanding)
+        except Exception as exc:
+            log(f'  panels paper {pf.paper_id}: {type(exc).__name__}: {exc}')
+            totals['errors'] += 1
+    return submitted
+
+
+def submit_batch_link(client, batch, state, prompt, outstanding, room, args, totals) -> int:
+    from papermeister.models import PaperFile
+    cursor = state.setdefault('cursor', {})
+    submitted = 0
+    while submitted < room:
+        index = cursor.get(batch.key, 0)
+        if index >= len(batch.file_ids):
+            break
+        cursor[batch.key] = index + 1
+        pf = PaperFile.get_or_none(PaperFile.id == batch.file_ids[index])
+        if pf is None:
+            continue
+        pages = pages_of(pf)
+        if pages is None:
+            totals['no structured OCR'] += 1
+            continue
+        try:
+            assemble(pf, pages)
+            submitted += submit_link(client, pf, pages, prompt, args.per_item, outstanding)
+        except Exception as exc:
+            log(f'  link   paper {pf.paper_id}: {type(exc).__name__}: {exc}')
+            totals['errors'] += 1
+    return submitted
 
 
 def _within_pages(pf, limit: int) -> bool:
@@ -380,6 +432,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--collections', help='comma-separated Folder ids or name fragments, in the order to '
                                               'process them (default: the whole Zotero tree, in tree order)')
+    parser.add_argument('--pilot', default=os.path.join(DATA_DIR, 'tmp', 'p16_pilot.json'),
+                        help='a pilot list to run as the first batch (default: <data>/tmp/p16_pilot.json if present; '
+                             "'' to skip)")
     parser.add_argument('--days', type=float, default=0, help='stop after this many days (0 = until the plan ends)')
     parser.add_argument('--max-queue', type=int, default=120,
                         help='keep about this many items outstanding on the server (default 120 ≈ 12 hours)')

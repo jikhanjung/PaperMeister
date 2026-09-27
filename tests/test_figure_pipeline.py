@@ -225,3 +225,41 @@ def test_the_queue_runner_never_submits_what_is_already_waiting(paper):
     fresh_view = {it['key'] for k, b in client.submitted if k == 'panels' for it in b['items']}
     assert fq.submit_panels(client, paper, prompt, set(fresh_view)) == 0    # next pass, read off the server
     assert [k for k, _ in client.submitted].count('panels') == 1
+
+
+@pytest.mark.unit
+def test_a_batch_finishes_its_splits_before_the_next_batch_links(paper, monkeypatch):
+    """The server is first in, first out. A batch's splits submitted after the
+    next batch's captions would wait behind a day of captions — so the next
+    batch's link waits until this batch's splits are asked for."""
+    from collections import Counter
+    from types import SimpleNamespace
+
+    from papermeister import figure_pipeline as fp
+    from papermeister import figure_prompts
+    from papermeister.models import Paper, PaperFile
+    from scripts import figure_queue as fq
+
+    # batch B: a second paper nobody has linked yet
+    other = PaperFile.create(paper=Paper.create(title='Kim 1999'), path='kim.pdf', hash='cd' * 32, status='processed')
+    monkeypatch.setattr(fq, 'pages_of', lambda pf: PAGES)
+    a = fq.Batch('A', 'first', [paper.id])
+    b = fq.Batch('B', 'second', [other.id])
+    client = FakeClient()
+    state, done = {}, set()
+    args = SimpleNamespace(per_item=80)
+    link, panels = figure_prompts.load('link'), figure_prompts.load('panels')
+
+    # pass 1: batch A's link goes out; B waits
+    fq.fill_queue(client, [a, b], state, done, set(), 100, link, panels, args, Counter())
+    assert [k for k, _ in client.submitted] == ['link']
+    assert client.submitted[0][1]['file_hash'] == paper.hash
+    # its captions land (and are no longer waiting on the server)
+    fp.collect_finished(client)
+    # pass 2: A's splits go out before B's link
+    fq.fill_queue(client, [a, b], state, done, set(), 100, link, panels, args, Counter())
+    kinds = [k for k, _ in client.submitted]
+    assert kinds[:2] == ['link', 'panels'] and kinds.index('panels') < len(kinds)
+    if len(kinds) > 2:                                   # B's link only after A's splits
+        assert kinds[2] == 'link' and client.submitted[2][1]['file_hash'] == other.hash
+    assert 'A' in done
