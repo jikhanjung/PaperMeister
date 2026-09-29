@@ -169,9 +169,10 @@ def submit_panels(client, pf, prompt, outstanding: set[str]) -> int:
     """Ask for the splits this paper's captioned figures are now due —
     except those already waiting on the server."""
     targets = figure_panels.split_targets(pf, prompt['version'])
-    for row in targets.rematch:
+    pending = _pending_rematch(targets.rematch)
+    for row in pending:
         figure_panels.rematch(row)
-    if targets.rematch:
+    if pending:
         figure_share.write_to_cache(pf)
     items = [figure_panels.panel_item(row, prompt['version']) for row in targets.due]
     items = [it for it in items if it['key'] not in outstanding]
@@ -269,11 +270,21 @@ def batch_state(batch: Batch, state, outstanding: set[str], prompt_version: str)
             continue
         targets = figure_panels.split_targets(pf, prompt_version)
         # A split already waiting on the server is asked for: it is ahead of
-        # anything submitted after it, which is all the ordering needs.
-        if targets.rematch or any(figure_panels.panel_item(r, prompt_version)['key'] not in outstanding
-                                  for r in targets.due):
+        # anything submitted after it, which is all the ordering needs. A
+        # re-attach that could not map its labels is a person's to decide
+        # (re-cut or fix the labels) — not work the batch waits for; left
+        # in, it held the pilot batch open forever (2026-09-30, 29 rows).
+        if _pending_rematch(targets.rematch) or any(
+                figure_panels.panel_item(r, prompt_version)['key'] not in outstanding for r in targets.due):
             panels_due += 1
     return {'link_left': max(0, len(batch.file_ids) - cursor), 'link_out': link_out, 'panels_due': panels_due}
+
+
+def _pending_rematch(rows: list) -> list:
+    """Rows whose panels can still be re-attached by label — not those a
+    re-attach already failed on and flagged for a person."""
+    flag = figure_panels.ENTRIES_CHANGED_UNMAPPED
+    return [r for r in rows if flag not in json.loads(r.uncertain_reasons_json or '[]')]
 
 
 def run(args) -> int:

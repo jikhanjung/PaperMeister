@@ -263,3 +263,22 @@ def test_a_batch_finishes_its_splits_before_the_next_batch_links(paper, monkeypa
     if len(kinds) > 2:                                   # B's link only after A's splits
         assert kinds[2] == 'link' and client.submitted[2][1]['file_hash'] == other.hash
     assert 'A' in done
+
+
+@pytest.mark.unit
+def test_a_failed_reattach_left_for_a_person_does_not_hold_the_batch_open(paper):
+    """2026-09-30: 29 rows whose panels could not be re-attached to their
+    new entries were flagged for a person — and counted as the batch's
+    pending work, so the pilot never finished and the queue ran dry."""
+    import json
+
+    from papermeister import figure_panels
+    from scripts import figure_queue as fq
+
+    class Row:
+        def __init__(self, reasons):
+            self.uncertain_reasons_json = json.dumps(reasons)
+    flagged = Row([figure_panels.ENTRIES_CHANGED_UNMAPPED])
+    fresh = Row([])
+    assert fq._pending_rematch([flagged, fresh]) == [fresh]
+    assert fq._pending_rematch([flagged]) == []
