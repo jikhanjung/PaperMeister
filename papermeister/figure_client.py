@@ -34,7 +34,12 @@ def worker_summary(payload: dict) -> dict:
     pool is paused only when every worker is — one still running means the
     queue is moving — and `state` names the busiest one."""
     raw = payload.get('workers', payload.get('worker'))
-    workers = [w for w in (raw if isinstance(raw, list) else [raw]) if isinstance(w, dict)]
+    # wrapper 0.3.7: one `worker` object that carries the pool in `workers`,
+    # including workers that died (`alive: false`) — those are not the pool.
+    if isinstance(raw, dict) and isinstance(raw.get('workers'), list):
+        raw = raw['workers']
+    workers = [w for w in (raw if isinstance(raw, list) else [raw])
+               if isinstance(w, dict) and w.get('alive', True) is not False]
     if not workers:
         return {'state': '?', 'paused_reason': None, 'count': 0}
     running = [w for w in workers if not w.get('paused_reason')]
