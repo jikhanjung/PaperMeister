@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.2] - 2026-09-30
+
+Figure work that runs for days, and an app that can share the server with it.
+
+### Changed
+- **Process Figures no longer asks twice.** If the work for a paper is
+  already waiting on the server — put there by an unattended run — the app
+  waits for it and lands the result instead of submitting it again.
+- **A failed caption request comes back smaller.** A request that stalled
+  on a long answer stalls again at the same size; each failed attempt now
+  halves it, and no request holds more than 30 figures.
+- **Two server workers are understood.** The progress window reads the
+  server's worker pool, whatever shape it comes in, and shows how many are
+  busy; the work reads as paused only when every worker is.
+
+### Fixed
+- The unattended figure run (`scripts/figure_queue.py`) works in ordered
+  batches — the pilot list, then each collection in turn — and a batch's
+  panel splits go in before the next batch's captions. It no longer
+  resubmits work already waiting on the server, remembers the finished jobs
+  it has read, and no longer waits forever on a figure whose panels need a
+  person's decision.
+
+---
+
 ## [0.2.1] - 2026-09-23
 
 Figures keep working while you are away, and the window behaves.
