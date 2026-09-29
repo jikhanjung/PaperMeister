@@ -282,3 +282,46 @@ def test_a_failed_reattach_left_for_a_person_does_not_hold_the_batch_open(paper)
     fresh = Row([])
     assert fq._pending_rematch([flagged, fresh]) == [fresh]
     assert fq._pending_rematch([flagged]) == []
+
+
+@pytest.mark.unit
+def test_process_figures_waits_for_what_the_runner_already_submitted(paper):
+    """The app's Process Figures used to resubmit a paper the queue runner
+    had already asked for. Now items already waiting on the server are
+    waited for, not submitted again."""
+    from papermeister import figure_pipeline as fp
+    from papermeister.models import Figure, FigurePanel
+
+    runner = FakeClient()                                  # the runner's view: link done, panels queued
+    fp.process_file(paper, runner, lambda k, m: None, stages=('assemble', 'link'))
+    fp.collect_finished(runner)
+    from papermeister import figure_panels, figure_prompts
+    v = figure_prompts.load('panels')['version']
+    rows = figure_panels.split_targets(paper, v).due
+    queued_body = {'items': [figure_panels.panel_item(r, v) for r in rows]}
+
+    class AppClient(FakeClient):
+        """The server holds the runner's queued panels job."""
+        def jobs(self, kind=None, status=None):
+            own = super().jobs(kind, status)
+            return own + ([{'job_id': 'runner-panels', 'kind': 'panels', 'status': 'queued',
+                            'total': len(queued_body['items']), 'done': 0}] if kind in (None, 'panels') else [])
+
+        def job(self, kind, job_id):
+            if job_id == 'runner-panels':
+                return {'items': [{'key': it['key'], 'status': 'queued'} for it in queued_body['items']]}
+            return super().job(kind, job_id)
+
+        def wait(self, kind, job_id, poll_seconds=0, on_progress=None, should_stop=None):
+            if job_id == 'runner-panels':
+                return self._answer('panels', queued_body)
+            return super().wait(kind, job_id, poll_seconds, on_progress, should_stop)
+
+    app = AppClient()
+    log = []
+    report = fp.process_file(paper, app, lambda k, m: log.append(m))
+    assert report.error == ''
+    assert [k for k, _ in app.submitted] == []                          # nothing submitted twice
+    assert any('already on the server' in m for m in log)
+    row = Figure.get(Figure.paper_file == paper.id)
+    assert FigurePanel.select().where(FigurePanel.figure == row.id).count() == 2   # and the reply landed

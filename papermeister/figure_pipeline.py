@@ -364,11 +364,40 @@ def _note(r: StageReport) -> str:
     return f'{r.failed} without a usable reply' if r.failed else ''
 
 
+def _open_jobs_with(client: FigureClient, kind: str, keys: set[str]) -> dict[str, set[str]]:
+    """Open jobs of `kind` holding any of these item keys, still waiting or
+    running: {job_id: keys it holds}. The queue runner may have asked for
+    this paper already; asking again would put the same work on the server
+    twice."""
+    found: dict[str, set[str]] = {}
+    for job in client.jobs(kind=kind):
+        if job.get('status') not in ('queued', 'processing'):
+            continue
+        held = {it['key'] for it in client.job(kind, job['job_id']).get('items', [])
+                if it.get('key') in keys and it.get('status') in ('queued', 'processing')}
+        if held:
+            found[job['job_id']] = held
+    return found
+
+
 def _run(client: FigureClient, kind: str, body: dict, notify: Notify, check) -> dict:
-    """Submit and wait, reporting the worker's state; a paused worker is a wait, not a failure."""
-    reply = client.submit(kind, body)
-    notify('info', f'{kind}: {reply.get("total", len(body["items"]))} item(s) submitted'
-                   + (f', {reply["cached"]} cached' if reply.get('cached') else ''))
+    """Submit and wait, reporting the worker's state; a paused worker is a wait, not a failure.
+
+    Items already waiting on the server (the queue runner submitted them) are
+    not submitted again — this waits for those jobs instead. Returns one
+    job-shaped dict whose `items` are the replies for this body's keys."""
+    keys = {it['key'] for it in body['items']}
+    existing = _open_jobs_with(client, kind, keys)
+    covered = set().union(*existing.values()) if existing else set()
+    todo = [it for it in body['items'] if it['key'] not in covered]
+    job_ids = list(existing)
+    if covered:
+        notify('info', f'{kind}: {len(covered)} item(s) already on the server — waiting for them')
+    if todo:
+        reply = client.submit(kind, {**body, 'items': todo})
+        notify('info', f'{kind}: {reply.get("total", len(todo))} item(s) submitted'
+                       + (f', {reply["cached"]} cached' if reply.get('cached') else ''))
+        job_ids.append(reply['job_id'])
 
     def on_progress(job: dict) -> None:
         from .figure_client import worker_summary
@@ -378,4 +407,8 @@ def _run(client: FigureClient, kind: str, body: dict, notify: Notify, check) -> 
         else:
             notify('info', f'{kind}: {job.get("done", 0)}/{job.get("total", 0)} done, worker {w["state"]}')
 
-    return client.wait(kind, reply['job_id'], poll_seconds=15, on_progress=on_progress, should_stop=check)
+    items: list[dict] = []
+    for job_id in job_ids:
+        job = client.wait(kind, job_id, poll_seconds=15, on_progress=on_progress, should_stop=check)
+        items.extend(it for it in (job or {}).get('items', []) if it.get('key') in keys)
+    return {'status': 'done', 'items': items}
