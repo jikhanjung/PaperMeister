@@ -75,9 +75,10 @@ def run_job(client: FigureClient, kind: str, body: dict, log: Callable[[str], No
         return None
 
     def progress(job: dict) -> None:
-        w = job.get('worker') or {}
-        state = w.get('state', '?')
-        paused = f' — PAUSED: {w["paused_reason"]}' if w.get('paused_reason') else ''
+        from .figure_client import worker_summary
+        w = worker_summary(job)
+        state = w['state']
+        paused = f' — PAUSED: {w["paused_reason"]}' if w['paused_reason'] else ''
         log(f'    {job.get("status")}  done {job.get("done", 0)}/{job.get("total", 0)}  '
             f'failed {job.get("failed", 0)}  worker {state}{paused}')
 

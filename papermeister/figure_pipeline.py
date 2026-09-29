@@ -371,10 +371,11 @@ def _run(client: FigureClient, kind: str, body: dict, notify: Notify, check) -> 
                    + (f', {reply["cached"]} cached' if reply.get('cached') else ''))
 
     def on_progress(job: dict) -> None:
-        w = job.get('worker') or {}
-        if w.get('paused_reason'):
-            notify('wait', f'server worker paused: {w["paused_reason"]} — waiting')
+        from .figure_client import worker_summary
+        w = worker_summary(job)
+        if w['paused_reason']:
+            notify('wait', f'server worker{"s" if w["count"] > 1 else ""} paused: {w["paused_reason"]} — waiting')
         else:
-            notify('info', f'{kind}: {job.get("done", 0)}/{job.get("total", 0)} done, worker {w.get("state", "?")}')
+            notify('info', f'{kind}: {job.get("done", 0)}/{job.get("total", 0)} done, worker {w["state"]}')
 
     return client.wait(kind, reply['job_id'], poll_seconds=15, on_progress=on_progress, should_stop=check)

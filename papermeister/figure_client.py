@@ -27,6 +27,28 @@ class FigureServerError(RuntimeError):
     pass
 
 
+def worker_summary(payload: dict) -> dict:
+    """The server's worker state as one `{state, paused_reason, count}`,
+    whatever shape it comes in: one `worker` object (wrapper 0.3.x), a list
+    under `worker` or `workers` (more than one worker). With several, the
+    pool is paused only when every worker is — one still running means the
+    queue is moving — and `state` names the busiest one."""
+    raw = payload.get('workers', payload.get('worker'))
+    workers = [w for w in (raw if isinstance(raw, list) else [raw]) if isinstance(w, dict)]
+    if not workers:
+        return {'state': '?', 'paused_reason': None, 'count': 0}
+    running = [w for w in workers if not w.get('paused_reason')]
+    rank = {'processing': 0, 'running': 0, 'busy': 0, 'sleeping': 1, 'idle': 2}
+    pick = min(running or workers, key=lambda w: rank.get(w.get('state', ''), 3))
+    state = pick.get('state', '?')
+    if len(workers) > 1:
+        busy = sum(1 for w in running if rank.get(w.get('state', ''), 3) == 0)
+        state = f'{state} ({busy}/{len(workers)} busy)'
+    return {'state': state,
+            'paused_reason': None if running else (workers[0].get('paused_reason') or 'paused'),
+            'count': len(workers)}
+
+
 def _json(resp: requests.Response, what: str) -> dict:
     try:
         return resp.json()
@@ -125,8 +147,8 @@ class FigureClient:
             if should_stop:
                 should_stop()
             job = self.job(kind, job_id)
-            signature = (job.get('status'), job.get('done'), job.get('failed'),
-                         (job.get('worker') or {}).get('state'), (job.get('worker') or {}).get('paused_reason'))
+            w = worker_summary(job)
+            signature = (job.get('status'), job.get('done'), job.get('failed'), w['state'], w['paused_reason'])
             if on_progress and signature != last_signature:
                 on_progress(job)
                 last_signature = signature
