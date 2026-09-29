@@ -516,3 +516,32 @@ def test_a_plate_run_reads_the_block_before_it_and_designations_in_both_numerals
     assert fl._block_before_run(3, {3}) == {0, 1, 2}
     assert fl._number_forms('3') == ['3', 'III'] and fl._number_forms('IV') == ['IV', '4']
     assert fl._roman(14) == 'XIV' and fl._from_roman('XIV') == 14 and fl._from_roman('ABC') == 0
+
+
+@pytest.mark.unit
+def test_a_failed_item_comes_back_smaller(stored):
+    """2026-09-30 (ocrserver): items that stalled were resubmitted at the same
+    size and stalled again. Each failed attempt halves the item; eighty body
+    figures are never one item, whatever they weigh."""
+    from papermeister import figure_link as fl
+    from papermeister.models import Figure
+    pf, rows = stored
+    for page in range(10, 70):
+        Figure.create(paper=pf.paper_id, paper_file=pf.id, file_hash=HASH, page=page,
+                      bbox_page_1000=json.dumps([100, 100, 900, 900]), blocks_json='[]')
+    t = fl.link_targets(pf, DIGEST, PROMPT)
+    fresh = fl.link_items(pf, PAGES, t, DIGEST, 'v')
+    assert len(t.due) == 62 and all(len([f for f in it['figures'] if not f['locked']]) <= fl.MAX_ITEM_FIGURES
+                                    for it in fresh)
+    assert len(fresh) >= 3                          # 61 body + 1 plate: the figure cap splits it
+    assert fl.item_limits(t.due) == (fl.MAX_ITEM_WEIGHT, fl.MAX_ITEM_FIGURES)
+    for r in t.due[:5]:
+        r.link_attempts = 1
+    assert fl.item_limits(t.due) == (fl.MAX_ITEM_WEIGHT // 2, fl.MAX_ITEM_FIGURES // 2)
+    once = fl.link_items(pf, PAGES, t, DIGEST, 'v')
+    assert len(once) > len(fresh)
+    for r in t.due[:5]:
+        r.link_attempts = 2
+    twice = fl.link_items(pf, PAGES, t, DIGEST, 'v')
+    assert len(twice) > len(once)
+    assert fl.item_limits([]) == (fl.MAX_ITEM_WEIGHT, fl.MAX_ITEM_FIGURES)

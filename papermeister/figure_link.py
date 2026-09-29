@@ -50,6 +50,18 @@ MAX_ATTEMPTS = 3
 MAX_ITEM_WEIGHT = 80
 PLATE_WEIGHT = 8
 BODY_WEIGHT = 1
+#: Figures in one item at most, whatever their weight: eighty body figures
+#: weigh 80 but answer like a small book (ocrserver flagged the size, 09-23).
+MAX_ITEM_FIGURES = 30
+
+
+def item_limits(rows: list[Figure], per_item: int = MAX_ITEM_WEIGHT) -> tuple[int, int]:
+    """(weight cap, figure cap) for an item holding these rows, halved for
+    every failed attempt among them. A session that stalled on an answer
+    stalls on the same answer again — the server saw the client resubmit
+    failed items at the same size and fail the same way (2026-09-30)."""
+    attempts = min(4, max(((r.link_attempts or 0) for r in rows), default=0))
+    return max(1, per_item >> attempts), max(1, MAX_ITEM_FIGURES >> attempts)
 #: Kept for callers that think in figures: the weight of that many body figures.
 MAX_FIGURES_PER_ITEM = MAX_ITEM_WEIGHT
 #: A caption prefix this long that two figures on one page share is the same caption.
@@ -179,11 +191,12 @@ def link_items(paper_file: PaperFile, pages: list[str], targets: LinkTargets, di
     }
     context = [_figure_item(r, locked=True) for r in targets.context]
     due = sorted(targets.due, key=lambda r: (r.page, r.id))
+    weight_cap, figure_cap = item_limits(due, per_item)
     chunks: list[list[Figure]] = [[]]
     weight = 0
     for row in due:
         w = figure_weight(row)
-        if chunks[-1] and weight + w > per_item:
+        if chunks[-1] and (weight + w > weight_cap or len(chunks[-1]) >= figure_cap):
             chunks.append([])
             weight = 0
         chunks[-1].append(row)
