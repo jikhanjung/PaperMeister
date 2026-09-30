@@ -614,9 +614,9 @@ def test_a_figures_own_number_as_its_only_entry_is_told_apart_from_a_part(db):
     paper = Paper.create(title='t')
     pf = PaperFile.create(paper=paper, path='t.pdf', hash=HASH, status='processed')
 
-    def fig(name, labels, page):
+    def fig(name, labels, page, caption=''):
         row = Figure.create(paper=paper.id, paper_file=pf.id, file_hash=HASH, page=page,
-                            bbox_page_1000='[0, 0, 10, 10]', assembly=SINGLE, name=name)
+                            bbox_page_1000='[0, 0, 10, 10]', assembly=SINGLE, name=name, caption=caption)
         for i, lab in enumerate(labels):
             FigureEntry.create(figure=row.id, order=i, label=lab, printed_label=lab, description='d')
         return row
@@ -627,3 +627,7 @@ def test_a_figures_own_number_as_its_only_entry_is_told_apart_from_a_part(db):
     assert fl.own_number_entry(fig('Fig. 9', ['10'], 4)) is None            # a panel label
     assert fl.own_number_entry(fig('Fig. 9', ['9', '10'], 5)) is None       # more than one
     assert fl.own_number_entry(fig('', ['1'], 6)) is None
+    # under a group caption the entry is what this figure shows — kept
+    group = 'Fig. 8-12. Cythodictya ? tubularis nov. Fig. 8. Group of specimens of usual size.'
+    assert fl.own_number_entry(fig('Fig. 8', ['8'], 7, caption=group)) is None
+    assert fl.own_number_entry(fig('Fig. 14', ['14'], 8, caption=group)) is not None   # not in the range

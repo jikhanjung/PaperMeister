@@ -730,6 +730,8 @@ def apply_link(targets: LinkTargets, check: LinkCheck, result: dict, digest: str
 
 
 _DESIGNATION_NUMBER = re.compile(r'(\d+|[IVXLCivxlc]+)\s*([A-Za-z]?)\W*$')
+#: "Figs. 1-3. Chasmops odini …": a caption heading several figures at once.
+_GROUP_RANGE = re.compile(r'(?:(?i:\b(?:figs?|abb|text-?figs?|pl|plates?|taf)\.?)|図|第)\s*(\d+)\s*[-–—~～]\s*(\d+)')
 
 
 def own_number_entry(row: Figure) -> FigureEntry | None:
@@ -738,7 +740,11 @@ def own_number_entry(row: Figure) -> FigureEntry | None:
     figure without printed panel labels has none (decided 2026-09-30), and a
     figure's number is its `name` already. A name with a part letter
     ("Figure 4b": the parser cut one figure into parts) is not this case —
-    that entry says which part."""
+    that entry says which part. Nor is a figure under a group caption ("Figs.
+    8-12. Cythodictya … Fig. 8. Group of specimens …"): the caption stored on
+    it is the whole group's, and its entry is the only place that says what
+    this figure shows (pilot 2026-09-30: the model kept 24 of 27 of these and
+    dropped 77 of 79 of the rest)."""
     entries = list(row.entries.limit(2))
     if len(entries) != 1 or not row.name:
         return None
@@ -748,6 +754,11 @@ def own_number_entry(row: Figure) -> FigureEntry | None:
     label = (entries[0].label or '').strip().rstrip('.')
     if not label or not any(re.fullmatch(f, label) for f in _number_forms(m.group(1))):
         return None
+    if m.group(1).isdigit():
+        n = int(m.group(1))
+        for g in _GROUP_RANGE.finditer(row.caption or ''):
+            if int(g.group(1)) <= n <= int(g.group(2)) and int(g.group(1)) < int(g.group(2)):
+                return None
     return entries[0]
 
 
