@@ -29,7 +29,16 @@ from dataclasses import dataclass, field
 _LINE = re.compile(r'^\s*(?P<kind>x|h1|h2|t|e)(?:\s+(?P<labels>[^|:]+?))?\s*'
                    r'(?P<opts>(\|\s*[Lsd]=.*?)*)\s*::\s?(?P<text>.*)$')
 _OPT = re.compile(r'\|\s*([Lsd])=(.*?)(?=\s*\|\s*[Lsd]=|$)')
-_TRAILING = re.compile(r'[\s,;:]+$')
+_TRAILING = re.compile(r'[\s,;:、，；：]+$')
+#: Scripts written without spaces between words. A piece of a Japanese or
+#: Chinese caption often ends mid-sentence — inside a parenthesis, before a
+#: particle — and joining it to the next with a space or a line break made
+#: text the page does not have: "頭骨（ Au. afarensis. ）の比較" (pilot 2026-09-30),
+#: and the caption check then found its words missing from the page.
+_CJK = re.compile(r'[\u3000-\u303f\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uff00-\uffef]')
+_OPENERS = '([{（［｛「『〈《'
+_CLOSERS = ')]}）］｝」』〉》、。，．,.;；:：'
+_ENDS = ('.', '!', '?', ')', '。', '．', '！', '？', '）', '」', '』')
 
 #: The fields a full figure result carries, in the order the schema lists them.
 FIGURE_FIELDS = ('figure_id', 'name', 'caption', 'caption_source', 'caption_pages', 'continuation_of', 'entries')
@@ -68,15 +77,53 @@ def _trim(text: str) -> str:
 
 
 def _close(text: str) -> str:
-    """End a part of a description as a sentence, once."""
+    """End a part of a description as a sentence, once, in its own script."""
     t = _trim(text)
-    return t if not t or t.endswith(('.', '!', '?', ')')) else t + '.'
+    if not t or t.endswith(_ENDS):
+        return t
+    return t + ('。' if _CJK.match(t[-1]) else '.')
+
+
+def _join(left: str, right: str, sep: str) -> str:
+    """`sep` between two pieces, or nothing where the printed text has none:
+    at a CJK boundary, after an opening bracket, before closing punctuation."""
+    if not left or not right:
+        return left + right
+    if (_CJK.match(left[-1]) or _CJK.match(right[0]) or left[-1] in _OPENERS
+            or right[0] in _CLOSERS):
+        return left + right
+    return left + sep + right
+
+
+def _run_on(parts: list[str]) -> str:
+    """Pieces that continue one sentence ("Specimen X in" + "lateral view")."""
+    out = ''
+    for p in parts:
+        out = _join(out, p.strip(), ' ')
+    return out
+
+
+def _description(body: list[str], tails: list[str]) -> str:
+    """Headings and the entry's text run on; each remark is closed off as its
+    own sentence — unless it only finishes the one before ("）の比較")."""
+    out = _run_on(body)
+    for tail in tails:
+        tail = tail.strip()
+        if not tail:
+            continue
+        if out and tail[0] in _CLOSERS:
+            out = _trim(out) + tail
+        else:
+            out = _join(_close(out), tail, ' ') if out else tail
+    return _close(out)
 
 
 def expand_figure(figure: dict) -> tuple[dict, list[str]]:
     """One figure's `segs` → its full result; plus warnings for a person."""
     segs = parse(figure.get('segs', ''))
-    caption = '\n'.join((s.printed + ' ' if s.printed else '') + s.text for s in segs)
+    caption = ''
+    for s in segs:
+        caption = _join(caption, (s.printed + ' ' if s.printed else '') + s.text, '\n')
     entries: list[dict] = []
     group: list[dict] = []      # entries since the last h1 — what a bare `t` applies to
     h1 = h2 = ''
@@ -108,13 +155,7 @@ def expand_figure(figure: dict) -> tuple[dict, list[str]]:
                 group.append(e)
     out = []
     for e in entries:
-        if e['_ditto']:
-            description = e['_ditto']
-        else:
-            # Headings and the entry's own text run on as printed ("Specimen X in"
-            # + "lateral view"); only the end of that sentence and each remark close.
-            parts = [' '.join(x.strip() for x in e['_body'])] + e['_tail']
-            description = ' '.join(_close(p) for p in parts if p.strip())
+        description = e['_ditto'] or _description(e['_body'], e['_tail'])
         out.append({'label': e['label'], 'printed_label': e['printed_label'],
                     'description': description.strip(), 'specimen_number': e['specimen_number']})
     full = {k: v for k, v in figure.items() if k != 'segs'}

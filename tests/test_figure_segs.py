@@ -97,3 +97,25 @@ def test_the_segment_prompt_keeps_the_rules_and_swaps_the_answer_fields():
     fig = segs['schema']['properties']['figures']['items']
     assert 'segs' in fig['required'] and 'caption' not in fig['properties'] and 'entries' not in fig['properties']
     assert 'caption' in full['schema']['properties']['figures']['items']['properties']
+
+
+@pytest.mark.unit
+def test_a_japanese_caption_cut_mid_sentence_is_joined_as_printed():
+    """Pilot 2026-09-30, a Japanese figure: pieces end inside parentheses."""
+    segs = '\n'.join([
+        'h1 | L=図3. :: 中期中新世の原始的なホミノイド（',
+        'e a | L=a: :: Proconsul）',
+        'x :: と',
+        'h1 :: 各種猿人頭骨（',
+        'e b | L=b: :: Au. afarensis,',
+        'e c | L=c: :: Au. africanus,',
+        't b,c :: ）の比較.',
+        't b,c :: b・cは華奢型猿人、',
+    ])
+    full, warnings = figure_segs.expand_figure(figure(segs))
+    assert warnings == []
+    assert full['caption'] == ('図3. 中期中新世の原始的なホミノイド（a: Proconsul）と各種猿人頭骨（'
+                               'b: Au. afarensis,\nc: Au. africanus,）の比較.\nb・cは華奢型猿人、')
+    by = {e['label']: e['description'] for e in full['entries']}
+    assert by['b'] == '各種猿人頭骨（Au. afarensis）の比較. b・cは華奢型猿人。'
+    assert by['a'] == '中期中新世の原始的なホミノイド（Proconsul）'
