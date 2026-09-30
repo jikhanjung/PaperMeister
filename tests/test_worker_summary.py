@@ -43,3 +43,15 @@ def test_wrapper_0_3_7_pool_inside_the_worker_object_and_dead_workers_ignored():
                                       {'worker_id': 'jikhanserver-2', 'state': 'running', 'alive': True}]}}
     w = worker_summary(payload)
     assert w['count'] == 2 and w['paused_reason'] is None and w['state'] == 'running (2/2 busy)'
+
+
+@pytest.mark.unit
+def test_a_pause_of_the_whole_pool_is_read_from_the_summary_object():
+    """0.3.7 with the codex quota spent (2026-09-30): the summary says paused,
+    each worker still says idle."""
+    payload = {'worker': {'state': 'paused', 'paused_reason': 'codex: quota — …', 'alive_count': 2,
+                          'running_count': 0,
+                          'workers': [{'worker_id': 'jikhanserver', 'state': 'idle', 'alive': False},
+                                      {'worker_id': 'jikhanserver-1', 'state': 'idle', 'alive': True},
+                                      {'worker_id': 'jikhanserver-2', 'state': 'idle', 'alive': True}]}}
+    assert worker_summary(payload) == {'state': 'paused', 'paused_reason': 'codex: quota — …', 'count': 2}

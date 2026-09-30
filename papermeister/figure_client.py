@@ -36,8 +36,15 @@ def worker_summary(payload: dict) -> dict:
     raw = payload.get('workers', payload.get('worker'))
     # wrapper 0.3.7: one `worker` object that carries the pool in `workers`,
     # including workers that died (`alive: false`) — those are not the pool.
+    # A pause of the whole pool (the codex quota, shared by every worker) is
+    # on that object; the workers themselves still read `idle` (2026-09-30:
+    # the progress said idle for an hour while nothing moved).
     if isinstance(raw, dict) and isinstance(raw.get('workers'), list):
+        pool_paused = raw.get('paused_reason')
         raw = raw['workers']
+        if pool_paused:
+            live = sum(1 for w in raw if isinstance(w, dict) and w.get('alive', True) is not False)
+            return {'state': 'paused', 'paused_reason': pool_paused, 'count': live}
     workers = [w for w in (raw if isinstance(raw, list) else [raw])
                if isinstance(w, dict) and w.get('alive', True) is not False]
     if not workers:
