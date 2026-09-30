@@ -34,7 +34,7 @@ import json
 import re
 from dataclasses import dataclass, field
 
-from . import figures
+from . import figure_segs, figures
 from .figure_store import PAGE, protection
 from .models import Figure, FigureEntry, PaperFile, db
 
@@ -79,6 +79,8 @@ DESCRIPTION_NOT_PRINTED = 'description_not_printed'
 CAPTION_SHARED = 'caption_shared'
 PLATE_NO_ENTRIES = 'plate_no_entries'
 ENTRIES_SHRANK = 'entries_shrank'
+#: A compact (`segs`) answer with lines that did not parse, or remarks aimed at labels it has not.
+SEGS_UNPARSED = 'segs_unparsed'
 
 _WORD = re.compile(r'\w{4,}', re.UNICODE)
 _TAG = re.compile(r'<[^>]+>')
@@ -101,6 +103,15 @@ def ocr_digest(pages: list[str]) -> str:
 
 def link_key(row: Figure, digest: str, prompt_version: str) -> str:
     return f'{row.file_hash}|{row.page}|{row.bbox_page_1000}|{digest}|{prompt_version}'
+
+
+def is_linked(row: Figure, digest: str, prompt_version: str) -> bool:
+    """The row holds a result for this text under this prompt — or under an
+    earlier prompt listed as still good (`figure_prompts.ACCEPTED_VERSIONS`):
+    a new answer format is no reason to ask about 6,000 figures again."""
+    from .figure_prompts import accepted
+    head = link_key(row, digest, '')
+    return (row.link_key or '').startswith(head) and row.link_key[len(head):] in accepted('link', prompt_version)
 
 
 # ── what to send ─────────────────────────────────────────────────────
@@ -133,7 +144,7 @@ def link_targets(paper_file: PaperFile, digest: str, prompt_version: str,
             out.excluded.append((row, 'own_caption'))
         elif protection(row).caption:
             out.context.append(row)
-        elif row.link_key == link_key(row, digest, prompt_version):
+        elif is_linked(row, digest, prompt_version):
             out.excluded.append((row, 'linked'))
         elif row.link_attempts >= MAX_ATTEMPTS and not retry_errors:
             out.excluded.append((row, 'attempts_exhausted'))
@@ -507,11 +518,16 @@ def validate_link_result(payload: dict, result: dict, pages: list[str],
     person: the reply may be right, and the rule cannot tell.
     """
     check = LinkCheck()
+    # The digest is of the reply as it came: the same answer read again is
+    # recognised whatever shape it was in.
+    digest = result_digest(result)
+    # A compact answer is rebuilt into the full shape first, so every check
+    # below reads the caption and entries the model meant.
+    result, segs_warnings = figure_segs.expand(result)
     # `payload` is one request item, or a whole one-item body.
     item = payload['items'][0] if 'items' in payload else payload
     sent = {f['figure_id']: f for f in item['figures']}
     page_count = item.get('page_count', len(pages))
-    digest = result_digest(result)
     for fid in sent:
         check.reply_digest[fid] = digest
     seen_captions: dict[tuple[int, str], str] = {}
@@ -547,6 +563,8 @@ def validate_link_result(payload: dict, result: dict, pages: list[str],
                 not isinstance(e, dict) or not isinstance(e.get('label', ''), str) for e in entries):
             check.rejected.append((fid, 'malformed_entries'))
             continue
+        if segs_warnings.get(fid):
+            check.flag(fid, SEGS_UNPARSED)
         cont = item.get('continuation_of')
         if cont is not None and str(cont) not in sent:
             check.rejected.append((fid, 'continuation_of_unknown'))
@@ -633,7 +651,8 @@ def reset_link(ids: list[int]) -> tuple[list[int], list[int]]:
             reasons = json.loads(row.uncertain_reasons_json or '[]')
             row.uncertain_reasons_json = json.dumps([r for r in reasons if not r.startswith('link_skipped')
                                                      and r not in ('caption_shared', 'plate_no_entries',
-                                                                   'entries_shrank', 'caption_not_printed')])
+                                                                   'entries_shrank', 'caption_not_printed',
+                                                                   SEGS_UNPARSED)])
             row.save()
             done.append(row.id)
     return done, refused
@@ -708,6 +727,28 @@ def apply_link(targets: LinkTargets, check: LinkCheck, result: dict, digest: str
             if reasons:
                 out.reviewed += 1
     return out
+
+
+_DESIGNATION_NUMBER = re.compile(r'(\d+|[IVXLCivxlc]+)\s*([A-Za-z]?)\W*$')
+
+
+def own_number_entry(row: Figure) -> FigureEntry | None:
+    """The row's only entry when it is just the figure's own number — "Fig. 14"
+    given entry "14" — not a panel. Entries are the parts a caption labels; a
+    figure without printed panel labels has none (decided 2026-09-30), and a
+    figure's number is its `name` already. A name with a part letter
+    ("Figure 4b": the parser cut one figure into parts) is not this case —
+    that entry says which part."""
+    entries = list(row.entries.limit(2))
+    if len(entries) != 1 or not row.name:
+        return None
+    m = _DESIGNATION_NUMBER.search(row.name)
+    if not m or m.group(2):
+        return None
+    label = (entries[0].label or '').strip().rstrip('.')
+    if not label or not any(re.fullmatch(f, label) for f in _number_forms(m.group(1))):
+        return None
+    return entries[0]
 
 
 def recheck_printed(row: Figure, pages: list[str]) -> list[str]:
@@ -801,6 +842,6 @@ def _store_reasons(row: Figure, reasons: list[str]) -> None:
 
 
 _LINK_REASONS = frozenset({CAPTION_NOT_PRINTED, DESCRIPTION_NOT_PRINTED, CAPTION_SHARED,
-                           PLATE_NO_ENTRIES, ENTRIES_SHRANK,
+                           PLATE_NO_ENTRIES, ENTRIES_SHRANK, SEGS_UNPARSED,
                            f'{LINK_SKIPPED}:explanation_not_found', f'{LINK_SKIPPED}:not_a_figure',
                            f'{LINK_SKIPPED}:ambiguous', f'{LINK_SKIPPED}:other'})

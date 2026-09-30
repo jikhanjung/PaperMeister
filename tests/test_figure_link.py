@@ -545,3 +545,85 @@ def test_a_failed_item_comes_back_smaller(stored):
     twice = fl.link_items(pf, PAGES, t, DIGEST, 'v')
     assert len(twice) > len(once)
     assert fl.item_limits([]) == (fl.MAX_ITEM_WEIGHT, fl.MAX_ITEM_FIGURES)
+
+
+@pytest.mark.unit
+def test_a_compact_reply_is_expanded_checked_and_written_like_a_full_one(stored):
+    from papermeister import figure_link as fl
+    from papermeister.models import Figure, FigureEntry
+    pf, rows = stored
+    t = fl.link_targets(pf, DIGEST, PROMPT)
+    p = fl.link_payload(pf, PAGES, t, DIGEST, 'c')
+    r = reply(str(rows[2].id), str(rows[3].id))
+    for f in r['figures']:
+        f.pop('entries')
+        f.pop('caption')
+    r['figures'][0]['segs'] = '\n'.join([
+        'h1 :: PLATE 2. Oistodus aff. breviconus.',
+        'e 1 | L=Fig. 1. | s=YSUG 00287 :: Lateral view of the holotype, YSUG 00287.',
+        'e 2 | L=Fig. 2. :: Posterior view of the same specimen, YSUG 00288.',
+        'e 3 | L=Fig. 3. | d=Drepanodus arcuatus, YSUG 00290. :: Drepanodus arcuatus, YSUG 00290.'])
+    r['figures'][1]['segs'] = 'x :: Fig. 4. Stratigraphic column of the Dumugol Formation.'
+    check = fl.validate_link_result(p, r, PAGES, {str(x.id): x for x in t.due})
+    assert check.rejected == [] and check.review == {}
+    fl.apply_link(t, check, r, DIGEST, PROMPT, 'gpt-6-astra')
+    plate = Figure.get_by_id(rows[2].id)
+    assert plate.caption.startswith('PLATE 2. Oistodus') and 'Fig. 2. Posterior view' in plate.caption
+    entries = list(FigureEntry.select().where(FigureEntry.figure == plate.id).order_by(FigureEntry.order))
+    assert [e.label for e in entries] == ['1', '2', '3'] and entries[0].specimen_number == 'YSUG 00287'
+    assert entries[0].description == 'PLATE 2. Oistodus aff. breviconus. Lateral view of the holotype, YSUG 00287.'
+    assert Figure.get_by_id(rows[3].id).entries.count() == 0
+
+
+@pytest.mark.unit
+def test_a_compact_line_that_does_not_parse_asks_a_person(stored):
+    from papermeister import figure_link as fl
+    pf, rows = stored
+    t = fl.link_targets(pf, DIGEST, PROMPT)
+    p = fl.link_payload(pf, PAGES, t, DIGEST, 'c')
+    r = reply(str(rows[2].id), str(rows[3].id))
+    body = r['figures'][1]
+    body.pop('entries')
+    body['segs'] = 'Fig. 4. Stratigraphic column of the Dumugol Formation.'   # no kind
+    body.pop('caption')
+    check = fl.validate_link_result(p, r, PAGES)
+    assert check.review.get(str(rows[3].id)) == [fl.SEGS_UNPARSED] and str(rows[3].id) in check.accepted
+
+
+@pytest.mark.unit
+def test_rows_linked_under_an_accepted_earlier_prompt_are_not_asked_again(stored, monkeypatch):
+    from papermeister import figure_link as fl
+    from papermeister import figure_prompts
+    pf, rows = stored
+    t = fl.link_targets(pf, DIGEST, PROMPT)
+    check = fl.validate_link_result(fl.link_payload(pf, PAGES, t, DIGEST, 'c'),
+                                    reply(str(rows[2].id), str(rows[3].id)), PAGES)
+    fl.apply_link(t, check, {}, DIGEST, PROMPT, 'gpt-6-astra')
+    # a new wording: stale, unless the old version is listed as still good
+    assert len(fl.link_targets(pf, DIGEST, 'link-v1-new').due) == 2
+    monkeypatch.setitem(figure_prompts.ACCEPTED_VERSIONS, 'link', frozenset({PROMPT}))
+    assert fl.link_targets(pf, DIGEST, 'link-v1-new').due == []
+    # a different text is still a different text
+    assert len(fl.link_targets(pf, 'e' * 64, 'link-v1-new').due) == 2
+
+
+@pytest.mark.unit
+def test_a_figures_own_number_as_its_only_entry_is_told_apart_from_a_part(db):
+    from papermeister import figure_link as fl
+    from papermeister.models import Figure, FigureEntry, Paper, PaperFile
+    paper = Paper.create(title='t')
+    pf = PaperFile.create(paper=paper, path='t.pdf', hash=HASH, status='processed')
+
+    def fig(name, labels, page):
+        row = Figure.create(paper=paper.id, paper_file=pf.id, file_hash=HASH, page=page,
+                            bbox_page_1000='[0, 0, 10, 10]', assembly=SINGLE, name=name)
+        for i, lab in enumerate(labels):
+            FigureEntry.create(figure=row.id, order=i, label=lab, printed_label=lab, description='d')
+        return row
+
+    assert fl.own_number_entry(fig('Fig. 14', ['14'], 1)) is not None
+    assert fl.own_number_entry(fig('Plate III', ['3'], 2)) is not None      # either numeral
+    assert fl.own_number_entry(fig('Figure 4b', ['4b'], 3)) is None         # a part of Figure 4
+    assert fl.own_number_entry(fig('Fig. 9', ['10'], 4)) is None            # a panel label
+    assert fl.own_number_entry(fig('Fig. 9', ['9', '10'], 5)) is None       # more than one
+    assert fl.own_number_entry(fig('', ['1'], 6)) is None
