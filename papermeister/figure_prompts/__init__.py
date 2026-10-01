@@ -25,7 +25,7 @@ _CLOSING = 'Return only JSON conforming to the schema.'
 #: asks for the caption once, as pieces (`link.segs.md`), and
 #: `figure_segs` rebuilds the full shape on the way in — about half the
 #: answer, which is what stalls a session (ocrserver P03).
-LINK_FORMAT = 'full'
+LINK_FORMAT = 'segs'
 
 #: Earlier versions whose results still count as done. A new wording makes
 #: every earlier result stale by key; a version listed here is one whose

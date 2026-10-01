@@ -29,11 +29,15 @@ def test_every_prompt_loads_as_a_strict_schema():
 
 @pytest.mark.unit
 def test_the_schemas_name_what_the_client_reads():
-    link = figure_prompts.load('link')['schema']['properties']
+    # the full answer's shape — what figure_segs rebuilds a compact answer into
+    link = figure_prompts.load('link', 'full')['schema']['properties']
     fig = link['figures']['items']['properties']
     assert {'figure_id', 'name', 'caption', 'caption_pages', 'continuation_of', 'entries'} <= set(fig)
     assert {'label', 'printed_label', 'description', 'specimen_number'} == set(fig['entries']['items']['properties'])
     assert 'pages_consulted' in link and 'skipped' in link
+    # the default asks for the compact one
+    segs = figure_prompts.load('link')['schema']['properties']['figures']['items']['properties']
+    assert figure_prompts.LINK_FORMAT == 'segs' and 'segs' in segs and 'entries' not in segs
     panels = figure_prompts.load('panels')['schema']['properties']
     assert {'is_compound', 'figure_kind', 'non_compound_reason', 'panels', 'annotation_indices'} <= set(panels)
     assert panels['non_compound_reason']['enum'] == ['', 'legend_labels', 'image_incomplete',
