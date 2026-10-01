@@ -79,7 +79,7 @@ DESCRIPTION_NOT_PRINTED = 'description_not_printed'
 CAPTION_SHARED = 'caption_shared'
 PLATE_NO_ENTRIES = 'plate_no_entries'
 ENTRIES_SHRANK = 'entries_shrank'
-#: A compact (`segs`) answer with lines that did not parse, or remarks aimed at labels it has not.
+#: A compact (`segs`) answer with lines that did not parse.
 SEGS_UNPARSED = 'segs_unparsed'
 
 _WORD = re.compile(r'\w{4,}', re.UNICODE)
@@ -563,7 +563,10 @@ def validate_link_result(payload: dict, result: dict, pages: list[str],
                 not isinstance(e, dict) or not isinstance(e.get('label', ''), str) for e in entries):
             check.rejected.append((fid, 'malformed_entries'))
             continue
-        if segs_warnings.get(fid):
+        # A remark aimed at labels this figure lacks is usually aimed at a
+        # sibling row of the same caption (pilot: 48 of 49 warnings); its text
+        # is in the caption either way. Only a line that did not parse asks.
+        if any(w.startswith('unparsed') for w in segs_warnings.get(fid, [])):
             check.flag(fid, SEGS_UNPARSED)
         cont = item.get('continuation_of')
         if cont is not None and str(cont) not in sent:
