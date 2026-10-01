@@ -8,12 +8,18 @@ figure whether the caption labels parts, so its answer checks the rule
 format answers as well as the old one (entries, labels, specimen numbers,
 descriptions).
 
-Nothing is written to the database. The stored answers are snapshotted at
-submit time and the replies are compared against the snapshot.
+Submit and collect write nothing to the database: the stored answers are
+snapshotted at submit time and the replies are compared against the snapshot.
+`--apply` writes the replies through the same checks a collect uses — a
+figure the model skipped or a reply the checks reject keeps its old answer
+(no attempt counted), and fewer entries than before is refused and flagged
+for a person (`entries_shrank`).
 
     python scripts/segs_pilot.py                 # which papers, how many figures (read-only)
     python scripts/segs_pilot.py --execute       # submit them, one job per paper
     python scripts/segs_pilot.py --collect       # compare finished replies → report
+    python scripts/segs_pilot.py --apply         # what writing the replies would do
+    python scripts/segs_pilot.py --apply --execute   # write them (the model's answer replaces the old)
 
 State and report live in <data>/tmp/segs_pilot*.json. Close the app and the
 queue runner first: the submit uploads workspaces, nothing else touches the DB.
@@ -280,14 +286,74 @@ def collect(args) -> None:
     print(f'\nreport: {REPORT_PATH}')
 
 
+def apply(args) -> None:
+    from papermeister.figure_client import from_preferences
+    state = load_state()
+    version = state.get('prompt_version') or figure_prompts.version('link', 'segs')
+    client = from_preferences()
+    totals = Counter()
+    for job_id, job in state['jobs'].items():
+        info = client.job('link', job_id)
+        replies = figure_lane.results_by_key(info)
+        pf = PaperFile.get_by_id(job['paper_file_id'])
+        pages = pages_of(pf)
+        if pages is None:
+            totals['no OCR cache'] += 1
+            continue
+        digest = figure_link.ocr_digest(pages)
+        rows = {str(r.id): r for r in Figure.select().where(Figure.id << [int(i) for i in job['snapshot']])}
+        rows = {fid: r for fid, r in rows.items() if not r.dismissed and not protection(r).caption}
+        check = figure_link.LinkCheck()
+        model = 'gpt-6-astra'
+        for item in job['items']:
+            reply = replies.get(item['key'], {})
+            if reply.get('status') != 'done' or not isinstance(reply.get('result'), dict):
+                totals[f'item {reply.get("status", "missing")}'] += 1
+                continue
+            check.merge(figure_link.validate_link_result(item, reply['result'], pages, rows))
+            model = reply.get('model') or model
+        accepted = [r for fid, r in rows.items() if fid in check.accepted]
+        shrank = [rows[fid] for fid, why in check.rejected if why == figure_link.ENTRIES_SHRANK and fid in rows]
+        totals['accepted'] += len(accepted)
+        totals['refused: entries shrank'] += len(shrank)
+        totals['skipped or rejected otherwise'] += len(rows) - len(accepted) - len(shrank)
+        totals['own-number entries dropped'] += sum(
+            1 for r in accepted if figure_link.own_number_entry(r) is not None
+            and not check.accepted[str(r.id)]['entries'])
+        if not args.execute:
+            continue
+        # Only the accepted rows are "due": the rest keep their answer and
+        # their attempt count — they were linked before this run.
+        targets = figure_link.LinkTargets(due=accepted)
+        applied = figure_link.apply_link(targets, check, {}, digest, version, model)
+        totals['written'] += applied.written
+        totals['unchanged'] += applied.unchanged
+        for row in shrank:
+            figure_link._store_reasons(row, check.review.get(str(row.id), [figure_link.ENTRIES_SHRANK]))
+            row.save()
+        totals['copied to siblings'] += figure_link.propagate_link(pf)
+        try:
+            figure_share.write_to_cache(pf)
+        except Exception as exc:  # the DB has the result; the cache catches up on the next write
+            totals['cache JSON not updated'] += 1
+            print(f'  paper {pf.paper_id}: cache JSON not updated ({type(exc).__name__}: {exc})')
+        print(f'  paper {pf.paper_id:>6}  written {applied.written}, refused {len(shrank)}')
+    print('\n' + '\n'.join(f'  {k}: {v}' for k, v in sorted(totals.items())))
+    if not args.execute:
+        print('\ndry run — add --execute to write')
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--execute', action='store_true', help='submit (default: list what would be sent)')
     ap.add_argument('--collect', action='store_true', help='compare finished replies with the snapshot')
+    ap.add_argument('--apply', action='store_true', help='write the replies (with --execute)')
     ap.add_argument('--limit', type=int, default=0, help='only the first N files')
     args = ap.parse_args()
     init_db()
-    if args.collect:
+    if args.apply:
+        apply(args)
+    elif args.collect:
         collect(args)
     else:
         submit(args)
