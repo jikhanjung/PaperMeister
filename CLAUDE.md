@@ -196,6 +196,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 | `split_panels.py` | (P16 ③) 패널 분할 레인. `--execute/--no-wait/--collect/--rematch`. 검사에서 거부된 답(`duplicate_caption_index` 등)을 다시 받으려면 **`--figure-ids N --force`** — 같은 키는 서버가 캐시된(같은) 답을 돌려주므로 `force` 없이는 재제출이 무의미 |
 | `figure_queue.py` | (P16 운영) **며칠짜리 무인 실행** — 끝난 답 수거 → panels → link 순으로 서버 큐를 `--max-queue`(기본 120항목) 근처로 유지하며 **Zotero 컬렉션을 트리 순서로** 하나씩 처리. `--collections`, `--days`, `--max-pages`(기본 200, 초록집 제외), `--status`, `--stop-file`, `--execute`. 진행 위치는 `<data>/figure_queue.json`에 남아 재시작하면 이어감. **앱을 닫고 실행**(DB writer 하나) |
 | `panel_sheet.py` | (P16 ③) 패널 결과 시각 검수 시트 — 도판 crop에 패널 상자·라벨, 옆에 매칭된 항목. `--paper-ids`, read-only |
+| `rehash_file.py` | PDF PaperFile의 해시를 실제 파일 해시로 교체(도판 서버가 "다른 판본"으로 업로드를 거부할 때). OCR이 지금 파일을 읽은 것인지 텍스트층으로 확인한 뒤에만 — 해시·도판 행/키·OCR 캐시 이름·사이블링 JSON(로컬 경로 + Zotero 파일명/제목). `--paper-file-ids`, `--execute` |
 | `verify_image.py` | OCR 이미지 경로(Pillow) 1-커맨드 검증 |
 | `migrate_data_dir.py` | 데이터 디렉터리 `~/.papermeister` → `~/PaleoBytes/PaperMeister` 이동 (`--execute`, `--copy`). **앱을 닫고 실행** |
 
