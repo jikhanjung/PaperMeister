@@ -194,6 +194,55 @@ def queue_depth(client) -> int:
                for j in client.jobs() if j.get('status') in ('queued', 'processing'))
 
 
+class TrackedClient:
+    """The figure client, plus the jobs this run submitted itself.
+
+    The server lists at most 1000 jobs (100 by default, 2026-10-06) and has
+    no paging; a job that leaves the list is invisible to collecting and to
+    the "anything outstanding?" check, so its reply never lands and its batch
+    closes early. Every job this run submits is remembered by id
+    (`state['open_jobs']`) and fetched directly when the list no longer
+    shows it, until it is finished and collected."""
+
+    def __init__(self, client, state: dict):
+        self._client = client
+        self._open = state.setdefault('open_jobs', {})      # job_id -> kind
+
+    def __getattr__(self, name):
+        return getattr(self._client, name)
+
+    def submit(self, kind: str, body: dict) -> dict:
+        reply = self._client.submit(kind, body)
+        if reply.get('job_id'):
+            self._open[reply['job_id']] = kind
+        return reply
+
+    def jobs(self, kind: str | None = None, status: str | None = None) -> list[dict]:
+        listed = self._client.jobs(kind=kind, status=status)
+        seen = {j.get('job_id') for j in listed}
+        for job_id, job_kind in list(self._open.items()):
+            if job_id in seen or (kind and job_kind != kind):
+                continue
+            try:
+                full = self._client.job(job_kind, job_id)
+            except Exception as exc:   # gone from the server, or the server away: try next pass
+                log(f'  job {job_id[:8]} not readable: {type(exc).__name__}: {exc}')
+                continue
+            summary = {k: v for k, v in full.items() if k not in ('items', 'worker')}
+            summary.setdefault('job_id', job_id)
+            summary.setdefault('kind', job_kind)
+            if summary.get('status') in ('failed', 'cancelled'):
+                self._open.pop(job_id, None)   # nothing will come of it; collect reads done jobs only
+            if status is None or summary.get('status') == status:
+                listed.append(summary)
+        return listed
+
+    def forget(self, job_ids) -> None:
+        """Jobs finished and collected: no longer this run's to watch."""
+        for job_id in job_ids:
+            self._open.pop(job_id, None)
+
+
 def outstanding_keys(client) -> set[str]:
     """Item keys already waiting on the server. A figure whose split is
     queued is still "due" in the DB until the reply lands — without this
@@ -290,11 +339,11 @@ def _pending_rematch(rows: list) -> list:
 def run(args) -> int:
     from papermeister.figure_client import from_preferences
     init_db()
-    client = from_preferences()
     link_prompt = figure_prompts.load('link')
     panels_prompt = figure_prompts.load('panels')
 
     state = load_state()
+    client = TrackedClient(from_preferences(), state)
     batches = plan_batches(args, state)
     done = set(state.get('done_batches', []))
     log(f'plan: {len(batches)} batch(es), {len(done)} done; queue cap {args.max_queue} items, '
@@ -329,6 +378,7 @@ def run(args) -> int:
             report = collect_finished(client, skip_jobs=settled)
             settled |= report.settled
             state['settled_jobs'] = sorted(settled)[-5000:]
+            client.forget(settled)
         except Exception as exc:
             log(f'collect failed: {type(exc).__name__}: {exc}')
             totals['errors'] += 1

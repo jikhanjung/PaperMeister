@@ -325,3 +325,39 @@ def test_process_figures_waits_for_what_the_runner_already_submitted(paper):
     assert any('already on the server' in m for m in log)
     row = Figure.get(Figure.paper_file == paper.id)
     assert FigurePanel.select().where(FigurePanel.figure == row.id).count() == 2   # and the reply landed
+
+
+@pytest.mark.unit
+def test_a_job_that_fell_out_of_the_servers_list_is_still_seen_and_collected(paper):
+    """2026-10-06: the server lists at most 1000 jobs (100 by default). The
+    runner's earlier link jobs left the list before they finished, their
+    replies never landed and the batch closed — 2,502 figures unlinked."""
+    from papermeister import figure_pipeline as fp
+    from papermeister.models import Figure
+    from scripts import figure_queue as fq
+
+    class ShortList(FakeClient):
+        def jobs(self, kind=None, status=None):
+            return []                       # everything has scrolled out of the list
+
+        def submit(self, kind, body):
+            super().submit(kind, body)
+            return {'job_id': f'{kind}-{len(self.submitted) - 1}'}   # an id `job()` can read back
+
+    inner = ShortList()
+    fp.process_file(paper, FakeClient(), lambda k, m: None, stages=('assemble',))
+    state: dict = {}
+    client = fq.TrackedClient(inner, state)
+    from papermeister import figure_link, figure_prompts
+    pages = fp._pages_of(paper)
+    prompt = figure_prompts.load('link')
+    assert fq.submit_link(client, paper, pages, prompt, figure_link.MAX_ITEM_WEIGHT, set()) >= 1
+    assert list(state['open_jobs'].values()) == ['link']
+    assert [j['kind'] for j in client.jobs(kind='link')] == ['link']       # fetched by id
+    assert fp.collect_finished(inner).jobs == 0                            # the bare list sees nothing
+    report = fp.collect_finished(client)
+    assert report.link_written >= 1
+    assert Figure.select().where((Figure.paper_file == paper.id) & (Figure.link_key != '')).count() >= 1
+    report = fp.collect_finished(client)                                   # read again: unchanged → settled
+    client.forget(report.settled)
+    assert state['open_jobs'] == {}
