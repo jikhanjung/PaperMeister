@@ -122,7 +122,10 @@ def _read_attrs(tag: str) -> tuple[str, tuple[int, int, int, int] | None]:
             parts = m.group(1).split()
             if len(parts) == 4:
                 try:
-                    x0, y0, x1, y1 = (int(float(p)) for p in parts)
+                    # Each axis is 0..1000. A value past it is the OCR's typo
+                    # ("283 100 7080 354", Craw 1999): kept, but at the page edge —
+                    # the server refuses the whole paper's request over one such box.
+                    x0, y0, x1, y1 = (min(1000, max(0, int(float(p)))) for p in parts)
                 except ValueError:
                     continue
                 if x1 > x0 and y1 > y0:

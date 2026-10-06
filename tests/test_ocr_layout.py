@@ -47,6 +47,13 @@ def test_blocks_carry_their_label_and_box():
 
 
 @pytest.mark.unit
+def test_a_box_past_the_page_is_held_at_its_edge():
+    """Craw 1999 p.17: the OCR wrote x1 = 7080; the server refused the paper."""
+    blocks = layout.parse_blocks('<div data-label="Image" data-bbox="283 100 7080 354"><img alt="x"></div>')
+    assert blocks[0].bbox == (283, 100, 1000, 354)
+
+
+@pytest.mark.unit
 def test_a_nested_figure_does_not_end_at_its_first_close_tag():
     """Chandra sometimes draws a figure as HTML instead of describing it, and
     that markup nests divs. Ending the block at the first `</div>` would spill
