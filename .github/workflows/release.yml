@@ -43,9 +43,16 @@ jobs:
 
       - name: Generate SHA256 checksums
         run: |
+          # Bare filenames only: users run `sha256sum -c` next to the downloaded files, where the
+          # runner's per-platform folders (./papermeister-windows/...) don't exist. (Same bug found
+          # in Modan2's release rehearsal, 2026-10-06.) An empty list fails instead of publishing
+          # a checksum file that checks nothing.
+          set -euo pipefail
           cd release-files
-          find . -type f \( -name "*.zip" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.dmg" \) -exec sha256sum {} \; > ../SHA256SUMS.txt
+          find . -type f \( -name "*.zip" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.dmg" \) \
+            -exec sh -c 'cd "$(dirname "$1")" && sha256sum "$(basename "$1")"' _ {} \; | sort -k2 > ../SHA256SUMS.txt
           cd ..
+          [ -s SHA256SUMS.txt ] || { echo "::error::no release files to checksum"; exit 1; }
           cat SHA256SUMS.txt
 
       # Release body = the tag's own CHANGELOG.md section, extracted verbatim
