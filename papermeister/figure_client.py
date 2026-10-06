@@ -27,6 +27,10 @@ class FigureServerError(RuntimeError):
     pass
 
 
+#: The most jobs `GET /figures/jobs` lists in one reply (wrapper 0.3.x: `limit` <= 1000).
+JOBS_LIMIT = 1000
+
+
 def worker_summary(payload: dict) -> dict:
     """The server's worker state as one `{state, paused_reason, count}`,
     whatever shape it comes in: one `worker` object (wrapper 0.3.x), a list
@@ -128,7 +132,14 @@ class FigureClient:
         return _json(r, f'POST /figures/{kind}/{job_id}/cancel')
 
     def jobs(self, kind: str | None = None, status: str | None = None) -> list[dict]:
-        params = {'client_id': self.client_id}
+        """This client's jobs, newest first — as many as the server lists.
+
+        The server lists 100 by default and at most JOBS_LIMIT, with no paging.
+        At the default, a run that submits a job per paper pushed its own
+        earlier jobs out of the list before they finished: their replies were
+        never collected and the runner, seeing nothing outstanding, closed the
+        batch (2026-10-06: 1,212 figures of '1. Dinosaur')."""
+        params = {'client_id': self.client_id, 'limit': JOBS_LIMIT}
         if kind:
             params['kind'] = kind
         if status:

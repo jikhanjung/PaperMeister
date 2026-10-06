@@ -201,6 +201,7 @@ class FakeSession:
 
     def get(self, url, params=None, **kw):
         self.calls.append(('GET', url))
+        self.last_params = params
         n = sum(1 for c in self.calls if c[0] == 'GET' and '/figures/link/j1' in c[1])
         if url.endswith('/figures/link/j1'):
             if n == 1:
@@ -227,6 +228,8 @@ def test_the_client_sends_the_id_polls_and_reports_a_paused_worker(monkeypatch):
     job = c.wait('link', 'j1', poll_seconds=0, on_progress=lambda j: seen.append(j['worker']['state']))
     assert job['status'] == 'done' and seen == ['paused', 'idle']
     assert [j['job_id'] for j in c.jobs(kind='link')] == ['j1']      # wrapper wraps the list in {"items": …}
+    # the server lists 100 by default; a runner's earlier jobs fell out of that (2026-10-06)
+    assert s.last_params['limit'] == fc.JOBS_LIMIT == 1000
     with pytest.raises(fc.FigureServerError, match='not JSON'):
         c.upload_workspace({'file_hash': 'x', 'ocr_digest': 'y', 'pages': []}) if False else fc._json(
             FakeResponse(200, None, '<html>'), 'x')
