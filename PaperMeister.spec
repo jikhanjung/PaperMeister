@@ -150,6 +150,17 @@ _exe_common = dict(
     icon=None,                  # add a .ico path here for a custom app icon
 )
 
+# Windows version resource (File Properties > Details, and what Inno Setup
+# compares on upgrade). Build number = CI commit count in the 4th field, so it
+# rises across releases and across prereleases of one x.y.z. See
+# build_version_info.py; local builds without BUILD_NUMBER get 0 there.
+if sys.platform == 'win32':
+    sys.path.insert(0, SPECPATH)
+    from build_version_info import prepare_version_info_file
+    from version import __version__ as _pm_version
+    _exe_common['version'] = prepare_version_info_file(
+        _pm_version, 'PaperMeister', os.environ.get('BUILD_NUMBER', ''))
+
 if ONEFILE:
     # Everything embedded in one PaperMeister.exe (extracted to a temp dir at
     # launch). dist/PaperMeister.exe

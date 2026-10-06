@@ -35,6 +35,8 @@ jobs:
         run: echo "VERSION=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
 
       - name: Build (PyInstaller onedir)
+        env:
+          BUILD_NUMBER: ${{ inputs.build_number }}   # stamped into the exe version resource
         run: pyinstaller PaperMeister.spec
 
       - name: Zip portable build

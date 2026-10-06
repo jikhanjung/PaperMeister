@@ -8,10 +8,10 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
-    reviewers:
-      - "@jikhanjung"
+    # Bare login, no "@": with it Dependabot comments "assignees could not be
+    # added" on every PR. `reviewers` is retired upstream (use CODEOWNERS).
     assignees:
-      - "@jikhanjung"
+      - "jikhanjung"
     commit-message:
       prefix: "deps"
       include: "scope"

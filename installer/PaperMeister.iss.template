@@ -36,7 +36,14 @@ SolidCompression=no
 OutputBaseFilename=PaperMeister_v{#AppVersion}_build{#BuildNumber}_Installer
 
 [Files]
-Source: "{{DIST_PATH}}\PaperMeister\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
+; ignoreversion on the whole payload. Without it Inno compares each file's binary
+; version resource with the installed copy and keeps the installed one when the
+; new file is "not newer" -- an exe with no (or an unchanging) version resource
+; is never newer, so an upgrade reports success while the previous build keeps
+; launching (found in Modan2, devlog 285). The payload is replaced wholesale on
+; every install; there is no file we want to keep from the previous version.
+; PaperMeister.spec also stamps a real, rising version resource (build_version_info.py).
+Source: "{{DIST_PATH}}\PaperMeister\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{userprograms}\PaleoBytes\PaperMeister"; Filename: "{app}\PaperMeister.exe"
