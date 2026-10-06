@@ -149,19 +149,23 @@ def _zotero_error(*names):
 def _transient_network_errors() -> tuple:
     """Connection/timeout exception types to retry, across HTTP backends.
 
-    pyzotero moved from requests to httpx in 1.13, so the same network blip
-    arrives as a different exception class depending on the installed version.
-    `download_file_content` still calls requests directly, so both matter.
-    HTTP *status* errors are excluded on purpose — those are handled by code.
+    pyzotero moved from requests to httpx in 1.13, and from httpx to httpx2 in
+    1.15, so the same network blip arrives as a different exception class
+    depending on the installed version — and with only httpx's types listed,
+    1.15's blips would silently stop being retried. `download_file_content`
+    still calls requests directly, so that one matters too. HTTP *status*
+    errors are excluded on purpose — those are handled by code.
     """
+    import importlib
+
     import requests
     types: list = [requests.exceptions.ConnectionError, requests.exceptions.Timeout]
-    try:
-        import httpx
-    except ImportError:
-        pass
-    else:
-        types.append(httpx.TransportError)   # connect/read/timeout, not status
+    for name in ('httpx', 'httpx2'):
+        try:
+            module = importlib.import_module(name)
+        except ImportError:
+            continue
+        types.append(module.TransportError)   # connect/read/timeout, not status
     return tuple(types)
 
 

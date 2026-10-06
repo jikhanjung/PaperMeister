@@ -84,6 +84,27 @@ def test_httpx_transport_errors_are_retryable():
 
 
 @pytest.mark.unit
+def test_httpx2_transport_errors_are_retryable():
+    """pyzotero >= 1.15 raises these instead."""
+    httpx2 = pytest.importorskip('httpx2')
+
+    assert zw._is_retryable_zotero_error(httpx2.ConnectError('boom'))
+    assert zw._is_retryable_zotero_error(httpx2.ReadTimeout('boom'))
+
+
+@pytest.mark.unit
+def test_the_backend_pyzotero_installs_is_covered():
+    """Each pyzotero minor so far swapped its HTTP library (requests → httpx →
+    httpx2); the two tests above skip when theirs is absent. This one does
+    not: whatever pyzotero brought in, its transport errors are retried."""
+    import importlib.util
+    present = [n for n in ('httpx', 'httpx2') if importlib.util.find_spec(n)]
+    assert present, 'pyzotero brought a third HTTP library — add its TransportError'
+    covered = {t.__module__.split('.')[0] for t in zw._transient_network_errors()}
+    assert set(present) <= covered
+
+
+@pytest.mark.unit
 def test_client_errors_are_not_retryable():
     """429 and 4xx are decisions, not blips — retrying them is wrong."""
     assert not zw._is_retryable_zotero_error(Exception('Code: 429'))
