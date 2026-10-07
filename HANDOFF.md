@@ -10,10 +10,13 @@
 
 **Phase: 코어 기능 완성(Phase 1~3 + D) / references(P11~P14) 완주 / 4월 배치 재OCR 완주 / **P16 도판 파이프라인 무인 운영 중** → 최신 릴리스 **v0.2.3**(2026-10-07, 3플랫폼)**
 
-> **지금 돌고 있는 것 (2026-10-07)**: Windows에서 `scripts/figure_queue.py`(앱 닫고 실행)가
-> Zotero 컬렉션을 트리 순서로 assemble → link(캡션 연결, segs 형식) → panels(패널 분할)로 처리하며
-> ocrserver 큐를 ~120항목으로 유지한다. 상태 `<data>/figure_queue.json`(완료 배치 93, 열린 잡 30),
-> 로그 `<data>/logs/figure_queue.log`. 중단은 정지 파일, 재시작하면 이어감.
+> **지금 돌고 있는 것 (2026-10-07)**: Windows 작업 스케줄러 **`PaperMeister Figure Queue`**가 5분마다
+> `scripts/figure_queue.py --tick --execute`(pythonw, 한 패스 후 종료)를 띄워 Zotero 컬렉션을 트리 순서로
+> assemble → link(캡션 연결, segs 형식) → panels(패널 분할)로 처리하며 ocrserver 큐를 ~120항목으로 유지한다.
+> 상태 `<data>/figure_queue.json`(완료 배치 93, 열린 잡 30), 로그 `<data>/logs/figure_queue.log`.
+> **일시정지 = `<data>/figure_queue.stop` 생성**(지우면 재개), 해제는 `install-figure-tick.ps1 -Remove`.
+> 재부팅해도 로그온하면 저절로 이어진다. **앱은 켜 둬도 된다**(가이드 §9).
+> 2026-10-07 20:29 오래 사는 러너 → 틱 전환(첫 틱이 러너가 멈춘 자리 paper 6339 다음부터 이어감).
 > **진행률 (2026-10-07 ~16시 체크포인트, WSL `immutable` 읽기)**: PDF 9,944개 중 도판이 조립된 파일 **1,603개(16%)** —
 > 그중 캡션 연결 완료 1,003 · 패널 분할 시작 1,264 · 둘 다 794. 도판 17,420장(캡션 15,957 · 분할 7,058),
 > 패널 54,295 · 항목 57,711. Phase 0 추정 전체 도판 ~156k 대비 약 11%
@@ -60,7 +63,7 @@
 ### 진행 중인 것
 
 - **P16 도판 무인 운영** — 위 박스. 이번 주 남은 것(상세는 P16 섹션):
-  - 🟡 오래 사는 러너 → fsis P47식 **5분 틱**(작업 스케줄러 + 잠금 + 틱 예산) 전환 여부
+  - ✅ 오래 사는 러너 → **5분 틱** 전환 완료(2026-10-07, 잠금·예산·정지 파일=일시정지). 남은 것: 논문 단위 `--status` 표, 서버 `paused_reason` 백오프
   - 🟡 reading set 확장 방아쇠에 **"얇은 답"**(`plate_no_entries`·`caption_shared`·`entries_shrank`) 추가 여부
   - 미결: 항목 설명에 산지·층준 포함(권고: 포함), 무게 상한 상향
   - ⚠️ panels 레인이 **같은 PDF 형제를 해시로 합치지 않는다**(link의 `propagate_link` 같은 처리 필요)

@@ -25,10 +25,26 @@ shorter queue is easier to abandon, and a reply that lands changes what the
 next paper needs. A PDF longer than `--max-pages` is left out — an abstract
 volume is a day of server time and a handful of real figures.
 
-**The desktop app must be closed**: this writes the DB, and SQLite takes one
-writer. Stop it with Ctrl-C or by creating the file named by `--stop-file`;
-it picks up where it left off (the plan's cursor lives in
-`<data>/figure_queue.json`).
+Two ways to run it:
+
+    python scripts/figure_queue.py --tick --execute   # one pass and exit — Task Scheduler, every 5 min
+    python scripts/figure_queue.py --execute          # one process, a pass every 2 min, for days
+
+The tick is the normal way (`scripts/install-figure-tick.ps1` registers it):
+a tick that dies costs one interval, and the machine coming back from a
+reboot or a power cut picks the work up without anyone. Either way the
+plan's cursor lives in `<data>/figure_queue.json`, and a lock
+(`<data>/figure_queue.lock`, held by the OS) keeps two passes from running
+at once — a tick that finds the last one still busy just exits.
+
+The desktop app may stay open. The DB is in WAL mode with a busy timeout, so
+the two take turns writing; a reply both of them land is applied once (the
+second finds nothing due); and the app's Process Figures waits for items a
+pass already put on the server instead of submitting them again.
+
+To pause: create the file named by `--stop-file` (`<data>/figure_queue.stop`).
+Ticks skip while it exists and leave it in place; delete it to resume. A
+long-running loop stops at its next pass and removes it when started again.
 """
 from __future__ import annotations
 
@@ -51,7 +67,7 @@ from papermeister import (  # noqa: E402
 )
 from papermeister.database import init_db  # noqa: E402
 from papermeister.nettls import install_system_trust  # noqa: E402
-from papermeister.paths import DATA_DIR, OCR_JSON_DIR  # noqa: E402
+from papermeister.paths import DATA_DIR, LOG_DIR, OCR_JSON_DIR  # noqa: E402
 from scripts.assemble_figures import collection_files  # noqa: E402
 
 # The institution's network intercepts TLS; its root CA is in the OS store,
@@ -60,6 +76,7 @@ from scripts.assemble_figures import collection_files  # noqa: E402
 install_system_trust()
 
 STATE_PATH = os.path.join(DATA_DIR, 'figure_queue.json')
+LOCK_PATH = os.path.join(DATA_DIR, 'figure_queue.lock')
 #: A pass that finds nothing to do waits this long before looking again.
 IDLE_SLEEP = 300
 
@@ -346,8 +363,9 @@ def run(args) -> int:
     client = TrackedClient(from_preferences(), state)
     batches = plan_batches(args, state)
     done = set(state.get('done_batches', []))
-    log(f'plan: {len(batches)} batch(es), {len(done)} done; queue cap {args.max_queue} items, '
-        f'page cap {args.max_pages or "none"}')
+    if not args.tick:                          # every five minutes it would only be noise
+        log(f'plan: {len(batches)} batch(es), {len(done)} done; queue cap {args.max_queue} items, '
+            f'page cap {args.max_pages or "none"}')
     if args.status:
         log(f'server queue: {queue_depth(client)} item(s) outstanding')
         outstanding = outstanding_keys(client)
@@ -360,6 +378,9 @@ def run(args) -> int:
                 f'link waiting {st["link_out"]:>3}  splits due {st["panels_due"]:>3}')
         return 0
 
+    if args.tick:
+        return tick(args, client, batches, state, done, link_prompt, panels_prompt)
+
     deadline = datetime.now() + timedelta(days=args.days) if args.days else None
     totals: Counter = Counter()
     while True:
@@ -369,46 +390,122 @@ def run(args) -> int:
         if deadline and datetime.now() >= deadline:
             log('time budget spent — stopping')
             break
-
-        # 1. land what finished. A pass that throws (the server away, a
-        # Zotero hiccup) must not end a run that has days to go.
-        from papermeister.figure_pipeline import CollectReport, collect_finished
-        settled = set(state.get('settled_jobs', []))
-        try:
-            report = collect_finished(client, skip_jobs=settled)
-            settled |= report.settled
-            state['settled_jobs'] = sorted(settled)[-5000:]
-            client.forget(settled)
-        except Exception as exc:
-            log(f'collect failed: {type(exc).__name__}: {exc}')
-            totals['errors'] += 1
-            report = CollectReport()
-        if report.jobs:
-            log(f'collected {report.summary()}')
-
-        # 2. top the queue up, batch by batch
-        try:
-            depth = queue_depth(client)
-            outstanding = outstanding_keys(client)
-        except Exception as exc:
-            log(f'server unreachable: {type(exc).__name__}: {exc} — retrying after the sleep')
-            totals['errors'] += 1
+        busy = one_pass(client, batches, state, done, link_prompt, panels_prompt, args, totals)
+        if busy is None:                       # the server away: wait, then try again
             time.sleep(max(args.sleep, IDLE_SLEEP))
             continue
-        room = max(0, args.max_queue - depth)
-        submitted = fill_queue(client, batches, state, done, outstanding, room,
-                               link_prompt, panels_prompt, args, totals)
-        state['done_batches'] = sorted(done)
-        save_state(state)
-
-        if submitted:
-            log(f'queue now ~{depth + submitted} item(s) ({submitted} submitted this pass)')
-        elif not report.jobs:
-            log(f'nothing to do; queue {depth} item(s) — sleeping {args.sleep}s')
-        time.sleep(args.sleep if (submitted or report.jobs) else max(args.sleep, IDLE_SLEEP))
+        time.sleep(args.sleep if busy else max(args.sleep, IDLE_SLEEP))
     for k, n in sorted(totals.items()):
         log(f'  {k:<24} {n:>6}')
     return 0
+
+
+def tick(args, client, batches, state, done: set, link_prompt, panels_prompt) -> int:
+    """One pass, then exit — what Task Scheduler runs every few minutes.
+
+    A runner that lives for days stops everything when it dies (2026-09-23:
+    four hours in, an unhandled TLS error, nothing in the log) and has to be
+    started again by hand after every reboot. A tick that dies costs one
+    interval: the next one is a fresh process. Everything a pass needs is in
+    the state file and the DB already, so a pass is the same code either way."""
+    if args.stop_file and os.path.exists(args.stop_file):
+        log(f'paused — {args.stop_file} exists; delete it to resume')
+        return 0
+    totals: Counter = Counter()
+    one_pass(client, batches, state, done, link_prompt, panels_prompt, args, totals)
+    return 1 if totals.get('errors') else 0
+
+
+def one_pass(client, batches, state, done: set, link_prompt, panels_prompt, args,
+             totals: Counter) -> bool | None:
+    """Land what finished, top the queue up, save the state. True when
+    something happened, False when there was nothing to do, None when the
+    server could not be asked."""
+    # 1. land what finished. A pass that throws (the server away, a
+    # Zotero hiccup) must not end a run that has days to go.
+    from papermeister.figure_pipeline import CollectReport, collect_finished
+    settled = set(state.get('settled_jobs', []))
+    try:
+        report = collect_finished(client, skip_jobs=settled)
+        settled |= report.settled
+        state['settled_jobs'] = sorted(settled)[-5000:]
+        client.forget(settled)
+    except Exception as exc:
+        log(f'collect failed: {type(exc).__name__}: {exc}')
+        totals['errors'] += 1
+        report = CollectReport()
+    if report.jobs:
+        log(f'collected {report.summary()}')
+
+    if over_budget(args):
+        # A tick that spent its time landing replies leaves the topping-up to
+        # the next one rather than run into it.
+        save_state(state)
+        log('tick budget spent after collecting — the next tick tops the queue up')
+        return True
+
+    # 2. top the queue up, batch by batch
+    try:
+        depth = queue_depth(client)
+        outstanding = outstanding_keys(client)
+    except Exception as exc:
+        log(f'server unreachable: {type(exc).__name__}: {exc} — trying again later')
+        totals['errors'] += 1
+        save_state(state)
+        return None
+    room = max(0, args.max_queue - depth)
+    submitted = fill_queue(client, batches, state, done, outstanding, room,
+                           link_prompt, panels_prompt, args, totals)
+    state['done_batches'] = sorted(done)
+    save_state(state)
+
+    if submitted:
+        log(f'queue now ~{depth + submitted} item(s) ({submitted} submitted this pass)')
+    elif not report.jobs:
+        log(f'nothing to do; queue {depth} item(s)')
+    return bool(submitted or report.jobs)
+
+
+def over_budget(args) -> bool:
+    """Past this tick's time? (`args.deadline` is a `time.monotonic()` value;
+    the long-running loop has none.)"""
+    deadline = getattr(args, 'deadline', None)
+    return deadline is not None and time.monotonic() >= deadline
+
+
+class RunLock:
+    """One runner at a time, however it was started.
+
+    Two passes at once would each see the other's items as not yet waiting
+    and submit them again. The lock is the OS's on an open file, so it goes
+    away with the process however the process ends — no stale lock file to
+    clean up after a crash or a power cut."""
+
+    def __init__(self, path: str):
+        self.path = path
+        self._f = None
+
+    def acquire(self) -> bool:
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        f = open(self.path, 'a+')
+        try:
+            if os.name == 'nt':
+                import msvcrt
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            f.close()
+            return False
+        self._f = f
+        return True
+
+    def release(self) -> None:
+        if self._f is not None:
+            self._f.close()          # closing the handle drops the lock
+            self._f = None
 
 
 def fill_queue(client, batches, state, done: set, outstanding: set, room: int,
@@ -418,6 +515,8 @@ def fill_queue(client, batches, state, done: set, outstanding: set, room: int,
     for batch in batches:
         if batch.key in done:
             continue
+        if over_budget(args):
+            break
         st = batch_state(batch, state, outstanding, panels_prompt['version'])
         # splits of this batch go in as soon as its captions land
         if st['panels_due'] and room > submitted:
@@ -457,7 +556,7 @@ def submit_batch_link(client, batch, state, prompt, outstanding, room, args, tot
     from papermeister.models import PaperFile
     cursor = state.setdefault('cursor', {})
     submitted = 0
-    while submitted < room:
+    while submitted < room and not over_budget(args):
         index = cursor.get(batch.key, 0)
         if index >= len(batch.file_ids):
             break
@@ -508,15 +607,44 @@ def main() -> int:
     parser.add_argument('--sleep', type=int, default=120, help='seconds between passes')
     parser.add_argument('--stop-file', default=os.path.join(DATA_DIR, 'figure_queue.stop'),
                         help='create this file to stop after the current pass')
+    parser.add_argument('--tick', action='store_true',
+                        help='one pass, then exit — for Task Scheduler (scripts/install-figure-tick.ps1). '
+                             'The stop file pauses ticks instead of ending a run, and is left in place')
+    parser.add_argument('--budget', type=int, default=240,
+                        help='with --tick: stop starting new work after this many seconds (default 240)')
+    parser.add_argument('--log', help='append the output to this file (with --tick: default '
+                                      '<data>/logs/figure_queue.log — pythonw has no console)')
     parser.add_argument('--status', action='store_true', help='say where the plan stands and exit')
     parser.add_argument('--execute', action='store_true', help='actually submit and write')
     parser.add_argument('--cache-dir', default=OCR_JSON_DIR)
     args = parser.parse_args()
     if not args.execute and not args.status:
         parser.error('add --execute to run, or --status to look')
-    if args.stop_file and os.path.exists(args.stop_file):
-        os.remove(args.stop_file)
-    return run(args)
+    if args.tick and not args.log:
+        args.log = os.path.join(LOG_DIR, 'figure_queue.log')
+    if args.log:
+        os.makedirs(os.path.dirname(args.log), exist_ok=True)
+        sys.stdout = sys.stderr = open(args.log, 'a', encoding='utf-8', buffering=1)
+    if args.status:
+        return run(args)
+
+    lock = RunLock(LOCK_PATH)
+    if not lock.acquire():
+        if not args.tick:                      # a tick finding the last one still busy is routine
+            log(f'another runner holds {LOCK_PATH} — not starting')
+        return 0
+    try:
+        if args.tick:
+            args.deadline = time.monotonic() + args.budget
+        elif args.stop_file and os.path.exists(args.stop_file):
+            os.remove(args.stop_file)          # a run started by hand means go
+        return run(args)
+    except Exception:
+        import traceback
+        log('pass failed:\n' + traceback.format_exc())
+        return 1
+    finally:
+        lock.release()
 
 
 if __name__ == '__main__':

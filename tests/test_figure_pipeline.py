@@ -361,3 +361,62 @@ def test_a_job_that_fell_out_of_the_servers_list_is_still_seen_and_collected(pap
     report = fp.collect_finished(client)                                   # read again: unchanged → settled
     client.forget(report.settled)
     assert state['open_jobs'] == {}
+
+
+@pytest.mark.unit
+def test_one_runner_at_a_time(tmp_path):
+    """Two passes at once would each submit what the other just put on the
+    server. The second runner — a tick finding the last one still busy —
+    is turned away, and the lock goes when the holder lets go."""
+    from scripts import figure_queue as fq
+
+    path = str(tmp_path / 'figure_queue.lock')
+    first, second = fq.RunLock(path), fq.RunLock(path)
+    assert first.acquire()
+    assert not second.acquire()
+    first.release()
+    assert second.acquire()
+    second.release()
+
+
+@pytest.mark.unit
+def test_a_paused_tick_does_nothing_and_leaves_the_stop_file(paper, tmp_path):
+    """The stop file pauses ticks. A tick must not remove it — the next one
+    five minutes later would run again — and must not touch the server."""
+    from types import SimpleNamespace
+
+    from scripts import figure_queue as fq
+
+    stop = tmp_path / 'figure_queue.stop'
+    stop.write_text('')
+    client = FakeClient()
+    args = SimpleNamespace(stop_file=str(stop))
+    assert fq.tick(args, client, [fq.Batch('A', 'first', [paper.id])], {}, set(), None, None) == 0
+    assert stop.exists()
+    assert client.submitted == []
+
+
+@pytest.mark.unit
+def test_a_tick_past_its_budget_submits_nothing_more(paper, monkeypatch):
+    """A tick that spent its time stops starting new work, so it ends before
+    the next one is due; the walk resumes there next tick."""
+    from collections import Counter
+    from types import SimpleNamespace
+
+    from papermeister import figure_prompts
+    from scripts import figure_queue as fq
+
+    monkeypatch.setattr(fq, 'pages_of', lambda pf: PAGES)
+    monkeypatch.setattr(fq, 'save_state', lambda state: None)
+    link, panels = figure_prompts.load('link'), figure_prompts.load('panels')
+    batch = fq.Batch('A', 'first', [paper.id])
+    client = FakeClient()
+    spent = SimpleNamespace(per_item=80, max_queue=100, deadline=0.0)
+    state: dict = {}
+    assert fq.one_pass(client, [batch], state, set(), link, panels, spent, Counter()) is True
+    assert client.submitted == []
+    assert state.get('cursor', {}).get('A', 0) == 0          # nothing walked past
+
+    fresh = SimpleNamespace(per_item=80, max_queue=100, deadline=None)
+    fq.one_pass(client, [batch], state, set(), link, panels, fresh, Counter())
+    assert [k for k, _ in client.submitted] == ['link']
