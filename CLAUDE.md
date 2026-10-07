@@ -219,6 +219,6 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 
 ## Future Phases
 
-- **Phase 1.5 (진행 중):** LLM 서지정보 추출 → Zotero 메타데이터 보강
+- **P16 (진행 중):** 도판 파이프라인 라이브러리 전체 무인 처리 (`figure_queue.py`)
 - **Phase 2:** Hybrid search (BM25 + embeddings), LLM query interpretation
 - **Phase 3:** Entity extraction (taxon, locality), relation extraction

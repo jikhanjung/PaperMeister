@@ -8,63 +8,68 @@
 
 ## 현재 단계
 
-**Phase: 코어 기능 완성 — Phase 1~3 + Phase D 완료 / **P11 references 추출 완주**(2026-08-28) / P12 CitedWork 정규화 + P13 FTS external-content + P14 인용 네트워크 라이브 반영 완료 / P15 코드품질·CI 완료 → **v0.1.8 릴리스**(3플랫폼, 자산 5종, `build291`) + 사용자 매뉴얼 en/ko 배포 + PaleoBytes 데이터·설치 경로 정렬 + 라이선스 명시(GPL-3.0)**
+**Phase: 코어 기능 완성(Phase 1~3 + D) / references(P11~P14) 완주 / 4월 배치 재OCR 완주 / **P16 도판 파이프라인 무인 운영 중** → 최신 릴리스 **v0.2.3**(2026-10-07, 3플랫폼)**
 
-> **라이브 DB 실측 (2026-08-28, WSL read-only)**: Paper **9,895**.
-> references 추출 — `references_checked` **9,765편(98.7%)**, `Reference` **511,338행**(held 매칭 79,736),
-> `CitedWork` **264,169노드**. **완주로 본다**(사용자 판단, 2026-08-28).
-> 남은 130편의 내역: give-up 48 / 직전 PARTIAL 53 / 처리된 PDF 없음 67 (겹침 있음) —
-> 어느 쪽도 배치를 계속 돌려서 줄어드는 종류가 아니다.
+> **지금 돌고 있는 것 (2026-10-07)**: Windows에서 `scripts/figure_queue.py`(앱 닫고 실행)가
+> Zotero 컬렉션을 트리 순서로 assemble → link(캡션 연결, segs 형식) → panels(패널 분할)로 처리하며
+> ocrserver 큐를 ~120항목으로 유지한다. 상태 `<data>/figure_queue.json`(완료 배치 93, 열린 잡 30),
+> 로그 `<data>/logs/figure_queue.log`. 중단은 정지 파일, 재시작하면 이어감.
+> **진행률 (2026-10-07 ~16시 체크포인트, WSL `immutable` 읽기)**: PDF 9,944개 중 도판이 조립된 파일 **1,603개(16%)** —
+> 그중 캡션 연결 완료 1,003 · 패널 분할 시작 1,264 · 둘 다 794. 도판 17,420장(캡션 15,957 · 분할 7,058),
+> 패널 54,295 · 항목 57,711. Phase 0 추정 전체 도판 ~156k 대비 약 11%
+> 운영 사고·고친 것의 이력은 아래 [P16](#p16-도판-패널-분할-계획-2026-09-14) 섹션 끝, 설계 전반은
+> [`docs/figure_pipeline_guide.md`](./docs/figure_pipeline_guide.md).
 >
-> **본체 잔여 작업은 이제 references가 아니라 [4월 배치 재OCR](#4월-배치-재ocr-신규-2026-08-28)이다**
-> — 2,048편 / 58,401페이지. ocrserver가 놀고 있으므로 지금이 그 창이다.
+> **라이브 DB 실측 (2026-08-28)**: Paper **9,895** / `references_checked` 9,765편(98.7%) /
+> `Reference` 511,338행(held 매칭 79,736) / `CitedWork` 264,169노드.
+> 재OCR은 2차 완주 후 전수 점검(2026-09-09) — 미완결 5건(4건 일시 장애, 1건 문서 손상) 외 정상.
 
 ### 안정적으로 돌아가는 것
 
 - **기존 GUI** (`papermeister/ui/` — **동결**, 신규 개발 없음). Process/Preferences 다이얼로그는 desktop 앱에서 재사용 중
 - **CLI** (`cli.py`) — import/process/search/list/show/config/zotero
-- **OCR 3-backend**: RunPod serverless / Direct vLLM pod / Wrapper API. Wrapper는 **파이프라인 모드** — 서버 큐에 항상 N페이지 유지, `ocr_min_queued_pages` 미설정이면 서버의 `/api/stats::recommended_concurrency`를 자동 추종
+- **OCR 3-backend**: RunPod serverless / Direct vLLM pod / Wrapper API. Wrapper는 **파이프라인 모드** — 서버 큐에 항상 N페이지 유지, `ocr_min_queued_pages` 미설정이면 서버의 `/api/stats::recommended_concurrency`를 자동 추종.
+  조각 OCR(`done_with_errors`) 덮어쓰기는 `text_extract.MIN_PAGE_COVERAGE`가 쓰기 전에 거부
 - **Zotero 양방향**: pull(컬렉션·아이템 incremental sync, trash + 영구삭제 미러) + push/write-back(`papermeister/zotero_writeback.py`)
   - `zotero_writeback_enabled` pref **기본 OFF** — OFF면 Apply Biblio가 local-only 경로로 우회한다(다음 pull sync에서 덮어쓰일 수 있음)
   - `zotero_upload_ocr_json`(OCR JSON sibling 업로드) / `auto_promote_standalone`(standalone PDF → Zotero parent 자동 생성, 기본 ON)
-  - OCR JSON 안의 `papermeister_meta`가 "이 논문 biblio는 이미 적용됨"을 머신 간에 전달 → 다른 머신에서 LLM 호출을 건너뛴다
+  - OCR JSON 안의 `papermeister_meta`가 "이 논문 biblio는 이미 적용됨"을, 도판 결과도 같은 JSON에 실려 머신 간에 전달된다(110)
   - OCR 진입 시 로컬 캐시 miss면 같은 paper의 `{hash}.json` sibling을 Zotero에서 먼저 받아 재OCR을 회피
 - **서지 추출**: Haiku/Sonnet(claude) + Qwen3 → `PaperBiblio`에 비파괴 보관 → `biblio_reflect`가 평가(auto_commit / needs_review) → Zotero 반영
-- **References 추출(P11) + CitedWork 정규화(P12) + 인용 네트워크(P14)** — 추출 완주만 남음(아래 "진행 중인 것")
+- **References 추출(P11) + CitedWork 정규화(P12) + 인용 네트워크(P14)** — 완주. 논문 단위 병렬(`refs_workers`), give-up 카운터(`references_attempts`)
 - **검색**: FTS5 external-content(P13) + document 단위 `paper_fts` + 제목 부스트 3단 재랭킹 + 결과·본문 하이라이트
+- **도판(P16)**: assemble(클라이언트 규칙) → link(ocrserver Astra, reading set으로 좁게 시작해 실패마다 넓힘, 답은 segs 형식) → panels(Astra 분할) → `Figure`/`FigureEntry`/`FigurePanel`.
+  앱에서는 우클릭 **Process Figures**(러너가 이미 낸 잡은 다시 내지 않고 기다림), 장기 일괄은 `figure_queue.py`
 - **desktop 앱** (`python -m desktop`, Windows + Anaconda):
-  - Rail(Library/Search 모드 + Sync·Import·Process·Settings·Works 액션) / SourceNav(소스마다 탭 + 컬렉션 트리 + 하단 STATUS 패널) / PaperList(헤더 정렬·인용 스타일 저자·Ctrl+click reveal) / DetailPanel 4탭(**Metadata / PDF / Text / References**, lazy 빌드)
-  - status pill: `wait`(pending) → `OCR`(processed) → `done`(applied·auto_committed) / `rev`(needs_review) / `err`(failed) / `skip`(비-PDF 첨부) / `—`(no PDF)
-  - 우클릭 — **Paper**: Process OCR·Retry·Extract Biblio·Extract References·Open PDF·Review Biblio·Show in citation network / **폴더·My Library**: Process All(OCR→Biblio)·Extract References·**Retry Failed References…**·Upload OCR JSON (하위폴더 재귀)
-  - 진행창 3종(Process / Biblio / References) — Cancel + 서버 다운 시 `ServerGuard`가 큐를 유지한 채 pause → 복구되면 자동 resume.
-    References 창은 **동시에 파싱 중인 논문마다 진행바 한 줄**(제목·엔트리 수·%; 엔트리 수를 모르는 동안은 busy)
-  - **로컬 폴더 가져오기**(Rail import): 재귀 스캔 + SHA256 dedup. 이미 있는 hash면 새 Paper를 만들지 않고 그 논문을 폴더에 링크한다. 탭 우클릭으로 directory 소스 제거(디스크 파일·OCR 캐시는 보존)
-  - **PyInstaller 패키징**: `build_desktop_clean.bat`만 사용한다 — conda 셸 직접 빌드(`build_desktop.bat`)는 Qt DLL 오염으로 실패한다([devlog 061](./devlog/20260615_061_PyInstaller_Conda_DLL_Troubleshooting.md))
-- **데이터·로그**: `~/PaleoBytes/PaperMeister/` 아래 `papermeister.db` · `ocr_json/` · `pdf_cache/{zotero_key}/{filename}` · `logs/{ocr,zotero_sync,biblio_YYYYMMDD}.log`
+  - 프레임리스 창(상단 바가 타이틀바, `"native_title_bar": true`로 복귀) / Rail(Library/Search 모드 + Sync·Import·Process·Settings·Works 액션) / SourceNav(소스마다 탭 + 컬렉션 트리, 새로고침해도 펼침·선택 유지) / PaperList(헤더 정렬·인용 스타일 저자) / DetailPanel 5탭(**Metadata / PDF / Text / Figures / References**, lazy 빌드)
+  - 목록 Status 열은 **파이프라인 4단계(OCR→Info→References→Figures) 중 현재/다음 단계 배지 하나**(`OCR wait`·`INFO rev`·`REF part`·`FIG cap`·`done`), 판정은 `paper_service.Stages` 한 곳(112). 우클릭 메뉴도 단계 상태를 따른다
+  - 진행창(Process / Info / References / Figures) — Cancel + 서버 다운 시 pause → 복구되면 자동 resume
+  - **로컬 폴더 가져오기**(Rail import): 재귀 스캔 + SHA256 dedup
+  - **PyInstaller 패키징**: `build_desktop_clean.bat`만 사용한다 — conda 셸 직접 빌드(`build_desktop.bat`)는 Qt DLL 오염으로 실패한다([devlog 061](./devlog/20260615_061_PyInstaller_Conda_DLL_Troubleshooting.md)).
+    릴리스는 태그 push → `release.yml`(exe 버전 리소스, SHA256SUMS 포함)
+- **데이터·로그**: `~/PaleoBytes/PaperMeister/` 아래 `papermeister.db` · `ocr_json/` · `pdf_cache/{zotero_key}/{filename}` · `figure_queue.json` · `logs/{ocr,zotero_sync,biblio_YYYYMMDD,figure_queue}.log`
 
 ### 진행 중인 것
 
-- **P11 references 추출 완주** — 유일한 본체 잔여 작업 (진행률과 재개는 아래 "다음 할 일")
-  - 파이프라인 자체는 완성됐다: 추출(ocrserver Qwen3) → `Reference` 저장 → **추출 직후 자동 resolve**(보유 논문 매칭) → `CitedWork` 정규화(P12 패스1 auto-canonicalize). desktop 우클릭(Paper / 폴더 / My Library)과 `scripts/extract_references.py` 양쪽에서 돈다. 계획 [P11](./devlog/20260625_P11_References_Extraction_Citation_Network.md) · [P12](./devlog/20260625_P12_External_Work_Normalization.md)
-  - **held vs cited-only는 `Reference.resolved_paper`의 null 여부**로 판정한다(별도 플래그 없음). 외부 문헌은 `resolved_work`(`CitedWork`)로 dedup되어 공동인용·"자주 인용하지만 미보유" 발굴이 가능해진다
-  - `Paper.references_checked`가 재파싱을 막는다. **"참고문헌 없음"은 실패가 아니라 checked-empty**
-  - **범위 결정(2026-07-27, 사용자)**: 일반적인 학술지 논문만 잘 처리하면 된다 — 가이드북·도판·목차·부고 등의 헤딩 탐지 정확도는 개선하지 않는다. 단 **조용한 유실·무한 루프를 봉쇄하는 가드(077~079)는 유지**한다
-  - ✅ **give-up 카운터 도입 (2026-08-13, [091](./devlog/20260813_091_References_Queue_Hygiene.md))** — 오래 미해결이던 항목.
-    `Paper.references_attempts`가 PARTIAL/실패마다 +1, **완전 파싱 성공 시 0으로 리셋**(리셋이 없으면 장애로 실패한 논문이 영영 은퇴 상태로 남는다). 3회면 일반 실행에서 빠지고
-    우클릭 **"Retry Failed References…"** / CLI `--only-failed`로만 돌아온다. 기존 DB는 0으로 마이그레이션(추측 backfill 금지 — 관측한 실패만 센다)
-  - **desktop도 논문 단위 병렬** (`refs_workers` pref, 기본 4, qwen에서만) — [089](./devlog/20260813_089_Desktop_Parallel_References.md).
-    워커는 **LLM 호출만**, 저장·resolve·인덱스 빌드는 메인 스레드(CLI `--workers`와 같은 분할). 진행창은 **동시 논문마다 진행바 한 줄**
+- **P16 도판 무인 운영** — 위 박스. 이번 주 남은 것(상세는 P16 섹션):
+  - 🟡 오래 사는 러너 → fsis P47식 **5분 틱**(작업 스케줄러 + 잠금 + 틱 예산) 전환 여부
+  - 🟡 reading set 확장 방아쇠에 **"얇은 답"**(`plate_no_entries`·`caption_shared`·`entries_shrank`) 추가 여부
+  - 미결: 항목 설명에 산지·층준 포함(권고: 포함), 무게 상한 상향
+  - ⚠️ panels 레인이 **같은 PDF 형제를 해시로 합치지 않는다**(link의 `propagate_link` 같은 처리 필요)
 
 ### 대기 중
-- **needs_review 일괄 검토** — 실측 **5,229편**. Library "Needs Review" 필터 → Metadata 탭의 Biblio 대조 UI로 처리
+- **재OCR 뒤 references 재추출 여부** — 본문이 새로 나왔으므로 파싱 결과가 달라질 수 있다. 511k행을 버리는 큰 결정이라 몇 편 비교 후 결정
+- **references 잔여 130편**(give-up 48 / PARTIAL 53 / PDF 없음 67) 처리 방침
+- **needs_review 일괄 검토** — 실측 **5,229편**. Library "Needs Review" 필터 → Metadata 탭의 Info 대조 UI로 처리
 - **Phase D 후처리**: 위 검토 후 non-dry `reflect_biblio.py` 확인 패스 한 번(desktop 경로 밖에서 생성된 biblio의 status stamp 누락 확인용)
 
 ---
 
 ## 다음 할 일
 
-> **현재 우선순위 (2026-08-28)**: references는 완주로 종료했다. 본체로 남은 건
-> **4월 배치 재OCR 하나**이고, ocrserver를 독점해서 쓸 수 있는 상태다.
+> **현재 우선순위 (2026-10-07)**: references·4월 재OCR은 끝났다. 본체는 **P16 도판 무인 운영**
+> (`figure_queue.py`가 컬렉션을 차례로 처리 중)이고, 사람 몫은 위 "대기 중"의 결정들과 needs_review 검토다.
+> 아래 "진행 중 (본체)"·"4월 배치 재OCR"은 완료 기록으로 남겨 둔다.
 
 ### 진행 중 (본체)
 

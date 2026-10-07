@@ -13,8 +13,9 @@
 - **전문 검색**: SQLite FTS5 — 페이지 본문 + 제목·저자 별도 색인, 제목 매치 우선 랭킹 + 일치 부분 강조
 - **LLM 서지 추출**: Claude(Haiku/Sonnet) 또는 Qwen3 → PaperBiblio 비파괴 저장 → 검토 후 Zotero 메타데이터 보강
 - **참고문헌 + 인용 네트워크**: 각 논문의 참고문헌을 구조화 파싱 → 보유 논문과 매칭, 외부 문헌은 `CitedWork` 대표 노드로 정규화. 인용 ego 그래프 + Cited Works 브라우저
+- **도판·플레이트 분해**: OCR 레이아웃에서 도판을 조립하고, 캡션을 항목(라벨·설명·표본번호) 단위로 연결한 뒤 플레이트를 서브패널로 분할 (ocrserver 경유). Figures 탭에서 패널 상자 ↔ 캡션 항목 연동
 - **세 가지 인터페이스**:
-  - **신규 desktop 앱** (`python -m desktop`) — 3-pane + 탭 기반 detail panel, OCR 본문 markdown 렌더링, 전문 검색
+  - **신규 desktop 앱** (`python -m desktop`) — 3-pane + 탭 기반 detail panel, OCR 레이아웃 렌더링(헤딩·캡션·표·그림), 도판 뷰어, 전문 검색
   - **기존 GUI** (`python main.py`) — 안정 상태, 동결됨
   - **CLI** (`python cli.py`) — import/process/search/list/show/config/zotero 서브커맨드
 
@@ -58,7 +59,7 @@ python cli.py --help     # CLI 도움말
 
 ### 레이아웃
 ```
-┌─[Rail]─┬──[Zotero 탭]──────┬──[논문 목록]──┬─[Metadata|PDF|Text|References]─┐
+┌─[Rail]─┬──[Zotero 탭]──────┬──[논문 목록]──┬─[Metadata|PDF|Text|Figures|References]┐
 │ 📚     │ All Files   9,783 │ Status Auth Yr … │ 탭별 독립 스크롤     │
 │ 🔍     │ Pending     7,481 │ done  Smith… │                        │
 │  ⋮     │ Processed   4,494 │ ...           │                        │
@@ -80,9 +81,10 @@ python cli.py --help     # CLI 도움말
 
 ### 네비게이션
 1. 좌측 Zotero 탭에서 Library 필터 또는 컬렉션 클릭 → 중앙 목록 로드
-2. 목록에서 논문 클릭 → 우측 상세 패널에 **Metadata / PDF / Text / References** 탭 표시
+2. 목록에서 논문 클릭 → 우측 상세 패널에 **Metadata / PDF / Text / Figures / References** 탭 표시
 3. **Metadata** — 메타데이터 + 파일 정보 + Paper(Zotero) vs PaperBiblio(추출) 대조 비교. 필드별 라디오 선택·편집 후 Apply
-4. **PDF** — pypdfium2 렌더 (보이는 페이지만 lazy 디코드) / **Text** — OCR 본문 markdown
+4. **PDF** — pypdfium2 렌더 (보이는 페이지만 lazy 디코드) / **Text** — OCR 본문 (레이아웃 HTML이면 헤딩·캡션·표 + PDF에서 잘라 온 그림)
+   **Figures** — 도판·플레이트마다 전체 그림 + 서브패널 상자 + 캡션 항목. hover로 상자 ↔ 항목 연동
 5. **References** — 이 논문이 인용한 문헌 + 이 논문을 인용한 라이브러리 논문(양방향). 보유 문헌은 클릭 시 이동. 우클릭 → *Show in citation network* 로 ego 그래프
 
 ### 검색
@@ -224,7 +226,8 @@ devlog/                 # 개발 기록 (구현 + 계획)
 - ✅ **Phase D** (대량 운영): 라이브러리 전체 OCR + biblio 추출 완료
 - ✅ **P02**: PyInstaller 패키징 → 3-플랫폼 릴리스 (v0.1.0 / v0.1.1)
 - ✅ **P13**: FTS external-content 전환 (DB 40%↓) + document 단위 제목·저자 색인
-- 🟡 **P11/P12**: 참고문헌 추출 + `CitedWork` 정규화 + 인용 네트워크 — 코드 완료, 라이브 추출 진행 중
+- ✅ **P11/P12/P14**: 참고문헌 추출 + `CitedWork` 정규화 + 인용 네트워크 — 라이브러리 98.7% 완주
+- 🟡 **P16**: 도판 조립 → 캡션 연결 → 패널 분할 — 앱 기능 완료(v0.2.x), 라이브러리 전체 무인 처리 진행 중
 - 🟡 **Phase 4**: hookup — batch Reflect UI, needs_review 일괄 검토
 - ⬜ **Phase 5**: Hybrid search (BM25 + embeddings), LLM query interpretation
 - ⬜ **Phase 6**: Entity/relation extraction (taxon, locality)
