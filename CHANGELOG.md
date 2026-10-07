@@ -11,6 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.3] - 2026-10-07
+
+Shorter caption answers, and no reply left behind on the server.
+
+### Changed
+- **Captions are asked for in a compact form.** The model writes each
+  caption once, in pieces, and the app rebuilds the caption and its entries
+  from them — about half the answer it used to write, so a request finishes
+  sooner and stalls less. Figures captioned before keep their captions and
+  are not asked again.
+- **A figure without printed panel labels has no entries.** Its number is
+  already its name; entries are the parts a caption labels.
+- **A pause of the whole figure server reads as paused.** When every server
+  worker stops (its usage limit), the progress window says so and why,
+  instead of showing the workers as idle.
+
+### Fixed
+- Replies to figure requests were missed once more than a hundred jobs had
+  been submitted after them: the server lists only its newest jobs unless
+  asked for more. The app now reads up to a thousand, and the unattended run
+  (`scripts/figure_queue.py`) follows every job it submitted until it is
+  collected.
+- One figure box past the edge of its page (an OCR typo) made the server
+  refuse the whole paper; the box is now held at the edge.
+- Japanese and Chinese captions rebuilt from pieces no longer gain spaces,
+  line breaks or periods inside a sentence.
+- Zotero network hiccups are retried again with pyzotero 1.15, which changed
+  its HTTP library.
+- Dependencies: pyzotero 1.15.2, peewee 4.5.2, pypdfium2 5.14, platformdirs
+  4.12.3, urllib3 2.8.0 (security fixes).
+
+---
+
 ## [0.2.2] - 2026-09-30
 
 Figure work that runs for days, and an app that can share the server with it.
