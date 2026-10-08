@@ -346,6 +346,35 @@ def batch_state(batch: Batch, state, outstanding: set[str], prompt_version: str)
     return {'link_left': max(0, len(batch.file_ids) - cursor), 'link_out': link_out, 'panels_due': panels_due}
 
 
+def status_lines(batches: list[Batch], state, done: set, outstanding: set[str], prompt_version: str,
+                 upcoming: int = 3) -> list[str]:
+    """Where the plan stands: the batches done in one line, the batch under
+    way in full, the next few by size, the rest in one line.
+
+    It used to list the first twelve batches — once the run was a hundred
+    batches in, all twelve read `done` and the batch actually under way (a
+    689-file collection, half walked) never showed (2026-10-08)."""
+    finished = [b for b in batches if b.key in done]
+    rest = [b for b in batches if b.key not in done]
+    lines = [f'done   {len(finished)} batch(es), {sum(len(b.file_ids) for b in finished)} file(s)']
+    if not rest:
+        return lines + ['nothing left']
+    # Batches go strictly one after another (fill_queue), so the first one
+    # not done is the one being worked on.
+    now, following = rest[0], rest[1:]
+    st = batch_state(now, state, outstanding, prompt_version)
+    total = len(now.file_ids)
+    lines.append(f'now    {now.key:>6} {now.name[:40]:<40} {total:>5} file(s): '
+                 f'link asked {total - st["link_left"]}/{total}, waiting {st["link_out"]}, '
+                 f'splits due {st["panels_due"]}')
+    for batch in following[:upcoming]:
+        lines.append(f'next   {batch.key:>6} {batch.name[:40]:<40} {len(batch.file_ids):>5} file(s)')
+    later = following[upcoming:]
+    if later:
+        lines.append(f'then   {len(later)} batch(es), {sum(len(b.file_ids) for b in later)} file(s)')
+    return lines
+
+
 def _pending_rematch(rows: list) -> list:
     """Rows whose panels can still be re-attached by label — not those a
     re-attach already failed on and flagged for a person."""
@@ -367,15 +396,11 @@ def run(args) -> int:
         log(f'plan: {len(batches)} batch(es), {len(done)} done; queue cap {args.max_queue} items, '
             f'page cap {args.max_pages or "none"}')
     if args.status:
-        log(f'server queue: {queue_depth(client)} item(s) outstanding')
-        outstanding = outstanding_keys(client)
-        for batch in batches[:12]:
-            if batch.key in done:
-                log(f'  done   {batch.key:>6} {batch.name[:44]}')
-                continue
-            st = batch_state(batch, state, outstanding, panels_prompt['version'])
-            log(f'  {batch.key:>12} {batch.name[:40]:<40} link left {st["link_left"]:>4}  '
-                f'link waiting {st["link_out"]:>3}  splits due {st["panels_due"]:>3}')
+        kinds = Counter((state.get('open_jobs') or {}).values())
+        log(f'server queue: {queue_depth(client)} item(s) outstanding; this runner waits on '
+            f'{sum(kinds.values())} job(s) ({", ".join(f"{n} {k}" for k, n in sorted(kinds.items())) or "none"})')
+        for line in status_lines(batches, state, done, outstanding_keys(client), panels_prompt['version']):
+            log(f'  {line}')
         return 0
 
     if args.tick:

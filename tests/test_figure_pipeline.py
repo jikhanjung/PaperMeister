@@ -266,6 +266,27 @@ def test_a_batch_finishes_its_splits_before_the_next_batch_links(paper, monkeypa
 
 
 @pytest.mark.unit
+def test_status_shows_the_batch_under_way_however_many_are_done(paper):
+    """2026-10-08: `--status` listed the first twelve batches; a hundred
+    batches in, all twelve read `done` and the batch being worked on never
+    showed. Done batches fold into one line; the one under way is in full."""
+    from papermeister import figure_prompts
+    from scripts import figure_queue as fq
+
+    done_batches = [fq.Batch(f'd{i}', f'done {i}', [paper.id]) for i in range(20)]
+    now = fq.Batch('N', 'Invertebrate', [paper.id, paper.id])
+    following = [fq.Batch(f'n{i}', f'later {i}', [paper.id] * (i + 1)) for i in range(5)]
+    state = {'cursor': {'N': 1}}
+    lines = fq.status_lines(done_batches + [now] + following, state, {b.key for b in done_batches},
+                            set(), figure_prompts.load('panels')['version'])
+
+    assert lines[0].startswith('done   20 batch(es), 20 file(s)')
+    assert lines[1].startswith('now') and 'Invertebrate' in lines[1] and 'link asked 1/2' in lines[1]
+    assert [ln.split()[1] for ln in lines[2:5]] == ['n0', 'n1', 'n2']
+    assert lines[5] == 'then   2 batch(es), 9 file(s)'
+
+
+@pytest.mark.unit
 def test_a_failed_reattach_left_for_a_person_does_not_hold_the_batch_open(paper):
     """2026-09-30: 29 rows whose panels could not be re-attached to their
     new entries were flagged for a person — and counted as the batch's
