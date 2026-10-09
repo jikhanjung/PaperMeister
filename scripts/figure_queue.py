@@ -264,13 +264,19 @@ def outstanding_keys(client) -> set[str]:
     """Item keys already waiting on the server. A figure whose split is
     queued is still "due" in the DB until the reply lands — without this
     check every pass submitted it again (2026-09-24/25: one paper's two
-    figures, fifty times, and the queue full of them starved everything)."""
+    figures, fifty times, and the queue full of them starved everything).
+
+    Every item of an unfinished job counts, finished ones too: a reply lands
+    only when its whole job is collected. Counting only the waiting items
+    sent each finished figure of a big panels job again while the rest ran
+    (2026-10-09: an 82-figure paper asked again in twos and eights) — the
+    server answered from its cache, but each copy took room under the cap."""
     keys: set[str] = set()
     for job in client.jobs():
         if job.get('status') not in ('queued', 'processing'):
             continue
         for item in client.job(job['kind'], job['job_id']).get('items', []):
-            if item.get('status') in ('queued', 'processing') and 'key' in item:
+            if 'key' in item:
                 keys.add(item['key'])
     return keys
 

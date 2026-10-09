@@ -228,6 +228,27 @@ def test_the_queue_runner_never_submits_what_is_already_waiting(paper):
 
 
 @pytest.mark.unit
+def test_a_finished_figure_of_a_running_job_is_still_outstanding():
+    """2026-10-09: the finished figures of a big panels job still running were
+    asked again in small jobs — its reply had not landed, only been made."""
+    from scripts import figure_queue as fq
+
+    class Server:
+        def jobs(self):
+            return [{'job_id': 'p-1', 'kind': 'panels', 'status': 'processing'},
+                    {'job_id': 'p-2', 'kind': 'panels', 'status': 'done'}]
+
+        def job(self, kind, job_id):
+            if job_id == 'p-2':
+                return {'items': [{'key': 'collectable', 'status': 'done'}]}
+            return {'items': [{'key': 'answered', 'status': 'done'},
+                              {'key': 'running', 'status': 'processing'},
+                              {'key': 'waiting', 'status': 'queued'}]}
+
+    assert fq.outstanding_keys(Server()) == {'answered', 'running', 'waiting'}
+
+
+@pytest.mark.unit
 def test_a_batch_finishes_its_splits_before_the_next_batch_links(paper, monkeypatch):
     """The server is first in, first out. A batch's splits submitted after the
     next batch's captions would wait behind a day of captions — so while a
