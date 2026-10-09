@@ -277,12 +277,14 @@ def outstanding_keys(client) -> set[str]:
 
 # ── batches ──────────────────────────────────────────────────────────
 #
-# A batch is the pilot list or one collection. Batches are strictly ordered
-# by stage: a batch's captions are asked for, they land, its splits are
-# asked for — and only then does the next batch's link start. The server
-# is first in, first out, so submitting the next batch's link before this
-# batch's splits would put every split behind a day of captions (it did:
-# the pilot's splits waited behind collection 1's link for four days).
+# A batch is the pilot list or one collection. Batches go in order: while a
+# batch has captions or splits still to ask for, the next batch's link
+# waits. The server is first in, first out, so submitting the next batch's
+# link ahead of this batch's splits would put every split behind a day of
+# captions (it did: the pilot's splits waited behind collection 1's link for
+# four days). A batch that has asked for everything and only waits on its
+# captions does not hold the next one back: with the queue capped, its
+# splits wait behind at most a queue's worth.
 
 class Batch:
     def __init__(self, key: str, name: str, file_ids: list[int]):
@@ -348,7 +350,7 @@ def batch_state(batch: Batch, state, outstanding: set[str], prompt_version: str)
 
 def status_lines(batches: list[Batch], state, done: set, outstanding: set[str], prompt_version: str,
                  upcoming: int = 3) -> list[str]:
-    """Where the plan stands: the batches done in one line, the batch under
+    """Where the plan stands: the batches done in one line, the batches under
     way in full, the next few by size, the rest in one line.
 
     It used to list the first twelve batches — once the run was a hundred
@@ -359,14 +361,20 @@ def status_lines(batches: list[Batch], state, done: set, outstanding: set[str], 
     lines = [f'done   {len(finished)} batch(es), {sum(len(b.file_ids) for b in finished)} file(s)']
     if not rest:
         return lines + ['nothing left']
-    # Batches go strictly one after another (fill_queue), so the first one
-    # not done is the one being worked on.
-    now, following = rest[0], rest[1:]
-    st = batch_state(now, state, outstanding, prompt_version)
-    total = len(now.file_ids)
-    lines.append(f'now    {now.key:>6} {now.name[:40]:<40} {total:>5} file(s): '
-                 f'link asked {total - st["link_left"]}/{total}, waiting {st["link_out"]}, '
-                 f'splits due {st["panels_due"]}')
+    # The first batch not done is being worked on, and so is any after it
+    # whose link has started (fill_queue goes on to the next batch while one
+    # only waits on its captions).
+    cursor = state.get('cursor') or {}
+    started = 1
+    while started < len(rest) and cursor.get(rest[started].key, 0):
+        started += 1
+    under_way, following = rest[:started], rest[started:]
+    for now in under_way:
+        st = batch_state(now, state, outstanding, prompt_version)
+        total = len(now.file_ids)
+        lines.append(f'now    {now.key:>6} {now.name[:40]:<40} {total:>5} file(s): '
+                     f'link asked {total - st["link_left"]}/{total}, waiting {st["link_out"]}, '
+                     f'splits due {st["panels_due"]}')
     for batch in following[:upcoming]:
         lines.append(f'next   {batch.key:>6} {batch.name[:40]:<40} {len(batch.file_ids):>5} file(s)')
     later = following[upcoming:]
@@ -540,7 +548,7 @@ def fill_queue(client, batches, state, done: set, outstanding: set, room: int,
     for batch in batches:
         if batch.key in done:
             continue
-        if over_budget(args):
+        if over_budget(args) or room <= submitted:
             break
         st = batch_state(batch, state, outstanding, panels_prompt['version'])
         # splits of this batch go in as soon as its captions land
@@ -555,8 +563,14 @@ def fill_queue(client, batches, state, done: set, outstanding: set, room: int,
             done.add(batch.key)
             log(f'batch {batch.key} {batch.name[:40]}: captions and splits all asked for — next batch')
             continue
-        # this batch is not finished: the next batch's link waits for it
-        break
+        # This batch still has work to put in: the next batch's link waits
+        # for it. A batch that only waits on its own captions has nothing to
+        # put in, and holding the next batch's link then drained the server
+        # queue to nothing at every small batch (2026-10-09: 0 items, four
+        # workers idle). Its splits, when the captions land, wait behind at
+        # most a queue's worth (~1 h) — not the days the rule was made for.
+        if st['link_left'] or st['panels_due']:
+            break
     return submitted
 
 
