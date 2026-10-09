@@ -239,16 +239,21 @@ class CollectReport:
     panels_written: int = 0
     papers: set = field(default_factory=set)      # paper ids touched
     skipped: int = 0                              # replies nothing here was waiting for
+    #: Figures a link reply skipped or had rejected (an attempt counted, no
+    #: caption): a run of these looked like nothing landing at all
+    #: (2026-10-09: 86 replies, 161 figures skipped, two lines in the log).
+    link_missed: int = 0
     #: Finished jobs that wrote nothing and never will (every row they name
     #: is applied, or gone): a caller may pass them back as `skip_jobs`, so
     #: a long run does not re-read the same job bodies every pass.
     settled: set = field(default_factory=set)
 
     def summary(self) -> str:
-        if not self.jobs:
+        if not self.jobs and not self.link_missed:
             return 'nothing to collect'
+        missed = f'; {self.link_missed} figure(s) the reply gave no caption for' if self.link_missed else ''
         return (f'{self.jobs} finished job(s): {self.link_written} caption(s), {self.panels_written} panel split(s) '
-                f'landed on {len(self.papers)} paper(s)')
+                f'landed on {len(self.papers)} paper(s){missed}')
 
 
 def collect_finished(client: FigureClient, notify: Notify | None = None,
@@ -298,6 +303,7 @@ def collect_finished(client: FigureClient, notify: Notify | None = None,
                 model = reply.get('model') or model
         applied = figure_link.apply_link(targets, check, {}, digest, link_prompt['version'], model)
         figure_link.propagate_link(pf)
+        report.link_missed += applied.failed
         if not applied.written:
             # The same reply read again (skipped rows stay due without a new
             # attempt): nothing will change until a new reply arrives.

@@ -292,6 +292,17 @@ def test_a_batch_waiting_only_on_its_captions_lets_the_next_batch_link(paper, mo
 
 
 @pytest.mark.unit
+def test_replies_that_gave_no_caption_still_show_in_the_log():
+    """2026-10-09: 86 link replies skipped 161 figures and the log said
+    nothing — it looked like the replies never landed."""
+    from papermeister.figure_pipeline import CollectReport
+
+    assert CollectReport().summary() == 'nothing to collect'
+    report = CollectReport(link_missed=5)
+    assert '5 figure(s) the reply gave no caption for' in report.summary()
+
+
+@pytest.mark.unit
 def test_status_shows_the_batch_under_way_however_many_are_done(paper):
     """2026-10-08: `--status` listed the first twelve batches; a hundred
     batches in, all twelve read `done` and the batch being worked on never

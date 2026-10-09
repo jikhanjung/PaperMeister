@@ -457,17 +457,22 @@ def one_pass(client, batches, state, done: set, link_prompt, panels_prompt, args
     # 1. land what finished. A pass that throws (the server away, a
     # Zotero hiccup) must not end a run that has days to go.
     from papermeister.figure_pipeline import CollectReport, collect_finished
-    settled = set(state.get('settled_jobs', []))
+    order = list(state.get('settled_jobs', []))
+    settled = set(order)
     try:
         report = collect_finished(client, skip_jobs=settled)
+        # Oldest out first. `sorted(...)[-5000:]` dropped job ids by their
+        # spelling — recent jobs among them, read again every pass after
+        # (2026-10-09: 11 of the last two hours').
+        order += [job_id for job_id in report.settled if job_id not in settled]
         settled |= report.settled
-        state['settled_jobs'] = sorted(settled)[-5000:]
+        state['settled_jobs'] = order[-5000:]
         client.forget(settled)
     except Exception as exc:
         log(f'collect failed: {type(exc).__name__}: {exc}')
         totals['errors'] += 1
         report = CollectReport()
-    if report.jobs:
+    if report.jobs or report.link_missed:
         log(f'collected {report.summary()}')
 
     if over_budget(args):
