@@ -90,6 +90,7 @@ _SPACE = re.compile(r'\s+')
 _HOMOGLYPHS = str.maketrans('АВЕКМНОРСТХаеорсух', 'ABEKMHOPCTXaeopcyx')
 STEM_CHARS = 5
 LINK_SKIPPED = 'link_skipped'
+NOT_A_FIGURE = f'{LINK_SKIPPED}:not_a_figure'
 
 
 def ocr_digest(pages: list[str]) -> str:
@@ -688,7 +689,14 @@ def apply_link(targets: LinkTargets, check: LinkCheck, result: dict, digest: str
                 if seen and row.link_result_digest == seen:
                     out.unchanged += 1
                     continue
-                row.link_attempts += 1
+                # A box the model calls no figure stays none when asked again
+                # with more pages (1 of 244 over 35 hours, 2026-10-10; a caption
+                # not found came back 11 of 31). It is asked once; its reason
+                # sends it to the re-judgement, which is shown the page.
+                if NOT_A_FIGURE in reasons:
+                    row.link_attempts = max(row.link_attempts, MAX_ATTEMPTS)
+                else:
+                    row.link_attempts += 1
                 if seen:
                     row.link_result_digest = seen
                 if reasons:

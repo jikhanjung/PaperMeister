@@ -378,7 +378,7 @@ def test_the_same_reply_collected_twice_is_not_a_second_attempt(stored):
     p = fl.link_payload(pf, PAGES, t, DIGEST, 'c')
     r = reply(str(rows[2].id), str(rows[3].id))
     r['figures'] = r['figures'][:1]
-    r['skipped'] = [{'figure_id': str(rows[3].id), 'reason': 'not_a_figure'}]
+    r['skipped'] = [{'figure_id': str(rows[3].id), 'reason': 'explanation_not_found'}]
     for _ in range(3):
         t = fl.link_targets(pf, DIGEST, PROMPT)
         fl.apply_link(t, fl.validate_link_result(p, r, PAGES), r, DIGEST, PROMPT, 'm')
@@ -388,6 +388,29 @@ def test_the_same_reply_collected_twice_is_not_a_second_attempt(stored):
     t = fl.link_targets(pf, DIGEST, PROMPT)
     fl.apply_link(t, fl.validate_link_result(p, r, PAGES), r, DIGEST, PROMPT, 'm')
     assert Figure.get_by_id(rows[3].id).link_attempts == 2
+
+
+@pytest.mark.unit
+def test_a_box_the_model_calls_no_figure_is_asked_once(stored):
+    """2026-10-10: of 244 figures skipped as not_a_figure and asked again, one
+    got a caption; the retries were most of the link lane's hour. A caption
+    not found is still asked again — wider reading found 11 of 31."""
+    from papermeister import figure_link as fl
+    from papermeister.models import Figure
+    pf, rows = stored
+    t = fl.link_targets(pf, DIGEST, PROMPT)
+    p = fl.link_payload(pf, PAGES, t, DIGEST, 'c')
+    r = reply(str(rows[2].id), str(rows[3].id))
+    r['figures'] = []
+    r['skipped'] = [{'figure_id': str(rows[2].id), 'reason': 'not_a_figure'},
+                    {'figure_id': str(rows[3].id), 'reason': 'explanation_not_found'}]
+    fl.apply_link(t, fl.validate_link_result(p, r, PAGES), r, DIGEST, PROMPT, 'm')
+    no_figure, not_found = Figure.get_by_id(rows[2].id), Figure.get_by_id(rows[3].id)
+    assert (no_figure.link_attempts, not_found.link_attempts) == (fl.MAX_ATTEMPTS, 1)
+    assert fl.NOT_A_FIGURE in json.loads(no_figure.uncertain_reasons_json)    # for the re-judgement
+    again = fl.link_targets(pf, DIGEST, PROMPT)
+    assert [r.id for r in again.due] == [not_found.id]
+    assert (no_figure, 'attempts_exhausted') in [(r, why) for r, why in again.excluded]
 
 
 @pytest.mark.unit
