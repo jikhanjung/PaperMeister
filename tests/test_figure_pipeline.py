@@ -443,6 +443,38 @@ def test_a_job_that_fell_out_of_the_servers_list_is_still_seen_and_collected(pap
 
 
 @pytest.mark.unit
+def test_a_panels_reply_that_failed_counts_one_attempt_not_one_per_pass(paper):
+    """2026-10-13/14: a panels job finished with one figure timed out. Its
+    row had no digest to say the reply was read, so every five-minute pass
+    landed the job again — 475 attempts and as many Zotero pushes."""
+    from papermeister import figure_pipeline as fp
+    from papermeister.models import Figure
+
+    class TimedOut(FakeClient):
+        def _answer(self, kind, body):
+            answer = super()._answer(kind, body)
+            if kind == 'panels':
+                answer['status'] = 'done_with_errors'
+                for item in answer['items']:
+                    item.update(status='budget_exhausted', result=None, error='session exceeded 600s')
+            return answer
+
+    client = TimedOut()
+    fp.process_file(paper, client, lambda k, m: None, stages=('assemble', 'link'))
+    fp.collect_finished(client)
+    from papermeister import figure_panels, figure_prompts
+    v = figure_prompts.load('panels')['version']
+    row = Figure.get(Figure.paper_file == paper.id)
+    client.submitted.append(('panels', {'items': [figure_panels.panel_item(row, v)]}))
+    settled: set = set()
+    for _ in range(3):                                # three passes of the runner
+        report = fp.collect_finished(client, skip_jobs=settled)
+        settled |= report.settled
+    assert 'panels-1' in settled
+    assert Figure.get_by_id(row.id).panel_attempts == 1
+
+
+@pytest.mark.unit
 def test_one_runner_at_a_time(tmp_path):
     """Two passes at once would each submit what the other just put on the
     server. The second runner — a tick finding the last one still busy —

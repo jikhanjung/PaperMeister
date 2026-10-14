@@ -347,6 +347,12 @@ def collect_finished(client: FigureClient, notify: Notify | None = None,
         report.papers.add(pf.paper_id)
         figure_share.write_to_cache(pf)
         say('info', f'collected panels for paper {pf.paper_id}: {len(rows)} figure(s)')
+        # A finished job's replies do not change: once read, it is done with.
+        # Left open, a figure whose reply failed (or was rejected) has no
+        # digest to say it was read, so every pass counted it another attempt
+        # and pushed the paper's JSON to Zotero again (2026-10-13/14: one
+        # timed-out plate, 475 attempts over 39 hours of five-minute ticks).
+        report.settled.add(job['job_id'])
     return report
 
 
