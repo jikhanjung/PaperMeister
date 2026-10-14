@@ -96,6 +96,14 @@
     118논문(같은 PDF를 가진 중복 항목 포함) 123파일을 `scripts/figure_share.py --export --paper-ids … --execute`로 다시 올림 — 123건 모두
     `sibling updated`, 6분 반, 러너는 그대로 둔 채. 다음에도 같은 방법: `grep -oh 'not pushed to the Zotero sibling for [0-9a-f]*'
     logs/figure_queue*` → `paperfile.hash LIKE '<접두>%'`로 논문 id
+  - ✅ **끝난 panels 잡을 매 틱 다시 읽던 버그 (10-14, `4c6eec8`)**: 10-13 01:45에 끝난 panels 잡 `9ff46859`(12항목)에서 도판 45467
+    하나가 서버 600초 한도로 실패 → 실패한 행엔 digest가 없어 잡이 "안 읽힘"으로 남았고, 39시간 동안 틱마다 다시 수거돼 시도 **477회**
+    + 같은 논문 JSON의 Zotero 푸시 ~477회(로그의 `collected 1 finished job(s): 0 caption(s), 0 panel split(s)`). link 쪽은 같은 답을
+    다시 읽으면 시도로 안 세는 장치가 있었고 panels엔 없었다. 이제 panels 잡은 한 번 읽으면 settled. DB 전체에서 걸린 행은 45467 하나 —
+    시도를 1로 되돌려 정상 재시도 대상으로
+  - ⚠️ **워커 10 → 1 (10-14 14:38:30)**: `jikhanserver-2..10`이 같은 초에 `idle`/`alive: False`(paused_reason 없음 = 사용량 한도
+    아님). 쥐고 있던 항목은 없었다. 처리량 ~1/6 — 항목 많은 link 잡 하나(14항목, 항목당 4~6분)가 한 시간을 다 쓴다. 쿠폰 소진 후 계획은
+    워커 2였는데 1뿐 — 서버 확인 필요
   - ✅ `--status`가 **진행 중인 배치**를 보여 준다(2026-10-08) — 전엔 앞 12개만 찍어 전부 `done`이었다. 완료 배치는 한 줄 요약, 진행 중 배치는 link 진행/대기/분할 due, 다음 3개, 나머지 한 줄. 2026-10-08 기준 진행 중인 건 **"1. Invertebrate"(689파일, link 379/689)** — 이 배치가 끝날 때까지 완료 배치 수는 93에 머문다(정상)
   - 🟡 reading set 확장 방아쇠에 **"얇은 답"**(`plate_no_entries`·`caption_shared`·`entries_shrank`) 추가 여부
   - 미결: 항목 설명에 산지·층준 포함(권고: 포함), 무게 상한 상향
