@@ -4,5 +4,5 @@ pypdfium2~=5.13
 Pillow>=12.3.0
 requests>=2.34.2
 pyzotero~=1.15.2
-truststore~=0.10.4
+truststore~=0.10.5
 platformdirs>=4.12.2
