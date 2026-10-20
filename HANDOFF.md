@@ -101,6 +101,10 @@
     + 같은 논문 JSON의 Zotero 푸시 ~477회(로그의 `collected 1 finished job(s): 0 caption(s), 0 panel split(s)`). link 쪽은 같은 답을
     다시 읽으면 시도로 안 세는 장치가 있었고 panels엔 없었다. 이제 panels 잡은 한 번 읽으면 settled. DB 전체에서 걸린 행은 45467 하나 —
     시도를 1로 되돌려 정상 재시도 대상으로
+  - ✅ (10-20, `6c6b8c9`) **수거 줄이 쌍둥이 복사를 안 셌다** — `collect_finished`가 `propagate_link`의 반환값(같은 PDF를
+    가진 다른 항목에 복사한 캡션 수)을 버려, 16:29 틱이 로그엔 45장·9편인데 DB엔 89행·17편으로 어긋나 보였다(Kaseki/72-에
+    같은 PDF가 두 항목에 붙은 쌍 14개 — 파일명 제목의 단독 PDF + 제대로 된 항목). 이제 `; N caption(s) copied to other library
+    entries of the same PDF`가 붙고, 복사만 있는 패스도 찍힌다
   - ⚠️ **워커 10 → 1 (10-14 14:38:30)**: `jikhanserver-2..10`이 같은 초에 `idle`/`alive: False`(paused_reason 없음 = 사용량 한도
     아님). 쥐고 있던 항목은 없었다. 처리량 ~1/6 — 항목 많은 link 잡 하나(14항목, 항목당 4~6분)가 한 시간을 다 쓴다. 사용자: GPT(Codex) 사용량이
     **리셋되기 전에는 늘릴 수 없다** — 리셋까지 워커 1로 간다. 러너는 손댈 것 없음(상한 120은 워커 1이면 반나절 넘는 대기열일 뿐).
