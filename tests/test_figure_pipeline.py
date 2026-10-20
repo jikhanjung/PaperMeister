@@ -324,6 +324,32 @@ def test_replies_that_gave_no_caption_still_show_in_the_log():
 
 
 @pytest.mark.unit
+def test_captions_copied_to_twin_entries_show_in_the_log(paper):
+    """2026-10-20: the log said 45 captions on 9 papers while 89 rows landed
+    on 17 — the copies onto other library entries of the same PDF went
+    uncounted, and the log and the DB looked out of step."""
+    from papermeister import figure_pipeline as fp
+    from papermeister.models import Figure, Paper, PaperFile
+
+    class ClosingClient(FakeClient):
+        def wait(self, kind, job_id, poll_seconds=0, on_progress=None, should_stop=None):
+            raise fp.Cancelled()
+
+    client = ClosingClient()
+    assert fp.process_file(paper, client, lambda k, m: None).error == 'cancelled'
+    twin = PaperFile.create(paper=Paper.create(title='Lee 2004 (again)'), path='lee2.pdf', hash=HASH, status='processed')
+    for row in Figure.select().where(Figure.paper_file == paper.id):
+        data = {k: v for k, v in row.__data__.items() if k != 'id'}
+        Figure.create(**{**data, 'paper': twin.paper_id, 'paper_file': twin.id})
+
+    collected = fp.collect_finished(client)
+    assert collected.link_written == 1 and collected.link_copied == 1
+    assert '1 caption(s) copied to other library entries of the same PDF' in collected.summary()
+    assert Figure.get(Figure.paper_file == twin.id).caption.startswith('PLATE 2')
+    assert fp.CollectReport(link_copied=3).summary() != 'nothing to collect'
+
+
+@pytest.mark.unit
 def test_status_shows_the_batch_under_way_however_many_are_done(paper):
     """2026-10-08: `--status` listed the first twelve batches; a hundred
     batches in, all twelve read `done` and the batch being worked on never

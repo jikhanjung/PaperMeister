@@ -478,7 +478,7 @@ def one_pass(client, batches, state, done: set, link_prompt, panels_prompt, args
         log(f'collect failed: {type(exc).__name__}: {exc}')
         totals['errors'] += 1
         report = CollectReport()
-    if report.jobs or report.link_missed:
+    if report.jobs or report.link_missed or report.link_copied:
         log(f'collected {report.summary()}')
 
     if over_budget(args):

@@ -243,17 +243,22 @@ class CollectReport:
     #: caption): a run of these looked like nothing landing at all
     #: (2026-10-09: 86 replies, 161 figures skipped, two lines in the log).
     link_missed: int = 0
+    #: Captions copied onto other library entries of the same PDF: the rows
+    #: the DB gained beyond `link_written` (2026-10-20: the log said 45
+    #: captions on 9 papers while 89 rows landed on 17).
+    link_copied: int = 0
     #: Finished jobs that wrote nothing and never will (every row they name
     #: is applied, or gone): a caller may pass them back as `skip_jobs`, so
     #: a long run does not re-read the same job bodies every pass.
     settled: set = field(default_factory=set)
 
     def summary(self) -> str:
-        if not self.jobs and not self.link_missed:
+        if not self.jobs and not self.link_missed and not self.link_copied:
             return 'nothing to collect'
+        copied = f'; {self.link_copied} caption(s) copied to other library entries of the same PDF' if self.link_copied else ''
         missed = f'; {self.link_missed} figure(s) the reply gave no caption for' if self.link_missed else ''
         return (f'{self.jobs} finished job(s): {self.link_written} caption(s), {self.panels_written} panel split(s) '
-                f'landed on {len(self.papers)} paper(s){missed}')
+                f'landed on {len(self.papers)} paper(s){copied}{missed}')
 
 
 def collect_finished(client: FigureClient, notify: Notify | None = None,
@@ -302,7 +307,7 @@ def collect_finished(client: FigureClient, notify: Notify | None = None,
                 check.merge(figure_link.validate_link_result(item, reply['result'], pages, existing))
                 model = reply.get('model') or model
         applied = figure_link.apply_link(targets, check, {}, digest, link_prompt['version'], model)
-        figure_link.propagate_link(pf)
+        report.link_copied += figure_link.propagate_link(pf)
         report.link_missed += applied.failed
         if not applied.written:
             # The same reply read again (skipped rows stay due without a new
