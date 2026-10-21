@@ -169,7 +169,7 @@ jobs:
 
   # macOS leg — PyInstaller onedir → .app → .dmg (hdiutil). NOT notarized/signed,
   # so Gatekeeper warns on first launch (right-click → Open). First CI run also
-  # confirms PyQt6 / PyMuPDF ship arm64 macOS wheels for the pinned versions.
+  # confirms PyQt6 / pypdfium2 ship arm64 macOS wheels for the pinned versions.
   build-macos:
     runs-on: macos-latest
     steps:

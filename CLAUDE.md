@@ -94,7 +94,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 
 ## Architecture Notes
 
-- 텍스트 추출은 항상 RunPod OCR 사용 (텍스트 레이어 유무 불문, 일관성 위해). PyMuPDF는 메타데이터만.
+- 텍스트 추출은 항상 RunPod OCR 사용 (텍스트 레이어 유무 불문, 일관성 위해). pypdfium2는 메타데이터와 페이지 렌더만.
 - Import 2단계: ScanWorker(폴더 구조 + PaperFile 생성, 빠름) → ProcessWorker(OCR, 느림)
 - Hash-based deduplication (SHA256) at ingestion. Zotero는 zotero_key 기반 dedup.
 - `PaperFile.status`: `pending` → `processed` / `failed`. PaperFile 없으면 `no PDF`.
@@ -174,7 +174,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 | `run_baseline.py` | 정규식 baseline 평가 |
 | `run_haiku_eval.py` | LLM 서지 추출 평가 (--model 지정 가능) |
 | `extract_biblio.py` | 본격 LLM 서지 추출 (--scope, --paper-ids) |
-| `extract_biblio_vision.py` | Vision pass 서지 추출 (PyMuPDF 렌더 + Claude vision) |
+| `extract_biblio_vision.py` | Vision pass 서지 추출 (pypdfium2 렌더 + Claude vision) |
 | `promote_standalone.py` | Standalone PDF → Zotero parent item 생성 |
 | `update_promoted_items.py` | 기존 Zotero parent item in-place 수정 |
 | `preview_standalone_biblio.py` | Standalone PDF 추출 결과 미리보기 (read-only) |

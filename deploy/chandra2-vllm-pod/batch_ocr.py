@@ -19,13 +19,13 @@ import io
 import json
 import os
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
-import fitz  # PyMuPDF
+import pypdfium2 as pdfium
 import requests
-from PIL import Image
 
 
 def sha256_file(filepath):
@@ -37,11 +37,33 @@ def sha256_file(filepath):
     return h.hexdigest()
 
 
-def render_page(doc, page_idx, dpi=150, quality=85):
+# PDFium is not thread-safe, not even across different documents, so every call into it
+# goes through this lock. A render takes milliseconds next to the seconds an OCR request takes.
+PDFIUM = threading.Lock()
+
+
+def page_count(pdf_path):
+    """Number of pages in a PDF."""
+    with PDFIUM:
+        doc = pdfium.PdfDocument(pdf_path)
+        try:
+            return len(doc)
+        finally:
+            doc.close()
+
+
+def render_page(pdf_path, page_idx, dpi=150, quality=85):
     """Render a single PDF page to base64 JPEG."""
-    mat = fitz.Matrix(dpi / 72, dpi / 72)
-    pix = doc[page_idx].get_pixmap(matrix=mat, alpha=False)
-    img = Image.frombytes('RGB', [pix.width, pix.height], pix.samples)
+    with PDFIUM:
+        doc = pdfium.PdfDocument(pdf_path)
+        try:
+            page = doc[page_idx]
+            bitmap = page.render(scale=dpi / 72)
+            img = bitmap.to_pil().convert('RGB')  # a copy: nothing of PDFium's outlives the lock
+            bitmap.close()
+            page.close()
+        finally:
+            doc.close()
     buf = io.BytesIO()
     img.save(buf, format='JPEG', quality=quality)
     return base64.b64encode(buf.getvalue()).decode()
@@ -217,10 +239,10 @@ def save_json_atomic(out_path, result):
     os.replace(tmp_path, out_path)
 
 
-def process_single_page(doc, page_idx, dpi, vllm_url, session):
+def process_single_page(pdf_path, page_idx, dpi, vllm_url, session=None):
     """Render and OCR one page, returning a page record."""
     page_t0 = time.time()
-    image_b64 = render_page(doc, page_idx, dpi)
+    image_b64 = render_page(pdf_path, page_idx, dpi)
     text = ocr_page(image_b64, vllm_url, session=session)
     page_elapsed = time.time() - page_t0
     return {
@@ -228,12 +250,6 @@ def process_single_page(doc, page_idx, dpi, vllm_url, session):
         'markdown': text.strip(),
         'duration_ms': int(page_elapsed * 1000),
     }
-
-
-def process_single_page_from_pdf(pdf_path, page_idx, dpi, vllm_url):
-    """Open a PDF, process one page, and return its OCR result."""
-    with fitz.open(pdf_path) as doc:
-        return process_single_page(doc, page_idx, dpi, vllm_url, session=None)
 
 
 def run_page_jobs(pdf_path, page_indexes, dpi, vllm_url, concurrency, total_pages, prefix):
@@ -244,7 +260,7 @@ def run_page_jobs(pdf_path, page_indexes, dpi, vllm_url, concurrency, total_page
     if concurrency <= 1:
         for page_idx in page_indexes:
             try:
-                page_record = process_single_page_from_pdf(pdf_path, page_idx, dpi, vllm_url)
+                page_record = process_single_page(pdf_path, page_idx, dpi, vllm_url)
                 page_results[page_idx] = page_record
                 if (page_idx + 1) % 10 == 0 or page_idx == 0:
                     print(
@@ -264,7 +280,7 @@ def run_page_jobs(pdf_path, page_indexes, dpi, vllm_url, concurrency, total_page
 
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
         future_to_page = {
-            executor.submit(process_single_page_from_pdf, pdf_path, page_idx, dpi, vllm_url): page_idx
+            executor.submit(process_single_page, pdf_path, page_idx, dpi, vllm_url): page_idx
             for page_idx in page_indexes
         }
         for future in as_completed(future_to_page):
@@ -303,12 +319,11 @@ def process_pdf(pdf_path, output_dir, vllm_url, dpi=150, concurrency=1, file_idx
 
     # Open PDF
     try:
-        doc = fitz.open(pdf_path)
+        total_pages = page_count(pdf_path)
     except Exception as e:
         print(f'{prefix}   ERROR opening PDF: {e}', flush=True)
         return None, str(e)
 
-    total_pages = doc.page_count
     print(f'{prefix}   pages: {total_pages}', flush=True)
 
     partial_result = load_partial_output_json(out_path)
@@ -327,7 +342,6 @@ def process_pdf(pdf_path, output_dir, vllm_url, dpi=150, concurrency=1, file_idx
         )
 
     t0 = time.time()
-    doc.close()
 
     current_results, current_failures = run_page_jobs(
         pdf_path,

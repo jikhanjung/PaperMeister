@@ -73,7 +73,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       # PyQt6 dlopens these even under the offscreen platform on headless Linux.
-      # (No OpenGL/GLUT/Xvfb: this app renders PDFs via PyMuPDF, not GL.)
+      # (No OpenGL/GLUT/Xvfb: this app renders PDFs via pypdfium2, not GL.)
       - name: Install Linux Qt runtime libs
         if: runner.os == 'Linux'
         run: |

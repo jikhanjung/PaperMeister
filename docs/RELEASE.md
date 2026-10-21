@@ -50,7 +50,7 @@ when frozen" gaps (bundled data files, native libs) that source tests can't prov
 - [ ] Window opens — Qt loads, no "procedure not found" DLL error
 - [ ] Library / DB opens — SQLite driver bundled
 - [ ] Zotero sync runs — SSL/openssl bundled (needs configured credentials)
-- [ ] Open a paper → **PDF** tab renders — PyMuPDF
+- [ ] Open a paper → **PDF** tab renders — pypdfium2
 - [ ] **Search** returns results — FTS5
 - [ ] **Text** (OCR) tab renders — image handling / Pillow
 - [ ] SVG rail icons show — the one source-relative data dir (`desktop/theme/icons`)

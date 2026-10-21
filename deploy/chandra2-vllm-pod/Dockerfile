@@ -3,8 +3,8 @@ FROM vllm/vllm-openai:latest
 # Download model at build time → baked into image (big layer, cache first)
 RUN python3 -c "from huggingface_hub import snapshot_download; snapshot_download('datalab-to/chandra-ocr-2')"
 
-# Dependencies for batch_ocr.py (PDF rendering + image processing)
-RUN pip3 install --no-cache-dir PyMuPDF Pillow
+# Dependencies for batch_ocr.py (PDF rendering + image processing) — pypdfium2, as in the app (BSD/Apache; PyMuPDF is AGPL)
+RUN pip3 install --no-cache-dir "pypdfium2~=5.13" Pillow
 
 # Batch OCR script
 COPY batch_ocr.py /workspace/batch_ocr.py
