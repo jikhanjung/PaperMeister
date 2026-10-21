@@ -543,6 +543,7 @@
     다만 **가이드가 상위이고 옆 리포는 참고**다(사본이 아니라 원본을 본다는 087의 논지 그대로)
   - ~~**설정된 경로가 사라졌을 때**~~ ✅ (2026-07-29) — `check_configured_data_dir()`가 `PAPERMEISTER_DATA_DIR`의 **부모**가 없으면 시작을 거부한다(CLI는 stderr+exit 1, desktop은 QMessageBox). 부모를 보는 이유는 새 위치를 처음 지정하는 것과 드라이브 미연결을 구분하기 위해서. 기본값 경로는 검사 대상이 아니다 — 그건 우리가 만들 자리고, 사용자가 지정한 자리는 사용자가 제공할 자리다. **UI를 붙일 때 같은 함수를 재사용하면 된다**
 - **`ocr_json/` 1.8GB(9,832개)에 백업이 없다** — 오프사이트 백업은 DB만 대상이다. Zotero sibling 업로드(`zotero_upload_ocr_json`)가 켜져 있는 만큼만 부분적으로 사본이 있다. OCR 비용 전체가 여기 들어 있으므로 재생성이 가장 비싼 자산
+- **figsplit 학습·공개 범위** — 논문별 라이선스 조사([R04](./devlog/20261021_R04_Paper_License_Survey.md), 2026-10-21)상 이미지째 재배포 가능(PD·CC0·CC BY·BY-SA)은 637편·도판 5,693개(5.7%), 미국 기준 1931년 이전 PD 428편 추가, 절반(4,978편)은 DOI 없는 옛 문헌이라 미상. 논문별 표는 `<data>/tmp/paper_licenses_20261021.csv`, 재분류 스크립트·캐시는 `<data>/tmp/license_survey_20261021/`. 가중치만 / A 묶음 이미지+주석 / 주석만 중 무엇으로 공개할지는 사용자 결정
 - 컬렉션-수준 메타데이터 (issue 모음 마킹 등)
 - **systematic** Zotero → DB pull sync (현재는 on-demand: `resync_zotero.py`는 destructive, 타겟 in-place refresh는 수동 one-off)
 
