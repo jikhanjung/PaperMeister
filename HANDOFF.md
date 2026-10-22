@@ -553,6 +553,10 @@
   남은 것: ① 같은 PDF를 가진 **쌍둥이 PaperFile의 도판 결과가 DB에서 서로 다르다**(이 39개 중 31개) — 캐시 파일은 하나라 마지막에 쓴 쌍둥이 것이 들어간다.
   ② ~~한 부모 밑에 같은 이름의 JSON 사이블링이 둘 이상~~ — 4곳 9개였다(`push_sibling_json`은 `.first()`만 올리므로 나머지가 뒤처진다). 사용자 요청으로
   5개를 Zotero **휴지통**으로(`PATCH {"deleted":1}`, 되돌릴 수 있음; 4개는 Zotero에 파일이 없는 404 껍데기, 1개는 같은 내용), 다시 동기화해 로컬도 trashed. 남은 중복 0.
+  ④ figsplit이 찾아낸 "한 PDF가 여러 항목에" 의심 6건(2026-10-22) — 사용자 승인으로 Zotero 휴지통: 잘못 붙은 PDF 2개(4692 돌고래에 붙은 Streng & Geyer 2019,
+  6988 Barraclough & Nee 2001에 붙은 Zimkus 2010 — 각 PDF는 진짜 주인 4370·6430에 남음; **6988은 이제 PDF 없음**, 진짜 PDF는 라이브러리에 없다)와 그 JSON,
+  중복 항목 2개(2612 → 3578, 4142 → 4301; Zotero "Merge Items"처럼 남는 쪽에 컬렉션을 합친 뒤). 나머지(3196·3550: 책/글 관계)는 그대로.
+  PDF→진짜 주인 표는 figsplit `data/licenses/owners.json`
   ③ **KOPRI 웹 필터가 Zotero 파일 다운로드를 가끔 가로챈다** — 204번의 JSON이 413바이트 차단 페이지(`warning.html…광고차단정책`)로 왔다가 다음엔 통과했다.
   동기화는 JSON이 아니면 덮지 않으므로 안전하지만, 다운로드가 "성공"해도 내용이 HTML일 수 있다
 - **논문 라이선스 데이터는 figsplit이 관리한다**(사용자 결정 2026-10-22) — 첫 조사는 여기서 했고([R04](./devlog/20261021_R04_Paper_License_Survey.md), 2026-10-21) 표·스크립트·API 캐시는 모두 jikhanserver `/mnt/disk1/figsplit-data/licenses/`(`20261021/` 논문 전체, `20261022/` 도판 서버에 보낸 PDF를 `file_hash`로, `survey_20261021/` 재조사 도구 — 이 호스트의 PaperMeister 일일 백업 DB로 다시 돌린다)로 옮겼다. 재조사·figsplit 공개 범위 결정은 그쪽에서. `<data>/tmp/`에 남은 것은 옮기기 전 사본
