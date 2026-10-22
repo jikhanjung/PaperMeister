@@ -67,7 +67,7 @@ def render_pdf_pages(pdf_path, out_dir, pages=(0, -1), dpi=150):
         if 0 <= idx < n and idx not in selected:
             selected.append(idx)
     for idx in selected:
-        img = doc[idx].render(scale=dpi / 72).to_pil()
+        img = doc.render(idx, dpi / 72)
         out = os.path.join(out_dir, f'page_{idx + 1}.png')
         img.save(out)
         out_paths.append(out)

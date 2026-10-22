@@ -130,7 +130,7 @@ class _LazyPdfView(QScrollArea):
         # first fit, the viewport would narrow and every page be decoded twice.
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         self._doc = doc
-        self._sizes_pt = [doc[i].get_size() for i in range(len(doc))]     # points, before zoom
+        self._sizes_pt = [doc.page_size(i) for i in range(len(doc))]      # points, before zoom
         self._zoom = 1.0                        # the zoom shown; per page in fit-width mode (`_zooms`)
         self._zooms = [1.0] * len(self._sizes_pt)
         self._fit_width = True                  # follow the viewport until the user zooms
@@ -289,17 +289,15 @@ class _LazyPdfView(QScrollArea):
         if self._rendered[idx] or self._doc is None:
             return
         from PyQt6.QtGui import QImage, QPixmap
-        # PDFium renders BGRA by default; ask for plain RGB so the buffer maps
-        # straight onto Format_RGB888 without a channel swap per page.
         # Rendered at the screen's pixel ratio so a hidpi display gets a
-        # sharp page in the same fitted slot.
+        # sharp page in the same fitted slot. pdfdoc renders RGB, which maps
+        # straight onto Format_RGB888.
         ratio = self.devicePixelRatioF() or 1.0
-        bitmap = self._doc[idx].render(scale=self._zooms[idx] * ratio, rev_byteorder=True,
-                                       prefer_bgrx=False)
-        buf = bitmap.buffer          # keep a reference: QImage does not copy
-        qimg = QImage(buf, bitmap.width, bitmap.height, bitmap.stride,
+        image = self._doc.render(idx, self._zooms[idx] * ratio)
+        data = image.tobytes()       # keep a reference: QImage does not copy
+        qimg = QImage(data, image.width, image.height, image.width * 3,
                       QImage.Format.Format_RGB888)
-        # copy() before the buffer goes out of scope with the bitmap.
+        # copy() before `data` goes out of scope.
         pixmap = QPixmap.fromImage(qimg.copy())
         pixmap.setDevicePixelRatio(ratio)
         self._page_labels[idx].setPixmap(pixmap)

@@ -1,5 +1,6 @@
 """The PDF tab fits pages to the viewport width and re-fits on resize."""
 import pytest
+from PIL import Image
 
 
 class _Page:
@@ -7,23 +8,23 @@ class _Page:
         self._size = (w, h)
         self.rendered = []
 
-    def get_size(self):
-        return self._size
 
-    def render(self, scale, rev_byteorder=True, prefer_bgrx=False):
-        self.rendered.append(scale)
-        w, h = int(self._size[0] * scale), int(self._size[1] * scale)
+class _Doc(list):
+    """What pdfdoc.Document offers the PDF tab: a length, page sizes, renders."""
 
-        class Bitmap:
-            width, height, stride = w, h, w * 3
-            buffer = bytes(w * h * 3)
-        return Bitmap()
+    def page_size(self, index):
+        return self[index]._size
+
+    def render(self, index, scale):
+        page = self[index]
+        page.rendered.append(scale)
+        return Image.new('RGB', (int(page._size[0] * scale), int(page._size[1] * scale)))
 
 
 @pytest.mark.ui
 def test_pages_fit_the_width_and_are_rerendered_after_a_resize(qapp):
     from desktop.views.detail_panel import _LazyPdfView
-    doc = [_Page(595, 842), _Page(595, 842)]
+    doc = _Doc([_Page(595, 842), _Page(595, 842)])
     view = _LazyPdfView(doc)
     view.resize(500, 600)
     view.show()
@@ -43,7 +44,7 @@ def test_pages_fit_the_width_and_are_rerendered_after_a_resize(qapp):
 @pytest.mark.ui
 def test_the_toolbar_moves_between_pages_and_zooms(qapp):
     from desktop.views.detail_panel import PdfTab
-    doc = [_Page(595, 842) for _ in range(5)]
+    doc = _Doc([_Page(595, 842) for _ in range(5)])
     tab = PdfTab(doc)
     tab.resize(500, 600)
     tab.show()
@@ -80,7 +81,7 @@ def test_a_landscape_page_does_not_narrow_the_others(qapp):
     """Bruton 2004 has one 766 pt landscape page among 557 pt portrait ones;
     fitting to the widest left every portrait page at two thirds of the panel."""
     from desktop.views.detail_panel import _LazyPdfView
-    doc = [_Page(557, 763), _Page(766, 560), _Page(557, 763)]
+    doc = _Doc([_Page(557, 763), _Page(766, 560), _Page(557, 763)])
     view = _LazyPdfView(doc)
     view.resize(600, 700)
     view.show()

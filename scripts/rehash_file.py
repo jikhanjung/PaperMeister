@@ -61,7 +61,7 @@ def ocr_matches(pdf: str, pages: list[str]) -> tuple[bool, str]:
     shares = []
     for i, text in enumerate(pages):
         ocr = {w.lower() for w in _WORD.findall(_TAG.sub(' ', text or ''))}
-        layer = {w.lower() for w in _WORD.findall(doc[i].get_textpage().get_text_range() or '')}
+        layer = {w.lower() for w in _WORD.findall(doc.text(i))}
         if not ocr or not layer:
             continue
         shares.append(len(ocr & layer) / len(ocr))

@@ -168,3 +168,80 @@ def test_rendered_page_is_not_blank(pdf_path):
                  else grey.getdata())
     assert min(levels) < 100, 'no dark pixels — nothing was drawn'
     assert max(levels) > 200, 'no light pixels — page is not white'
+
+
+# ── one lock for PDFium ─────────────────────────────────────────
+#
+# PDFium is not thread-safe even across documents, and the app calls it from
+# the Text/Figures crop workers, OCR and the PDF tab at once.
+
+@pytest.mark.unit
+def test_a_held_document_reads_pages_and_closes(pdf_path):
+    with pdfdoc.open_document(pdf_path(text=b'Trilobita')) as doc:
+        assert len(doc) == 1
+        w, h = doc.page_size(0)
+        assert (round(w), round(h)) == (200, 120)
+        assert 'Trilobita' in doc.text(0)
+        img = doc.render(0, 2.0)
+        assert img.mode == 'RGB' and img.size == (400, 240)
+    assert not doc._finalizer.alive
+
+
+@pytest.mark.unit
+def test_a_dropped_document_closes_itself(pdf_path):
+    """Through our finalizer, which takes the lock; PDFium's own would not."""
+    doc = pdfdoc.Document(pdf_path())
+    finalizer = doc._finalizer
+    del doc
+    assert not finalizer.alive
+
+
+@pytest.mark.unit
+def test_every_pdfium_call_holds_the_lock(pdf_path, monkeypatch):
+    """Eight threads at once through every entry point; PDFium is never entered unlocked."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    path = pdf_path(text=b'PaperMeister', title=b'Trilobites')
+    unlocked = []
+
+    class Watched(pdfdoc.pdfium.PdfDocument):
+        def _check(self, what):
+            if not pdfdoc.LOCK._is_owned():
+                unlocked.append(what)
+
+        def __init__(self, *a, **kw):
+            self._check('open')
+            super().__init__(*a, **kw)
+
+        def __len__(self):
+            self._check('len')
+            return super().__len__()
+
+        def __getitem__(self, i):
+            self._check('page')
+            return super().__getitem__(i)
+
+        def get_metadata_dict(self, *a, **kw):
+            self._check('metadata')
+            return super().get_metadata_dict(*a, **kw)
+
+        def close(self):
+            self._check('close')
+            return super().close()
+
+    monkeypatch.setattr(pdfdoc.pdfium, 'PdfDocument', Watched)
+    expected = pdfdoc.render_page(path, 0, dpi=100).tobytes()
+
+    def everything(_):
+        assert pdfdoc.page_count(path) == 1
+        assert pdfdoc.is_encrypted(path) is False
+        assert pdfdoc.read_metadata(path)['title'] == 'Trilobites'
+        assert pdfdoc.page_sizes(path) == [(200.0, 120.0)]
+        with pdfdoc.open_document(path) as doc:
+            assert 'PaperMeister' in doc.text(0)
+        return pdfdoc.render_page(path, 0, dpi=100).tobytes()
+
+    with ThreadPoolExecutor(8) as pool:
+        images = list(pool.map(everything, range(40)))
+    assert unlocked == []
+    assert all(img == expected for img in images)

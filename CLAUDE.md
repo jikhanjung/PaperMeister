@@ -71,7 +71,10 @@ peewee가 생성하는 `id`/`<fk>_id`는 `models.py`에 `TYPE_CHECKING`으로 �
 - **DB:** SQLite with FTS5 — `~/PaleoBytes/PaperMeister/papermeister.db`
 - **ORM:** Peewee 4.x (`peewee.DatabaseProxy` + `peewee.SqliteDatabase`)
 - **PDF:** pypdfium2 — 메타데이터 추출 + 페이지 렌더링. `papermeister/pdfdoc.py`가 **유일한 진입점**
-  (페이지 수·암호화 여부·메타데이터·페이지 렌더·페이지 크기 5가지). PyMuPDF는 AGPL이라 0.1.7에서 걷어냈다 ([R03](./devlog/20260813_R03_License_Audit.md))
+  (페이지 수·암호화 여부·메타데이터·페이지 렌더·페이지 크기 5가지). PyMuPDF는 AGPL이라 0.1.7에서 걷어냈다 ([R03](./devlog/20260813_R03_License_Audit.md)).
+  **PDFium은 스레드 안전하지 않다(문서가 달라도)** — Text·Figures 탭 crop 워커, OCR, PDF 탭이 동시에 부르므로
+  모든 호출이 `pdfdoc.LOCK`을 거치고, 열어 둔 문서는 잠금을 스스로 잡는 `pdfdoc.Document`다. 잠금을 빼면 동시 렌더에서
+  프로세스가 segfault로 죽는다(테스트로 재현). **pypdfium2를 직접 import하지 말 것**
 - **OCR:** RunPod serverless (Chandra2-vllm) — Preferences에서 API 키 설정
 - **Zotero:** pyzotero — Preferences에서 user_id + api_key 설정
 - **Settings:** OS 설정 위치의 `PaleoBytes/PaperMeister/preferences.json` (RunPod, Zotero 자격증명) — Windows `%LOCALAPPDATA%`, macOS `~/Library/Application Support`, Linux `~/.config`. **데이터 디렉터리와 분리**(머신 로컬 상태 + 평문 키, 그리고 데이터 위치를 설정 가능하게 만들 때의 부트스트랩 순환 방지). 규약·근거는 [R02](./devlog/20260728_R02_Config_File_Location_Convention.md)
