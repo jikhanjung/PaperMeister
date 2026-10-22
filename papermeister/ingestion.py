@@ -278,6 +278,45 @@ def _get_or_create_zotero_folder(source, collection):
     return folder
 
 
+_CACHE_STAMPS = (('figures', 'exported_at'), ('papermeister_meta', 'biblio_applied_at'))
+
+
+def _cache_is_newer(local: dict, remote: dict) -> bool:
+    """Whether the cache JSON holds something the Zotero copy lacks.
+
+    A differing md5 says only that the two differ. The Zotero copy can be the
+    older one: a push from this machine that failed leaves it behind, and on
+    2026-10-22 one sync put 39 papers' older figure exports over newer ones.
+    The OCR run decides first (a re-OCR replaces everything after it); on the
+    same OCR, any block this side wrote later keeps the cache."""
+    mine, theirs = local.get('processed_at') or '', remote.get('processed_at') or ''
+    if mine != theirs:
+        return mine > theirs
+    return any(((local.get(block) or {}).get(stamp) or '') > ((remote.get(block) or {}).get(stamp) or '')
+               for block, stamp in _CACHE_STAMPS)
+
+
+def _land_figures(existing_pf, data, progress_callback=None):
+    """Land the `figures` block of a sibling JSON on the PDF's rows (newer stages only)."""
+    pdf = PaperFile.select().where((PaperFile.paper == existing_pf.paper_id)
+                                   & ~PaperFile.path.endswith('.json')
+                                   & (PaperFile.hash == data['figures'].get('file_hash', ''))).first()
+    if pdf is None:
+        return None, None
+    try:
+        from .figure_share import import_figures
+        pages = [(p.get('markdown') or '') for p in sorted(data.get('pages') or [],
+                                                           key=lambda p: p.get('page', 0))]
+        report = import_figures(pdf, data, pages)
+    except Exception as exc:
+        if progress_callback:
+            progress_callback(f'  figures in the refreshed JSON not imported: {exc}')
+        return pdf, None
+    if progress_callback:
+        progress_callback(f'  figures: {report}')
+    return pdf, report
+
+
 def _refresh_sibling_json(existing_pf, att, zotero_client, progress_callback=None) -> bool:
     """An OCR JSON sibling that another machine replaced on Zotero: fetch it
     over the local cache and land the figures it carries.
@@ -287,7 +326,8 @@ def _refresh_sibling_json(existing_pf, att, zotero_client, progress_callback=Non
     was fetched only when this machine had no cache. So a second machine's
     captions and panels never reached a machine that had OCR'd the paper
     itself. Compare Zotero's md5 with the cache file's; when they differ,
-    the cache is stale. Returns whether the cache was refreshed.
+    fetch it — and replace the cache only when the cache is not the newer
+    of the two (`_cache_is_newer`). Returns whether the cache was refreshed.
     """
     if zotero_client is None or not is_derived(existing_pf.path, att.get('content_type', '')):
         return False
@@ -299,8 +339,9 @@ def _refresh_sibling_json(existing_pf, att, zotero_client, progress_callback=Non
     if not os.path.isfile(local):
         return False                      # nothing here to be stale; the OCR step fetches it
     with open(local, 'rb') as f:
-        if hashlib.md5(f.read()).hexdigest() == remote_md5:  # noqa: S324 — Zotero's own content hash
-            return False
+        raw = f.read()
+    if hashlib.md5(raw).hexdigest() == remote_md5:  # noqa: S324 — Zotero's own content hash
+        return False
     try:
         content = zotero_client.download_file_content(att['key'])
         data = json.loads(content.decode('utf-8'))
@@ -309,24 +350,32 @@ def _refresh_sibling_json(existing_pf, att, zotero_client, progress_callback=Non
             progress_callback(f'  sibling JSON refresh failed for {existing_pf.path}: {exc}')
         return False
     from .text_extract import write_ocr_json
+    try:
+        cached = json.loads(raw.decode('utf-8'))
+    except ValueError:
+        cached = {}
+    if _cache_is_newer(cached, data):
+        # Keep the cache; still take what the Zotero copy has newer: figure
+        # stages (import_figures takes only newer ones) and the biblio marker.
+        if progress_callback:
+            progress_callback(f'  OCR JSON kept, the cache is newer than Zotero\'s: {existing_pf.path}')
+        if (cached.get('processed_at') or '') != (data.get('processed_at') or ''):
+            return False                  # another OCR run: its figures point at other text
+        theirs = (data.get('papermeister_meta') or {}).get('biblio_applied_at') or ''
+        if theirs > ((cached.get('papermeister_meta') or {}).get('biblio_applied_at') or ''):
+            cached['papermeister_meta'] = data['papermeister_meta']
+            write_ocr_json(local, cached)
+        if data.get('figures'):
+            pdf, report = _land_figures(existing_pf, data, progress_callback)
+            if report is not None and (report.created or report.updated):
+                from .figure_share import write_to_cache
+                write_to_cache(pdf, push=False)
+        return False
     write_ocr_json(local, data)
     if progress_callback:
         progress_callback(f'  OCR JSON refreshed from Zotero: {existing_pf.path}')
     if data.get('figures'):
-        pdf = PaperFile.select().where((PaperFile.paper == existing_pf.paper_id)
-                                       & ~PaperFile.path.endswith('.json')
-                                       & (PaperFile.hash == data['figures'].get('file_hash', ''))).first()
-        if pdf is not None:
-            try:
-                from .figure_share import import_figures
-                pages = [(p.get('markdown') or '') for p in sorted(data.get('pages') or [],
-                                                                   key=lambda p: p.get('page', 0))]
-                report = import_figures(pdf, data, pages)
-                if progress_callback:
-                    progress_callback(f'  figures: {report}')
-            except Exception as exc:
-                if progress_callback:
-                    progress_callback(f'  figures in the refreshed JSON not imported: {exc}')
+        _land_figures(existing_pf, data, progress_callback)
     return True
 
 

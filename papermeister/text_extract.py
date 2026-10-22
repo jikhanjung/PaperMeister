@@ -266,6 +266,9 @@ def push_sibling_json(paper, json_filename: str, json_path: str) -> str | None:
     from .zotero_client import ZoteroClient
     client = ZoteroClient(user_id, api_key)
     outcome = client.replace_attachment_file(sibling.zotero_key, json_path)
+    if outcome is None:
+        # Zotero refused without an exception: its copy is now behind this one
+        logger.warning('sibling JSON not replaced on Zotero (%s, key %s)', json_filename, sibling.zotero_key)
 
     # Keep the local PaperFile row's hash consistent with the new content so
     # later diagnostics / dedupe don't see a stale (or empty) value.
