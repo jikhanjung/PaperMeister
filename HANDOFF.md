@@ -177,6 +177,10 @@
   **retention은 새 디렉터리만 청소한다.** 홈에 남은 최대 24개(≈26GB)는 아무도 안 지운다.
   한 번 지워야 한다: `ssh jikhanserver "ls -t ~/backups/papermeister-*.db.gz"` 로 확인 후 삭제
 - [ ] **백업 스크립트 Windows 실행** — 7/28 이후 첫 성공 백업이 되는지
+- **데이터 디렉터리 전체 백업 1회 (2026-10-22 16:28 KST)** — jikhanserver `/mnt/disk1/backups/papermeister-full/20261022-1628/`(63.9 GB,
+  그대로 데이터 디렉터리로 쓸 수 있다: DB 스냅샷 + pdf_cache·ocr_json·tmp·logs 전부, 파일 수 양쪽 일치). 빠진 것: 데이터 폴더의 옛
+  `preferences.json`(7/28 이전 사본, 평문 키 — 실제 설정은 `%LOCALAPPDATA%`)과 `figure_queue.lock`. 일일 retention은 `papermeister/`만 청소하므로 안전.
+  같은 날 17:15 사본(Zotero 동기화 후)은 figsplit용으로 `/mnt/disk1/figsplit-data/papermeister/`에 따로 있다(주인은 figsplit, README 참고)
 - [x] ~~앱 재시작 후 `%LOCALAPPDATA%\PaleoBytes\PaperMeister\preferences.json` 생성 확인~~
   ✅ (2026-08-13 확인) 7/29에 생성됐고 8/5에 갱신됨 — `migrate_legacy_config()`가 라이브에서 실제로 돌았다
 
