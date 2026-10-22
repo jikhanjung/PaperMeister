@@ -180,7 +180,8 @@
 - **데이터 디렉터리 전체 백업 1회 (2026-10-22 16:28 KST)** — jikhanserver `/mnt/disk1/backups/papermeister-full/20261022-1628/`(63.9 GB,
   그대로 데이터 디렉터리로 쓸 수 있다: DB 스냅샷 + pdf_cache·ocr_json·tmp·logs 전부, 파일 수 양쪽 일치). 빠진 것: 데이터 폴더의 옛
   `preferences.json`(7/28 이전 사본, 평문 키 — 실제 설정은 `%LOCALAPPDATA%`)과 `figure_queue.lock`. 일일 retention은 `papermeister/`만 청소하므로 안전.
-  같은 날 17:15 사본(Zotero 동기화 후)은 figsplit용으로 `/mnt/disk1/figsplit-data/papermeister/`에 따로 있다(주인은 figsplit, README 참고)
+  **Zotero 동기화·정리 전 상태**다(아래 "2026-10-22 Zotero 정리"). 정리 뒤 19:01 사본(DB + pdf_cache의 PDF + ocr_json, `by_hash/`·`ocr_by_hash/` 색인)은
+  figsplit용으로 `/mnt/disk1/figsplit-data/papermeister/`에 따로 있다(주인은 figsplit, README 참고). WSL에서 이 서버로 rsync하는 법은 메모리 `ocrserver-ssh-via-windows`
 - [x] ~~앱 재시작 후 `%LOCALAPPDATA%\PaleoBytes\PaperMeister\preferences.json` 생성 확인~~
   ✅ (2026-08-13 확인) 7/29에 생성됐고 8/5에 갱신됨 — `migrate_legacy_config()`가 라이브에서 실제로 돌았다
 
@@ -546,19 +547,26 @@
     구현 예시가 필요하면 `../CTHarvester/utils/paths.py`가 그 체크리스트를 가장 충실히 따른 사례다 —
     다만 **가이드가 상위이고 옆 리포는 참고**다(사본이 아니라 원본을 본다는 087의 논지 그대로)
   - ~~**설정된 경로가 사라졌을 때**~~ ✅ (2026-07-29) — `check_configured_data_dir()`가 `PAPERMEISTER_DATA_DIR`의 **부모**가 없으면 시작을 거부한다(CLI는 stderr+exit 1, desktop은 QMessageBox). 부모를 보는 이유는 새 위치를 처음 지정하는 것과 드라이브 미연결을 구분하기 위해서. 기본값 경로는 검사 대상이 아니다 — 그건 우리가 만들 자리고, 사용자가 지정한 자리는 사용자가 제공할 자리다. **UI를 붙일 때 같은 함수를 재사용하면 된다**
-- **`ocr_json/` 1.8GB(9,832개)에 백업이 없다** — 오프사이트 백업은 DB만 대상이다. Zotero sibling 업로드(`zotero_upload_ocr_json`)가 켜져 있는 만큼만 부분적으로 사본이 있다. OCR 비용 전체가 여기 들어 있으므로 재생성이 가장 비싼 자산
-- **2026-10-22 동기화가 OCR JSON 캐시 39개를 Zotero의 옛것으로 덮었다 — 복구 끝** — md5만 보고 덮었다(efdf685로 고침: 이제 더 새 캐시는 남는다).
-  캐시는 쌍둥이 중 도판 단계가 가장 새 PaperFile에서 다시 내보냈고(동기화 전보다 오래된 단계 0, DB는 처음부터 그대로), 사용자 요청으로 Zotero 사이블링 82개
-  (쌍둥이 부모마다 하나씩)에 올려 md5 일치를 확인했다. 뒤처진 원인은 push 실패: 예외 117건이 `figure_queue.log`에 있고, 예외 없이 거부된 것(`replace_attachment_file`→None)은 이제 로그에 남는다.
-  남은 것: ① 같은 PDF를 가진 **쌍둥이 PaperFile의 도판 결과가 DB에서 서로 다르다**(이 39개 중 31개) — 캐시 파일은 하나라 마지막에 쓴 쌍둥이 것이 들어간다.
-  ② ~~한 부모 밑에 같은 이름의 JSON 사이블링이 둘 이상~~ — 4곳 9개였다(`push_sibling_json`은 `.first()`만 올리므로 나머지가 뒤처진다). 사용자 요청으로
-  5개를 Zotero **휴지통**으로(`PATCH {"deleted":1}`, 되돌릴 수 있음; 4개는 Zotero에 파일이 없는 404 껍데기, 1개는 같은 내용), 다시 동기화해 로컬도 trashed. 남은 중복 0.
-  ④ figsplit이 찾아낸 "한 PDF가 여러 항목에" 의심 6건(2026-10-22) — 사용자 승인으로 Zotero 휴지통: 잘못 붙은 PDF 2개(4692 돌고래에 붙은 Streng & Geyer 2019,
-  6988 Barraclough & Nee 2001에 붙은 Zimkus 2010 — 각 PDF는 진짜 주인 4370·6430에 남음; **6988은 이제 PDF 없음**, 진짜 PDF는 라이브러리에 없다)와 그 JSON,
-  중복 항목 2개(2612 → 3578, 4142 → 4301; Zotero "Merge Items"처럼 남는 쪽에 컬렉션을 합친 뒤). 나머지(3196·3550: 책/글 관계)는 그대로.
-  PDF→진짜 주인 표는 figsplit `data/licenses/owners.json`
-  ③ **KOPRI 웹 필터가 Zotero 파일 다운로드를 가끔 가로챈다** — 204번의 JSON이 413바이트 차단 페이지(`warning.html…광고차단정책`)로 왔다가 다음엔 통과했다.
-  동기화는 JSON이 아니면 덮지 않으므로 안전하지만, 다운로드가 "성공"해도 내용이 HTML일 수 있다
+- **`ocr_json/` 2.0GB(9,832개)에 정기 백업이 없다** — 오프사이트 일일 백업은 DB만 대상이다. 2026-10-22에 데이터 디렉터리 전체를 한 번 떠 두었고(위 운영 항목,
+  `papermeister-full/20261022-1628/`), Zotero sibling 업로드(`zotero_upload_ocr_json`)가 켜져 있는 만큼 사본이 있다. OCR 비용 전체가 여기 들어 있으므로 재생성이 가장 비싼 자산
+- **2026-10-22 Zotero 정리** — 전부 사용자 요청·승인으로, Zotero 서버에 직접 쓰고(Web API) 동기화로 DB에 받은 뒤 서버에서 다시 읽어 확인했다.
+  지운 것은 모두 **휴지통**(영구 삭제 아님 — Zotero에서 되돌릴 수 있다). 일회성 스크립트라 저장소에 넣지 않았다
+  - **동기화가 OCR JSON 캐시 39개를 Zotero의 옛것으로 덮었다 → 복구.** md5만 보고 덮었기 때문(efdf685로 고침: 이제 더 새 캐시는 남는다). 캐시는 쌍둥이 중
+    도판 단계가 가장 새 PaperFile에서 다시 내보냈고(동기화 전보다 오래된 단계 0, DB는 처음부터 그대로), Zotero 사이블링 82개(쌍둥이 부모마다 하나씩)에 올려 md5 일치.
+    Zotero가 뒤처진 원인은 push 실패: 예외 117건이 `figure_queue.log`에 있고, 예외 없이 거부된 것(`replace_attachment_file`→None)은 이제 로그에 남는다
+  - **같은 이름 JSON 사이블링 중복** 4곳 9개(`push_sibling_json`은 `.first()`만 올려 나머지가 뒤처진다) → 5개 휴지통(4개는 Zotero에 파일 없는 404 껍데기, 1개는 같은 내용). 남은 중복 0
+  - **figsplit이 찾은 "한 PDF가 여러 항목에" 의심 6건** → 잘못 붙은 PDF 2개와 그 JSON 휴지통(4692 돌고래에 붙은 Streng & Geyer 2019, 6988 Barraclough & Nee 2001에
+    붙은 Zimkus 2010 — 각 PDF는 진짜 주인 4370·6430에 남음), 중복 항목 2개 휴지통(2612 → 3578, 4142 → 4301; Zotero "Merge Items"처럼 남는 쪽에 컬렉션을 합친 뒤).
+    3196·3550(책/글 관계)은 그대로. PDF→진짜 주인 표는 figsplit `data/licenses/owners.json`
+  - **DOI** — HTML 이스케이프 2개(3118·5044, Zotero 원본에 `&lt;…&gt;`로 저장돼 있었다) + paperbiblio 사본 2개. 비정형 23개: URL 형태 → `10.…` 11, arXiv → `10.48550/arXiv.…` 2,
+    Crossref 제목 일치 확인 후 3(7991 PII, 6730 `10:1167` 오타, 3939 BMC), DOI 아닌 값 비움 3(`null`·ISSN·`www.nature.com`), 페이지 주소는 URL 필드로 4.
+    **남긴 것**: JSTOR SICI 링크 148 + 인코딩된 SICI 3(사용자 결정: 그대로 — 진짜 DOI는 대개 JSTOR `10.2307/…`라 Crossref 제목 검색으로 찾을 수 있다, 1편 1요청),
+    Crossref가 확인 못 한 PII 2(159, 5114), 뜻 모를 숫자 3(4450, 5046, 9882)
+  - 휴지통은 pyzotero `update_item`이 `deleted` 키를 거부해서 Web API `PATCH {"deleted":1}` + `If-Unmodified-Since-Version`으로 했다
+  - **남은 것**: ① 같은 PDF를 가진 **쌍둥이 PaperFile의 도판 결과가 DB에서 서로 다르다**(39개 중 31개) — 캐시 파일은 하나라 마지막에 쓴 쌍둥이 것이 들어간다.
+    ② **6988 Barraclough & Nee 2001은 이제 PDF가 없다**(진짜 PDF는 라이브러리에 없다).
+    ③ **KOPRI 웹 필터가 Zotero 파일 다운로드를 가끔 가로챈다** — 204번 JSON이 413바이트 차단 페이지(`warning.html…광고차단정책`)로 왔다가 다음엔 통과했다.
+    동기화는 JSON이 아니면 덮지 않으므로 안전하지만, 다운로드가 "성공"해도 내용이 HTML일 수 있다
 - **논문 라이선스 데이터는 figsplit이 관리한다**(사용자 결정 2026-10-22) — 첫 조사는 여기서 했고([R04](./devlog/20261021_R04_Paper_License_Survey.md), 2026-10-21) 표·스크립트·API 캐시는 모두 jikhanserver `/mnt/disk1/figsplit-data/licenses/`(`20261021/` 논문 전체, `20261022/` 도판 서버에 보낸 PDF를 `file_hash`로, `survey_20261021/` 재조사 도구 — 이 호스트의 PaperMeister 일일 백업 DB로 다시 돌린다)로 옮겼다. 재조사·figsplit 공개 범위 결정은 그쪽에서. `<data>/tmp/`에 남은 것은 옮기기 전 사본
 - 컬렉션-수준 메타데이터 (issue 모음 마킹 등)
 - **systematic** Zotero → DB pull sync (현재는 on-demand: `resync_zotero.py`는 destructive, 타겟 in-place refresh는 수동 one-off)
