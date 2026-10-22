@@ -121,6 +121,10 @@ DB는 읽기 전용으로만 열었다. 스크립트는 저장소 밖(`<data>/tm
 
 ## 산출물 (저장소 밖 — 논문별 목록은 공개 저장소에 두지 않는다)
 
+> **2026-10-22: 라이선스 데이터는 figsplit이 관리한다**(사용자 결정). 아래 표·스크립트·캐시와, 도판 서버에 보낸 PDF 8,934개를
+> `file_hash`로 라이선스에 붙인 표(`sent_list.py`)를 jikhanserver `/mnt/disk1/figsplit-data/licenses/`(`20261021/`, `20261022/`,
+> `survey_20261021/`)로 옮겼다. 그 호스트의 PaperMeister 일일 백업 DB로 다시 돌릴 수 있다. 이 문서는 첫 조사의 기록으로 남고, 이후 갱신은 figsplit에서 한다.
+
 - `<data>/tmp/paper_licenses_20261021.csv` (UTF-8 BOM, 엑셀에서 바로 열림) — 논문 한 줄씩:
   `paper_id, year, year_source, title, journal, collection, doi, doi_source, category, reuse_of_figures, source,
   all_sources, conflict, evidence(근거 문구), publisher, oa_status, openalex_license, crossref_licenses, in_crossref,
