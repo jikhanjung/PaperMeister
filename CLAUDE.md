@@ -143,7 +143,7 @@ Source (directory|zotero) → Folder (계층구조, zotero_key) → Paper → Pa
 - **SourceNav**: `QTabWidget` — 각 Source마다 탭 하나 (현재 Zotero 하나). 각 탭 내부는 단일 트리에 상단=Library 필터, 하단=hierarchical 컬렉션
 - **DetailPanel**: `QWidget` (not QScrollArea) + 내부 `QTabWidget#DetailTabs`. 탭 5개 — **Metadata / PDF / Text / Figures / References** (Biblio 대조는 Metadata 탭에 통합, PDF·Text·Figures·References는 첫 활성화 때 lazy 빌드; `_on_tab_changed`의 인덱스가 하드코딩이라 탭을 끼우면 거기도 고칠 것). **Figures 탭**(`desktop/views/figures_tab.py` + `desktop/components/figure_canvas.py`): 도판 블록마다 도판 전체(폭 맞춤)+서브피겨 상자(한 가지 옅은 색, hover/클릭만 노랑)+Entries/Caption 탭, hover로 상자↔항목 연동·툴팁, 뷰포트 근처만 렌더(최대 10장 보유). 각 탭 독립 스크롤, 논문 전환 시 직전 탭 복원. Stub 배너는 탭바 위에 고정
 - **Biblio 탭 대조 비교 UI**: Paper(Zotero) vs PaperBiblio(추출) 필드별 비교 테이블. diff가 있는 행에 라디오 버튼(Paper/Biblio 선택) + 편집 가능한 입력 필드(QPlainTextEdit: Title/Authors/Journal, QLineEdit: Year/DOI) + × 클리어 버튼. Apply 시 `apply_merged()`로 선택/편집된 값 반영. 저자는 한 줄 한 명, "Lastname, Firstname" 형식
-- **Text 탭**: `papermeister.biblio.load_ocr_pages()`로 `~/PaleoBytes/PaperMeister/ocr_json/{hash}.json` 페치.
+- **Text 탭**: `papermeister.biblio.load_ocr_pages()`로 `~/PaleoBytes/PaperMeister/ocr_json/{pdf 파일명}.{hash[:8]}.json` 페치(이름은 `text_extract.ocr_json_filename` 한 곳, 찾기는 `.{hash[:8]}.json` 접미사 — 같은 PDF가 여러 Zotero 부모 밑에 있으면 OCR한 쪽 이름이다).
   **Chandra2 출력은 마크다운이 아니라 레이아웃 HTML**이다 — 블록마다 `data-label`(무엇인지)과
   `data-bbox`(어디였는지)가 붙는다. `ocr_layout.is_structured()`로 두 갈래:
   - **structured(라이브 캐시 ~72%)** → `papermeister/ocr_layout.py`가 표시 HTML을 만들고
