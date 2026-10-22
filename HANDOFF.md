@@ -551,7 +551,10 @@
   캐시는 쌍둥이 중 도판 단계가 가장 새 PaperFile에서 다시 내보냈고(동기화 전보다 오래된 단계 0, DB는 처음부터 그대로), 사용자 요청으로 Zotero 사이블링 82개
   (쌍둥이 부모마다 하나씩)에 올려 md5 일치를 확인했다. 뒤처진 원인은 push 실패: 예외 117건이 `figure_queue.log`에 있고, 예외 없이 거부된 것(`replace_attachment_file`→None)은 이제 로그에 남는다.
   남은 것: ① 같은 PDF를 가진 **쌍둥이 PaperFile의 도판 결과가 DB에서 서로 다르다**(이 39개 중 31개) — 캐시 파일은 하나라 마지막에 쓴 쌍둥이 것이 들어간다.
-  ② 한 부모 밑에 **같은 이름의 JSON 사이블링이 둘 이상**인 곳이 4곳(첨부 9개) — `push_sibling_json`은 `.first()`만 올리므로 나머지는 뒤처진다(6988의 `R35F7UP3`은 직접 맞췄다)
+  ② ~~한 부모 밑에 같은 이름의 JSON 사이블링이 둘 이상~~ — 4곳 9개였다(`push_sibling_json`은 `.first()`만 올리므로 나머지가 뒤처진다). 사용자 요청으로
+  5개를 Zotero **휴지통**으로(`PATCH {"deleted":1}`, 되돌릴 수 있음; 4개는 Zotero에 파일이 없는 404 껍데기, 1개는 같은 내용), 다시 동기화해 로컬도 trashed. 남은 중복 0.
+  ③ **KOPRI 웹 필터가 Zotero 파일 다운로드를 가끔 가로챈다** — 204번의 JSON이 413바이트 차단 페이지(`warning.html…광고차단정책`)로 왔다가 다음엔 통과했다.
+  동기화는 JSON이 아니면 덮지 않으므로 안전하지만, 다운로드가 "성공"해도 내용이 HTML일 수 있다
 - **논문 라이선스 데이터는 figsplit이 관리한다**(사용자 결정 2026-10-22) — 첫 조사는 여기서 했고([R04](./devlog/20261021_R04_Paper_License_Survey.md), 2026-10-21) 표·스크립트·API 캐시는 모두 jikhanserver `/mnt/disk1/figsplit-data/licenses/`(`20261021/` 논문 전체, `20261022/` 도판 서버에 보낸 PDF를 `file_hash`로, `survey_20261021/` 재조사 도구 — 이 호스트의 PaperMeister 일일 백업 DB로 다시 돌린다)로 옮겼다. 재조사·figsplit 공개 범위 결정은 그쪽에서. `<data>/tmp/`에 남은 것은 옮기기 전 사본
 - 컬렉션-수준 메타데이터 (issue 모음 마킹 등)
 - **systematic** Zotero → DB pull sync (현재는 on-demand: `resync_zotero.py`는 destructive, 타겟 in-place refresh는 수동 one-off)
