@@ -547,10 +547,11 @@
     다만 **가이드가 상위이고 옆 리포는 참고**다(사본이 아니라 원본을 본다는 087의 논지 그대로)
   - ~~**설정된 경로가 사라졌을 때**~~ ✅ (2026-07-29) — `check_configured_data_dir()`가 `PAPERMEISTER_DATA_DIR`의 **부모**가 없으면 시작을 거부한다(CLI는 stderr+exit 1, desktop은 QMessageBox). 부모를 보는 이유는 새 위치를 처음 지정하는 것과 드라이브 미연결을 구분하기 위해서. 기본값 경로는 검사 대상이 아니다 — 그건 우리가 만들 자리고, 사용자가 지정한 자리는 사용자가 제공할 자리다. **UI를 붙일 때 같은 함수를 재사용하면 된다**
 - **`ocr_json/` 1.8GB(9,832개)에 백업이 없다** — 오프사이트 백업은 DB만 대상이다. Zotero sibling 업로드(`zotero_upload_ocr_json`)가 켜져 있는 만큼만 부분적으로 사본이 있다. OCR 비용 전체가 여기 들어 있으므로 재생성이 가장 비싼 자산
-- **Zotero의 OCR JSON 사이블링 39개가 로컬보다 오래됐다** (2026-10-22) — 그날 동기화가 md5만 보고 이 39개로 로컬 캐시를 덮었다(efdf685로 고침: 이제 더 새 캐시는 남는다).
-  로컬 캐시는 쌍둥이 중 도판 단계가 가장 새 PaperFile에서 다시 내보내 되돌렸고(동기화 전보다 오래된 단계 0, DB는 처음부터 그대로), Zotero 쪽은 **아직 옛것** —
-  올릴지는 사용자 결정(Zotero 쓰기). 뒤처진 원인은 push 실패: 예외 117건이 `figure_queue.log`에 있고, 예외 없이 거부된 것(`replace_attachment_file`→None)은 이제야 로그에 남는다.
-  같은 PDF를 가진 **쌍둥이 PaperFile의 도판 결과가 DB에서 서로 다르다**(이 39개 중 31개) — 캐시 파일은 하나라 마지막에 쓴 쌍둥이 것이 들어간다
+- **2026-10-22 동기화가 OCR JSON 캐시 39개를 Zotero의 옛것으로 덮었다 — 복구 끝** — md5만 보고 덮었다(efdf685로 고침: 이제 더 새 캐시는 남는다).
+  캐시는 쌍둥이 중 도판 단계가 가장 새 PaperFile에서 다시 내보냈고(동기화 전보다 오래된 단계 0, DB는 처음부터 그대로), 사용자 요청으로 Zotero 사이블링 82개
+  (쌍둥이 부모마다 하나씩)에 올려 md5 일치를 확인했다. 뒤처진 원인은 push 실패: 예외 117건이 `figure_queue.log`에 있고, 예외 없이 거부된 것(`replace_attachment_file`→None)은 이제 로그에 남는다.
+  남은 것: ① 같은 PDF를 가진 **쌍둥이 PaperFile의 도판 결과가 DB에서 서로 다르다**(이 39개 중 31개) — 캐시 파일은 하나라 마지막에 쓴 쌍둥이 것이 들어간다.
+  ② 한 부모 밑에 **같은 이름의 JSON 사이블링이 둘 이상**인 곳이 4곳(첨부 9개) — `push_sibling_json`은 `.first()`만 올리므로 나머지는 뒤처진다(6988의 `R35F7UP3`은 직접 맞췄다)
 - **논문 라이선스 데이터는 figsplit이 관리한다**(사용자 결정 2026-10-22) — 첫 조사는 여기서 했고([R04](./devlog/20261021_R04_Paper_License_Survey.md), 2026-10-21) 표·스크립트·API 캐시는 모두 jikhanserver `/mnt/disk1/figsplit-data/licenses/`(`20261021/` 논문 전체, `20261022/` 도판 서버에 보낸 PDF를 `file_hash`로, `survey_20261021/` 재조사 도구 — 이 호스트의 PaperMeister 일일 백업 DB로 다시 돌린다)로 옮겼다. 재조사·figsplit 공개 범위 결정은 그쪽에서. `<data>/tmp/`에 남은 것은 옮기기 전 사본
 - 컬렉션-수준 메타데이터 (issue 모음 마킹 등)
 - **systematic** Zotero → DB pull sync (현재는 on-demand: `resync_zotero.py`는 destructive, 타겟 in-place refresh는 수동 one-off)
