@@ -30,6 +30,23 @@ from papermeister.references import (
 )
 
 
+def _print_utf8():
+    """Titles in this library are half non-English; stdout redirected on Windows is cp949.
+
+    A title cp949 lacks (an en dash) used to raise in the per-paper print — after
+    that paper was saved, but it ended the run, and the papers still in flight
+    were parsed by the LLM and then dropped, with no resolve pass.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
+        except (AttributeError, ValueError):
+            pass
+
+
+_print_utf8()
+
+
 def _short(title, n=28):
     """Collapse whitespace and truncate a title from the front for log lines."""
     t = ' '.join((title or '').split())
