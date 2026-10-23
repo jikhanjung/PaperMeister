@@ -10,7 +10,7 @@
 - **최신 릴리스 v0.2.3**(2026-10-07, 3플랫폼). 코어(Phase 1~3 + D), references(P11~P14), 4월 배치 재OCR([114](./devlog/20261022_114_April_Batch_ReOCR_And_Fragment_Guard.md)), **P16 도판 1차 완주**까지 끝났다
 - **라이브러리**: 논문 9,913(휴지통 제외), PDF 9,954, 도판 99,041. **OCR 대기 0** — 대기하던 27개(10-22 동기화분 12 + 6~10월에 들어와 Process를 안 돌린 15,
   실패 이력 없음)를 10-23에 pdf_cache로 받아 OCR(PaperFile 20022~20048). 부모 없던 PDF 3개는 `auto_promote_standalone`이 Zotero 부모 항목을 만들었다.
-  **이 27편은 OCR까지만** — Info·References·도판은 아직
+  **이 27편은 OCR까지만** — Info·References·도판은 아직. PDF 다운로드는 이제 `%PDF` 검사 + 재시도를 거친다(KOPRI 차단 페이지, [117](./devlog/20261023_117_Pending_OCR_And_PDF_Download_Guard.md))
 - **P16 도판** — 1차 완주(10-21 05:05, [115](./devlog/20261022_115_P16_Unattended_Run_First_Pass.md)): ≤200쪽 파일 9,554/9,554, 도판 99,041, 캡션 88,762(89.6%), 분할 35,181.
   작업 스케줄러 `PaperMeister Figure Queue`(5분 틱)는 그대로 돌지만 할 일이 없다. **새 컬렉션**은 다음 틱이 잡지만 **이미 끝난 컬렉션에 새로 넣은 PDF는 안 잡는다**
   (`figure_queue.json`의 `files_cache`·`done_batches` — 앱 우클릭 Process Figures로 처리하거나 그 키를 두 곳에서 지울 것)
@@ -27,6 +27,8 @@
 - **references 잔여 130편**(give-up 48 — Treatise·化石 합본·단행본 / 직전 PARTIAL 53 / 처리된 PDF 없음 67) — "Retry Failed References…"로 한 번 볼지 영구 제외할지
 - **needs_review 일괄 검토**(실측 5,229편) — Library "Needs Review" → Metadata 탭 Info 대조. 끝나면 non-dry `reflect_biblio.py` 확인 패스 한 번
 - **DOI 필드의 JSTOR SICI 링크 148 + 인코딩된 SICI 3** — 10-22에 그대로 두기로 함(사용자). 진짜 DOI는 대개 JSTOR `10.2307/…`라 Crossref 제목 검색으로 찾을 수 있다(1편 1요청, 천천히)
+- **6355 Manuel 2009(Early evolution of symmetry…)의 Zotero 첨부 `732NKRFK`는 PDF가 아니라 ScienceDirect 페이지 HTML이다**(md5 일치, 117) — 본문 8 passage와 JSON 사이블링 `472HNXXQ`가 그 내용.
+  진짜 PDF를 Zotero에 넣으면: `pdf_cache/732NKRFK/` 삭제 → PaperFile 8388 hash 비우고 `pending` + passage 삭제 → JSON 사이블링 휴지통 → 재OCR
 - **6988 Barraclough & Nee 2001은 PDF가 없다** — 붙어 있던 건 다른 논문(Zimkus 2010)이라 10-22에 뺐다. 진짜 PDF는 라이브러리에 없다
 - **RunPod Reserved Pod 이미지 재빌드·push**(10-22 요청, 멈춤) — `deploy/chandra2-vllm-pod`의 PyMuPDF → pypdfium2 반영분. 이미지 이름·레지스트리가 저장소에 없고(README는 자리표시자) Docker Desktop이 꺼져 있었다
 
@@ -55,8 +57,6 @@
 - Zotero 동기화: **컬렉션 멤버십 제거가 반영 안 됨**(`PaperFolder.get_or_create`만 — mirror냐 add-only냐 정책) / 앱에서 휴지통 복원 / PaperFile md5 추적(Zotero에서 PDF를 바꿔도 옛 hash 캐시를 씀) /
   `content_type` 컬럼 / itemType 캐시 / OCR JSON 사이블링 attachment title 정규화(지금은 의도적으로 파일명 그대로) / systematic pull sync(지금은 on-demand) / 컬렉션 수준 메타데이터
 - **`ocr_json/`(2.0 GB)에 정기 백업이 없다** — 일일 백업은 DB만. OCR 비용 전체가 여기 있다
-- **PDF 다운로드에 차단 페이지 가드가 없다** — `text_extract._resolve_filepath`는 받은 바이트를 검사 없이 `pdf_cache/<key>/…pdf`로 쓰고 해시를 찍는다.
-  KOPRI 필터가 HTML(413 B)로 바꾸면 그게 캐시·해시로 남아 PDF 탭·도판까지 간다(116). 10-23 실행은 바깥 드라이버에서 `%PDF` 검사·재시도로 막았다
 - **데이터 경로 설정 가능화** — 착수 전제: 프로덕션 20여 곳의 `from .paths import DB_PATH`(import 시점 바인딩)를 접근자로. 규약 원본은 `.guides/desktop/file-locations.md`(§5·§7), 예시는 `../CTHarvester/utils/paths.py`.
   경로 부재 가드(`check_configured_data_dir()`)는 이미 있다
 - 저순위: 병렬 OCR 실측, 암호화·파손 PDF 처리, DB 삭제 후 복구 실증, 커버리지(floor 18%)
@@ -99,5 +99,6 @@
 | 09-14 ~ 09-22 | P16 설계·구현(조립·연결·분할·검수·Figures 탭·머신 간 동기화) | P16·P17 · 095~113 · `docs/figure_pipeline_guide.md` · `docs/figure_server_spec_v2.md` |
 | 09-23 ~ 10-21 | P16 무인 운영 1차 완주 | **115** · `docs/figure_runner_processing_log.md` |
 | 10-21 ~ 10-22 | 논문 라이선스 조사, PDFium 잠금, 백업·사본, Zotero 정리 | R04 · **116** |
+| 10-23 | 대기 PDF 27개 OCR, PDF 다운로드 검사·재시도 | **117** |
 
 릴리스별 변경은 `CHANGELOG.md`, 결정된 설계·규약은 CLAUDE.md와 각 P 문서.
