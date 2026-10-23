@@ -15,6 +15,7 @@ CLI wrapper lives at scripts/reflect_biblio.py.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Literal
@@ -39,6 +40,12 @@ YEARLESS_DOCTYPES = {'book', 'chapter', 'report'}
 
 # doc_types that are explicitly out-of-scope for auto-commit (P08 §2.2)
 NON_AUTOCOMMIT_DOCTYPES = {'journal_issue', 'unknown', ''}
+
+# An author "Hsiang et al." is a citation read as a byline, or a list cut short —
+# either way not one to write to Zotero unseen. A 2026 literature-review note
+# opening "Hsiang et al. (2019)…" auto-committed as that author and year: its
+# placeholder Paper had relaxed the confidence gate.
+_ET_AL = re.compile(r'\bet\.?\s*al\b', re.IGNORECASE)
 
 
 def _normalize_name(name: str) -> str:
@@ -209,6 +216,8 @@ def evaluate(biblio: PaperBiblio, paper: Paper) -> Decision:
         return Decision('needs_review', 'missing_title', biblio.id)
     if not authors:
         return Decision('needs_review', 'missing_authors', biblio.id)
+    if any(_ET_AL.search(a) for a in authors):
+        return Decision('needs_review', 'et_al_author', biblio.id)
     if not year_ok and not relaxable:
         return Decision('needs_review', 'missing_year', biblio.id)
     if not doctype_ok:

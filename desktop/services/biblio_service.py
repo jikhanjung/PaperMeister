@@ -83,6 +83,7 @@ _REASON_BLURB = {
     '':                   'All checks passed. Click Apply to reflect into Paper.',
     'missing_title':      'Biblio has no title.',
     'missing_authors':    'Biblio has no authors.',
+    'et_al_author':       'An author reads "et al." — a citation taken for the byline, or a list cut short.',
     'missing_year':       'Biblio has no year (and doc_type is not book/chapter/report).',
     'unknown_doctype':    'doc_type is unknown — cannot classify.',
     'low_confidence':     'Confidence is not "high". Review manually.',
