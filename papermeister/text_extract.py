@@ -398,7 +398,7 @@ def _resolve_filepath(paper_file):
         import requests
         client = ZoteroClient(user_id, api_key)
         try:
-            content = client.download_file_content(paper_file.zotero_key)
+            content = client.download_pdf_content(paper_file.zotero_key)
         except requests.HTTPError as e:
             status = e.response.status_code if e.response is not None else '?'
             if status == 404:
@@ -416,11 +416,6 @@ def _resolve_filepath(paper_file):
                 f'Zotero file download failed for key={paper_file.zotero_key} '
                 f'path={paper_file.path!r}: {e.__class__.__name__}: {e}'
             ) from e
-        if not content:
-            raise RuntimeError(
-                f'Zotero returned empty content for key={paper_file.zotero_key} '
-                f'path={paper_file.path!r} — attachment likely missing from web storage'
-            )
         os.makedirs(cache_dir, exist_ok=True)
         with open(cached_path, 'wb') as f:
             f.write(content)

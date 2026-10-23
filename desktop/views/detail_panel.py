@@ -896,7 +896,7 @@ class DetailPanel(QWidget):
             return cached
 
         client = ZoteroClient(get_pref('zotero_user_id'), get_pref('zotero_api_key'))
-        content = client.download_file_content(zotero_key)
+        content = client.download_pdf_content(zotero_key)
 
         os.makedirs(cache_dir, exist_ok=True)
         with open(cached, 'wb') as f:

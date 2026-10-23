@@ -181,17 +181,19 @@ def _is_retryable_zotero_error(exc: Exception) -> bool:
     )
 
 
-def _zotero_retry(fn, *, attempts: int = 3, delays=(2.0, 5.0)):
+def _zotero_retry(fn, *, attempts: int = 3, delays=(2.0, 5.0), retry_on: tuple = ()):
     """Call fn(); retry on transient Zotero errors with short backoff. Bounded
     so the UI (write-back runs on the main thread) isn't frozen for long. Raises
     the last exception once attempts are exhausted or the error isn't retryable.
+    `retry_on`: further exception types the caller knows to be transient.
     """
     import time
     for i in range(attempts):
         try:
             return fn()
         except Exception as exc:
-            if i >= attempts - 1 or not _is_retryable_zotero_error(exc):
+            retryable = isinstance(exc, retry_on) or _is_retryable_zotero_error(exc)
+            if i >= attempts - 1 or not retryable:
                 raise
             time.sleep(delays[min(i, len(delays) - 1)])
 

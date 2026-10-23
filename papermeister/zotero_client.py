@@ -46,6 +46,19 @@ def save_collections_cache(collections):
         json.dump(collections, f, ensure_ascii=False, indent=2)
 
 
+class NotAPdfError(RuntimeError):
+    """Zotero's file endpoint answered, but the body is not a PDF."""
+
+    def __init__(self, attachment_key, content: bytes):
+        if not content:
+            why = 'empty body — file likely missing from Zotero web storage'
+        elif content.lstrip()[:1] == b'<':
+            why = 'HTML — a web filter block page?'
+        else:
+            why = f'starts {content[:16]!r}'
+        super().__init__(f'{attachment_key}: not a PDF ({len(content)} bytes, {why})')
+
+
 class ZoteroClient:
     """Thin wrapper around pyzotero for PaperMeister."""
 
@@ -320,6 +333,29 @@ class ZoteroClient:
         resp.raise_for_status()
         return resp.content
 
+    def download_pdf_content(self, attachment_key, *, attempts=3, delays=(2.0, 5.0)):
+        """download_file_content for a PDF, checked: the bytes must be a PDF.
+
+        KOPRI's web filter now and then swaps a Zotero file for its own ~413-byte
+        HTML block page, and asking again goes through (devlog 116). Cached
+        unchecked, that page would be hashed as the paper's file and reused by
+        the PDF tab and the figure lanes. So a body that is not a PDF is retried
+        like a dropped connection or a 5xx; a 4xx (404 = never uploaded) is not.
+
+        Returns: bytes.
+        Raises: NotAPdfError once the attempts are used up.
+        """
+        from .file_utils import looks_like_pdf
+        from .zotero_writeback import _zotero_retry  # it imports this module
+
+        def fetch():
+            content = self.download_file_content(attachment_key)
+            if not looks_like_pdf(content):
+                raise NotAPdfError(attachment_key, content)
+            return content
+
+        return _zotero_retry(fetch, attempts=attempts, delays=delays, retry_on=(NotAPdfError,))
+
     def download_attachment(self, attachment_key):
         """Download a PDF attachment to a temp file. Returns file path.
 
@@ -328,7 +364,7 @@ class ZoteroClient:
         dest_dir = TMP_DIR
         os.makedirs(dest_dir, exist_ok=True)
 
-        content = self.download_file_content(attachment_key)
+        content = self.download_pdf_content(attachment_key)
 
         out_path = os.path.join(dest_dir, f'{attachment_key}.pdf')
         with open(out_path, 'wb') as f:

@@ -37,6 +37,17 @@ def attachment_status(filename: str, content_type: str = '') -> str:
     return 'skipped'
 
 
+def looks_like_pdf(content: bytes) -> bool:
+    """True when these bytes are a PDF: `%PDF-` within the first 1024 bytes,
+    where readers look for the header (some files carry junk before it).
+
+    For checking a download before it is cached — KOPRI's web filter now and
+    then answers a Zotero file request with its own HTML block page, which
+    would otherwise be stored, hashed and reused as the paper's PDF.
+    """
+    return b'%PDF-' in content[:1024]
+
+
 def has_non_pdf_extension(filename: str) -> bool:
     """True only when the name has a concrete extension that isn't a PDF/JSON.
 
