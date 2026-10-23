@@ -5,10 +5,12 @@
 
 ---
 
-## 현재 상태 (2026-10-22)
+## 현재 상태 (2026-10-23)
 
 - **최신 릴리스 v0.2.3**(2026-10-07, 3플랫폼). 코어(Phase 1~3 + D), references(P11~P14), 4월 배치 재OCR([114](./devlog/20261022_114_April_Batch_ReOCR_And_Fragment_Guard.md)), **P16 도판 1차 완주**까지 끝났다
-- **라이브러리**: 논문 9,913(휴지통 제외), PDF 9,954, 도판 99,041. OCR 대기 PaperFile 27개(10-22 동기화로 들어온 새 논문 12편 포함 — PDF 미수신)
+- **라이브러리**: 논문 9,913(휴지통 제외), PDF 9,954, 도판 99,041. **OCR 대기 0** — 대기하던 27개(10-22 동기화분 12 + 6~10월에 들어와 Process를 안 돌린 15,
+  실패 이력 없음)를 10-23에 pdf_cache로 받아 OCR(PaperFile 20022~20048). 부모 없던 PDF 3개는 `auto_promote_standalone`이 Zotero 부모 항목을 만들었다.
+  **이 27편은 OCR까지만** — Info·References·도판은 아직
 - **P16 도판** — 1차 완주(10-21 05:05, [115](./devlog/20261022_115_P16_Unattended_Run_First_Pass.md)): ≤200쪽 파일 9,554/9,554, 도판 99,041, 캡션 88,762(89.6%), 분할 35,181.
   작업 스케줄러 `PaperMeister Figure Queue`(5분 틱)는 그대로 돌지만 할 일이 없다. **새 컬렉션**은 다음 틱이 잡지만 **이미 끝난 컬렉션에 새로 넣은 PDF는 안 잡는다**
   (`figure_queue.json`의 `files_cache`·`done_batches` — 앱 우클릭 Process Figures로 처리하거나 그 키를 두 곳에서 지울 것)
@@ -53,6 +55,8 @@
 - Zotero 동기화: **컬렉션 멤버십 제거가 반영 안 됨**(`PaperFolder.get_or_create`만 — mirror냐 add-only냐 정책) / 앱에서 휴지통 복원 / PaperFile md5 추적(Zotero에서 PDF를 바꿔도 옛 hash 캐시를 씀) /
   `content_type` 컬럼 / itemType 캐시 / OCR JSON 사이블링 attachment title 정규화(지금은 의도적으로 파일명 그대로) / systematic pull sync(지금은 on-demand) / 컬렉션 수준 메타데이터
 - **`ocr_json/`(2.0 GB)에 정기 백업이 없다** — 일일 백업은 DB만. OCR 비용 전체가 여기 있다
+- **PDF 다운로드에 차단 페이지 가드가 없다** — `text_extract._resolve_filepath`는 받은 바이트를 검사 없이 `pdf_cache/<key>/…pdf`로 쓰고 해시를 찍는다.
+  KOPRI 필터가 HTML(413 B)로 바꾸면 그게 캐시·해시로 남아 PDF 탭·도판까지 간다(116). 10-23 실행은 바깥 드라이버에서 `%PDF` 검사·재시도로 막았다
 - **데이터 경로 설정 가능화** — 착수 전제: 프로덕션 20여 곳의 `from .paths import DB_PATH`(import 시점 바인딩)를 접근자로. 규약 원본은 `.guides/desktop/file-locations.md`(§5·§7), 예시는 `../CTHarvester/utils/paths.py`.
   경로 부재 가드(`check_configured_data_dir()`)는 이미 있다
 - 저순위: 병렬 OCR 실측, 암호화·파손 PDF 처리, DB 삭제 후 복구 실증, 커버리지(floor 18%)
