@@ -8,9 +8,10 @@
 ## 현재 상태 (2026-10-23)
 
 - **최신 릴리스 v0.2.3**(2026-10-07, 3플랫폼). 코어(Phase 1~3 + D), references(P11~P14), 4월 배치 재OCR([114](./devlog/20261022_114_April_Batch_ReOCR_And_Fragment_Guard.md)), **P16 도판 1차 완주**까지 끝났다
-- **라이브러리**: 논문 9,913(휴지통 제외), PDF 9,954, 도판 99,041. **OCR 대기 0** — 대기하던 27개(10-22 동기화분 12 + 6~10월에 들어와 Process를 안 돌린 15,
-  실패 이력 없음)를 10-23에 pdf_cache로 받아 OCR(PaperFile 20022~20048). 부모 없던 PDF 3개는 `auto_promote_standalone`이 Zotero 부모 항목을 만들었다.
-  **이 27편은 OCR까지만** — Info·References·도판은 아직. PDF 다운로드는 이제 `%PDF` 검사 + 재시도를 거친다(KOPRI 차단 페이지, [117](./devlog/20261023_117_Pending_OCR_And_PDF_Download_Guard.md))
+- **라이브러리**: 논문 9,913(휴지통 제외), PDF 9,954, 도판 99,259. **대기 0** — 대기하던 27개(10-22 동기화분 12 + 6~10월에 들어와 Process를 안 돌린 15,
+  실패 이력 없음, paper 9899~9925 / PaperFile 20022~20048)를 10-23에 OCR → Info → References → 도판까지 끝냈다
+  (Info는 Zotero에 쓴 것 1·쓸 것 없음 1·검토 대기 16·이미 같음 9, references 1,881·보유 논문 연결 195, 도판 218·캡션 190·분할 75). 부모 없던 PDF 3개는 `auto_promote_standalone`이 Zotero 부모 항목을 만들었다.
+  PDF 다운로드는 이제 `%PDF` 검사 + 재시도를 거친다(KOPRI 차단 페이지). 전부 [117](./devlog/20261023_117_Pending_OCR_And_PDF_Download_Guard.md)
 - **P16 도판** — 1차 완주(10-21 05:05, [115](./devlog/20261022_115_P16_Unattended_Run_First_Pass.md)): ≤200쪽 파일 9,554/9,554, 도판 99,041, 캡션 88,762(89.6%), 분할 35,181.
   작업 스케줄러 `PaperMeister Figure Queue`(5분 틱)는 그대로 돌지만 할 일이 없다. **새 컬렉션**은 다음 틱이 잡지만 **이미 끝난 컬렉션에 새로 넣은 PDF는 안 잡는다**
   (`figure_queue.json`의 `files_cache`·`done_batches` — 앱 우클릭 Process Figures로 처리하거나 그 키를 두 곳에서 지울 것)
@@ -25,7 +26,9 @@
 - **P16 범위 밖 200쪽 초과 ~379파일**(초록집·합본, 도판 ~6만 추정) — 돌릴지
 - **재OCR 뒤 references 재추출 여부** — 본문이 새로 나왔으므로 파싱이 달라질 수 있다. 511k행을 버리는 큰 결정이라 몇 편 비교 후
 - **references 잔여 130편**(give-up 48 — Treatise·化石 합본·단행본 / 직전 PARTIAL 53 / 처리된 PDF 없음 67) — "Retry Failed References…"로 한 번 볼지 영구 제외할지
-- **needs_review 일괄 검토**(실측 5,229편) — Library "Needs Review" → Metadata 탭 Info 대조. 끝나면 non-dry `reflect_biblio.py` 확인 패스 한 번
+- **10-23에 새로 들어온 27편 중 5편은 이미 있던 논문의 중복 Zotero 항목이다** — 새 쪽 → 옛 쪽: 9903→4627(같은 PDF), 9904→2945, 9916→212(같은 PDF), 9917→1346, 9922→7344(DOI 일치).
+  Zotero에서 병합할지. 같은 27편 중 **논문이 아닌 것 3개**: 9923·9915(저자 없는 3쪽 한국어 문헌 검토 노트), 9924 "동네 치과의 AX전환기 — 인쇄용" — 라이브러리에 둘지
+- **needs_review 일괄 검토**(실측 5,174편, 10-23) — Library "Needs Review" → Metadata 탭 Info 대조. 끝나면 non-dry `reflect_biblio.py` 확인 패스 한 번
 - **DOI 필드의 JSTOR SICI 링크 148 + 인코딩된 SICI 3** — 10-22에 그대로 두기로 함(사용자). 진짜 DOI는 대개 JSTOR `10.2307/…`라 Crossref 제목 검색으로 찾을 수 있다(1편 1요청, 천천히)
 - **6355 Manuel 2009(Early evolution of symmetry…)의 Zotero 첨부 `732NKRFK`는 PDF가 아니라 ScienceDirect 페이지 HTML이다**(md5 일치, 117) — 본문 8 passage와 JSON 사이블링 `472HNXXQ`가 그 내용.
   진짜 PDF를 Zotero에 넣으면: `pdf_cache/732NKRFK/` 삭제 → PaperFile 8388 hash 비우고 `pending` + passage 삭제 → JSON 사이블링 휴지통 → 재OCR
@@ -99,6 +102,6 @@
 | 09-14 ~ 09-22 | P16 설계·구현(조립·연결·분할·검수·Figures 탭·머신 간 동기화) | P16·P17 · 095~113 · `docs/figure_pipeline_guide.md` · `docs/figure_server_spec_v2.md` |
 | 09-23 ~ 10-21 | P16 무인 운영 1차 완주 | **115** · `docs/figure_runner_processing_log.md` |
 | 10-21 ~ 10-22 | 논문 라이선스 조사, PDFium 잠금, 백업·사본, Zotero 정리 | R04 · **116** |
-| 10-23 | 대기 PDF 27개 OCR, PDF 다운로드 검사·재시도 | **117** |
+| 10-23 | 대기 PDF 27개 OCR~도판, PDF 다운로드 검사·재시도, "et al." 저자 자동 반영 차단 | **117** |
 
 릴리스별 변경은 `CHANGELOG.md`, 결정된 설계·규약은 CLAUDE.md와 각 P 문서.
