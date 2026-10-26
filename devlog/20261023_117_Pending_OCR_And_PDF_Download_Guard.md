@@ -78,3 +78,26 @@ journalArticle, 저자 "Hsiang et / al.", 2019가 됐다.
 
 - 27편 중 5편은 이미 있던 논문의 중복 Zotero 항목이다. 9903→4627과 9916→212는 PDF가 같고, 9904→2945·9917→1346·9922→7344는 DOI가 같다. 병합 여부는 사용자가 정한다(HANDOFF)
 - 논문이 아닌 것 3개: 9923·9915(문헌 검토 노트)와 9924("동네 치과의 AX전환기 — 인쇄용", 도판 21개 중 캡션 1개)
+
+## 5. 중복 항목 5개 병합 (10-26)
+
+사용자 결정: 이미 있던 논문의 중복은 합치고, 논문이 아닌 문서는 그대로 둔다(라이브러리에 그런 문서가 이것 말고도 꽤 있다).
+
+| 새 항목(휴지통) | 남긴 옛 항목 | PDF |
+|---|---|---|
+| 9903 `RS6H4A3T` | 4627 `4GGZ8E98` Weideman 2017 | 같은 파일 |
+| 9904 `ZM3FTQ8I` | 2945 `TBCUVN82` Kreho 1999 | 같은 출판사 판본, 바이트만 다름 |
+| 9916 `KQM6JWPB` | 212 `FFLDNLHL` Klingenberg 2016 | 같은 파일 |
+| 9917 `CRYCIEBQ` | 1346 `UZMFXSL5` Gerber & Hopkins 2011 | 새 쪽 앞에 OUP 표지 1쪽 |
+| 9922 `ZGF7DZXR` | 7344 `5KYJPEJK` Adams & Collyer 2009 | 같은 출판사 판본 |
+
+- 새 항목들은 원고 컬렉션(`0. Manuscript 2 - DolfinID`, `notch`, `0. Manuscript 7 - AnQ`)에 있었다. 옛 항목은 다른 논문의 인용 연결(5~13건)과 기존 컬렉션을 갖고 있다.
+  새 항목에는 노트·주석(annotation)·고유 태그가 없었다
+- Zotero "Merge Items"와 같은 방식이다. 옛 항목에 새 항목의 컬렉션·태그를 합치고 빈 필드를 채웠다(4627 DOI `10.48550/arXiv.1708.07785`, 7344 language).
+  `dc:replaces`에 새 항목 URI를 달았으므로, Word 원고가 새 항목을 인용하고 있어도 옛 항목으로 이어진다
+- **PDF는 옮기지 않았다.** 새 항목은 PDF·JSON 첨부째 휴지통으로 보냈다(Web API `PATCH {"deleted": 1}`). 같은 논문의 PDF 두 개가 한 Paper에 붙으면 도판과 본문이 두 번 나온다.
+  필요하면 휴지통에서 복원할 수 있다
+- 로컬: `sync_trash_state`가 논문 5·파일 10을 휴지통으로 표시했다. 옛 항목은 Zotero에서 다시 읽었고, 새 항목의 컬렉션을 PaperFolder에 더했다.
+  새 항목의 references 391행은 지웠다(`references_checked`도 해제). `normalize_works`·`citation_stats`는 휴지통 논문을 거르지 않으므로, 두면 같은 논문의 인용이 두 번 집계된다.
+  그 뒤 `recompute_cite_counts()`를 돌렸다. 새 항목으로 연결된 다른 논문의 인용은 0건이었다
+- 라이브러리 전체에는 DOI와 제목이 같은 묶음이 136개 더 있다(HANDOFF 결정 대기)
