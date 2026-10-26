@@ -100,4 +100,4 @@ journalArticle, 저자 "Hsiang et / al.", 2019가 됐다.
 - 로컬: `sync_trash_state`가 논문 5·파일 10을 휴지통으로 표시했다. 옛 항목은 Zotero에서 다시 읽었고, 새 항목의 컬렉션을 PaperFolder에 더했다.
   새 항목의 references 391행은 지웠다(`references_checked`도 해제). `normalize_works`·`citation_stats`는 휴지통 논문을 거르지 않으므로, 두면 같은 논문의 인용이 두 번 집계된다.
   그 뒤 `recompute_cite_counts()`를 돌렸다. 새 항목으로 연결된 다른 논문의 인용은 0건이었다
-- 라이브러리 전체에는 DOI와 제목이 같은 묶음이 136개 더 있다(HANDOFF 결정 대기)
+- 라이브러리 전체에는 DOI와 제목이 같은 묶음이 136개 더 있었다 — 같은 날 병합했다([118](./20261026_118_Library_Wide_Duplicate_Merge.md))
