@@ -5,7 +5,7 @@
 
 ---
 
-## 현재 상태 (2026-10-27)
+## 현재 상태 (2026-11-06)
 
 - **최신 릴리스 v0.2.3**(2026-10-07, 3플랫폼). 코어(Phase 1~3 + D), references(P11~P14), 4월 배치 재OCR([114](./devlog/20261022_114_April_Batch_ReOCR_And_Fragment_Guard.md)), **P16 도판 1차 완주**까지 끝났다
 - **라이브러리**(10-27, 휴지통 제외): 논문 9,766, PDF 9,770, 도판 97,435. **대기 0** — 대기하던 27개(10-22 동기화분 12 + 6~10월에 들어와 Process를 안 돌린 15,
@@ -22,8 +22,14 @@
 - **백업**: DB는 매일 04:00 jikhanserver `/mnt/disk1/backups/papermeister/`(24개 보존). 데이터 디렉터리 전체는 **한 번만** 떠 두었다 —
   `/mnt/disk1/backups/papermeister-full/20261022-1628/`(10-22 Zotero 정리 **전** 상태, 63.9 GB). figsplit용 라이브러리 사본(DB+PDF+OCR JSON, 정리 뒤)은
   `/mnt/disk1/figsplit-data/papermeister/`(주인 figsplit) — [116](./devlog/20261022_116_Library_Copy_Backup_And_Zotero_Cleanup.md)
+- **의존성**(11-06, PR #43 `e01289b`): 열려 있던 Dependabot PR 7개(#33 #34 #36 #38 #39 #41 #42)를 한 PR로 합쳐 lock을 한 번에 재생성·병합하고 원래 PR은 닫았다.
+  PyQt6 6.12.0(qt6 6.12.0, sip 13.13.0)·peewee 4.5.3·pyzotero 1.16.0·truststore 0.10.5·platformdirs 4.14.5로 올라갔고, Pillow 13.0.0·pypdfium2 5.14.0은 이미 lock에 있었다(하한만 상향).
+  CI 전부 green(Linux·Windows 테스트, lock-check, pip-audit, CodeQL). **Windows Anaconda env는 아직 옛 버전** — 아래 사용자 액션
 
 ## 결정 대기
+
+- **`LOCK_REFRESH_TOKEN` 시크릿을 넣을지** — 없으면 Dependabot PR에 `dependabot-lock-refresh.yml`이 올린 lock 커밋에서 CI가 다시 돌지 않아(GITHUB_TOKEN 루프 방지) GitGuardian 한 줄만 보인다.
+  넣으면(fine-grained PAT, `contents: write`) PR별로 green을 확인하고 바로 병합할 수 있다. 안 넣으면 이번처럼 모아서 한 PR로
 
 - **P16 범위 밖 200쪽 초과 ~379파일**(초록집·합본, 도판 ~6만 추정) — 돌릴지
 - **재OCR 뒤 references 재추출 여부** — 본문이 새로 나왔으므로 파싱이 달라질 수 있다. 511k행을 버리는 큰 결정이라 몇 편 비교 후
@@ -40,6 +46,9 @@
 - **RunPod Reserved Pod 이미지 재빌드·push**(10-22 요청, 멈춤) — `deploy/chandra2-vllm-pod`의 PyMuPDF → pypdfium2 반영분. 이미지 이름·레지스트리가 저장소에 없고(README는 자리표시자) Docker Desktop이 꺼져 있었다
 
 ## 사용자 액션 대기
+
+- [ ] **Windows Anaconda env를 새 lock으로** — 앱·러너·`--execute` 스크립트가 쓰는 라이브 환경이다(PyQt6 6.12 등, PR #43):
+  `"…/envs/PaperMeister/python.exe" -m pip install --require-hashes -r requirements.lock` 후 앱 기동·PDF 탭·도판 러너 틱 한 번 확인
 
 - [ ] **설치본 수동 확인** — CI 스모크는 "기동한다"까지만 본다. 제자리 업그레이드(AppId 고정)와 **프로즌 빌드에서 PDF 탭이 그려지는지**(PyInstaller 번들의 `pdfium.dll`)
 - [ ] **백업 신선도 감시를 서버에** — 백업은 이 PC가 깨어 있을 때만 돈다. 실패 모드가 "조용히 안 돎"이라 서버 쪽에서:
@@ -85,6 +94,8 @@
 - **Zotero 사이블링 푸시 실패**는 로그에서 찾아 다시 올린다: `grep -oh 'not pushed to the Zotero sibling for [0-9a-f]*' logs/figure_queue*` → `paperfile.hash LIKE '<접두>%'` → `figure_share.py --export --paper-ids … --execute`(115).
   쌍둥이가 있으면 단계가 가장 새로운 쌍둥이에서 내보낼 것(116)
 - **Zotero 항목을 휴지통으로**: pyzotero `update_item`이 `deleted`를 거부한다 → Web API `PATCH /items/{key}` `{"deleted": 1}` + `If-Unmodified-Since-Version`. 앱 동기화가 trash를 로컬에 미러한다
+- **Dependabot PR은 모아서 한 PR로** — lock-refresh 커밋은 CI를 다시 안 돌리고(`LOCK_REFRESH_TOKEN` 없음), 하나씩 병합하면 매번 lockfile이 충돌한다.
+  브랜치에서 `requirements.txt`를 다 반영 → `make lock` → 테스트 → PR → green이면 병합 후 원 PR은 닫기(PR #43)
 - **CI는 push에서만 돈다** — 오래 쉰 뒤 첫 push는 결과를 반드시 확인([090](./devlog/20260813_090_Dependency_Sweep_And_CI_Red_Fortnight.md)). lock 설치는 `python -m pip`(Windows `pip.exe`는 자신을 못 바꾼다)
 - **새 런타임 의존성**: `papermeister/about.py` 표에 넣어야 테스트가 통과하고(copyleft 차단), Windows Anaconda env에도 설치해야 라이브가 안 죽는다
 
@@ -108,5 +119,6 @@
 | 10-21 ~ 10-22 | 논문 라이선스 조사, PDFium 잠금, 백업·사본, Zotero 정리 | R04 · **116** |
 | 10-23 | 대기 PDF 27개 OCR~도판, PDF 다운로드 검사·재시도, "et al." 저자 자동 반영 차단 | **117** |
 | 10-26 ~ 10-27 | 라이브러리 전체 같은 DOI·제목 중복 142항목 병합(PDF 내용 대조, 다른 문서 5묶음 제외), 한 항목의 같은 논문 PDF 사본 53개 정리 | **118** |
+| 11-06 | Dependabot 7개 일괄 반영(PyQt6 6.12 외) | PR #43 |
 
 릴리스별 변경은 `CHANGELOG.md`, 결정된 설계·규약은 CLAUDE.md와 각 P 문서.
