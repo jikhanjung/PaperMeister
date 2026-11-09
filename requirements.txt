@@ -5,4 +5,4 @@ Pillow>=13.0.0
 requests>=2.34.2
 pyzotero~=1.16.0
 truststore~=0.10.5
-platformdirs>=4.14.0
+platformdirs>=4.14.5
