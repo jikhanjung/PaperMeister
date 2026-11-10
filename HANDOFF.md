@@ -5,7 +5,7 @@
 
 ---
 
-## 현재 상태 (2026-11-06)
+## 현재 상태 (2026-11-10)
 
 - **최신 릴리스 v0.2.3**(2026-10-07, 3플랫폼). 코어(Phase 1~3 + D), references(P11~P14), 4월 배치 재OCR([114](./devlog/20261022_114_April_Batch_ReOCR_And_Fragment_Guard.md)), **P16 도판 1차 완주**까지 끝났다
 - **라이브러리**(10-27, 휴지통 제외): 논문 9,766, PDF 9,770, 도판 97,435. **대기 0** — 대기하던 27개(10-22 동기화분 12 + 6~10월에 들어와 Process를 안 돌린 15,
@@ -25,11 +25,14 @@
 - **의존성**(11-06, PR #43 `e01289b`): 열려 있던 Dependabot PR 7개(#33 #34 #36 #38 #39 #41 #42)를 한 PR로 합쳐 lock을 한 번에 재생성·병합하고 원래 PR은 닫았다.
   PyQt6 6.12.0(qt6 6.12.0, sip 13.13.0)·peewee 4.5.3·pyzotero 1.16.0·truststore 0.10.5·platformdirs 4.14.5로 올라갔고, Pillow 13.0.0·pypdfium2 5.14.0은 이미 lock에 있었다(하한만 상향).
   CI 전부 green(Linux·Windows 테스트, lock-check, pip-audit, CodeQL). **Windows Anaconda env는 아직 옛 버전** — 아래 사용자 액션
+  11-10: Dependabot PR #44(platformdirs 하한 4.14.5, lock 변경 없음, `b5ad7b0`)와 #45(pypdfium2 5.15.2, `c4a9638`)를 병합해 열린 Dependabot PR은 0개다.
+  #45는 lock 커밋의 CI가 `action_required`로 멈춰 있어 사용자가 Approve and run 한 뒤 Linux·Windows 테스트(둘 다 5.15.2 설치 확인), lock-check, pip-audit, CodeQL 전부 green을 보고 병합했다.
+  5.15부터 릴리스 wheel이 pdfium-binaries가 아닌 소스 빌드다. **Windows Anaconda env에도 이 lock을 반영해야 하고, 프로즌 빌드는 미확인** — 아래 사용자 액션
 
 ## 결정 대기
 
 - **`LOCK_REFRESH_TOKEN` 시크릿을 넣을지** — 없으면 Dependabot PR에 `dependabot-lock-refresh.yml`이 올린 lock 커밋에서 CI가 다시 돌지 않아(GITHUB_TOKEN 루프 방지) GitGuardian 한 줄만 보인다.
-  넣으면(fine-grained PAT, `contents: write`) PR별로 green을 확인하고 바로 병합할 수 있다. 안 넣으면 이번처럼 모아서 한 PR로
+  넣으면(fine-grained PAT, `contents: write`) PR별로 green을 확인하고 바로 병합할 수 있다. 안 넣으면 #43처럼 모아서 한 PR로 하거나, #45처럼 Actions에서 `action_required`로 멈춘 실행을 Approve and run 한다
 
 - **P16 범위 밖 200쪽 초과 ~379파일**(초록집·합본, 도판 ~6만 추정) — 돌릴지
 - **재OCR 뒤 references 재추출 여부** — 본문이 새로 나왔으므로 파싱이 달라질 수 있다. 511k행을 버리는 큰 결정이라 몇 편 비교 후
@@ -47,10 +50,10 @@
 
 ## 사용자 액션 대기
 
-- [ ] **Windows Anaconda env를 새 lock으로** — 앱·러너·`--execute` 스크립트가 쓰는 라이브 환경이다(PyQt6 6.12 등, PR #43):
+- [ ] **Windows Anaconda env를 새 lock으로** — 앱·러너·`--execute` 스크립트가 쓰는 라이브 환경이다(PyQt6 6.12 등 PR #43, pypdfium2 5.15.2 PR #45):
   `"…/envs/PaperMeister/python.exe" -m pip install --require-hashes -r requirements.lock` 후 앱 기동·PDF 탭·도판 러너 틱 한 번 확인
 
-- [ ] **설치본 수동 확인** — CI 스모크는 "기동한다"까지만 본다. 제자리 업그레이드(AppId 고정)와 **프로즌 빌드에서 PDF 탭이 그려지는지**(PyInstaller 번들의 `pdfium.dll`)
+- [ ] **설치본 수동 확인** — CI 스모크는 "기동한다"까지만 본다. 제자리 업그레이드(AppId 고정)와 **프로즌 빌드에서 PDF 탭이 그려지는지**(PyInstaller 번들의 `pdfium.dll` — pypdfium2 5.15부터 소스 빌드 wheel이라 다음 릴리스 빌드에서 특히 볼 것)
 - [ ] **백업 신선도 감시를 서버에** — 백업은 이 PC가 깨어 있을 때만 돈다. 실패 모드가 "조용히 안 돎"이라 서버 쪽에서:
   `find /mnt/disk1/backups/papermeister -name 'papermeister-*.db.gz' -mtime -2 | grep -q . || echo stale`
 - [ ] **서버의 옛 `~/backups` 정리** — retention은 새 디렉터리만 청소한다(10-22 기준 9월 파일 3개, 3.3 GB): `ssh jikhanserver "ls -t ~/backups/papermeister-*.db.gz"` 확인 후 삭제
