@@ -11,6 +11,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.4] - 2026-11-11
+
+A PDF library that cannot crash the app from two threads, and downloads that
+are checked to be PDFs.
+
+### Changed
+- **The unattended figure run can work as a five-minute tick.**
+  `scripts/figure_queue.py --tick` does one pass and exits;
+  `scripts/install-figure-tick.ps1` registers it with Windows Task Scheduler,
+  so a pass that dies costs five minutes instead of stopping the run. Ticks
+  and the long-running loop never run at once, a stop file pauses them, and
+  the desktop app may stay open meanwhile.
+- **A box the caption stage calls no figure is asked once.** Asking again
+  with more pages almost never changed the answer, and between large
+  batches those retries were nearly half the caption requests.
+
+### Fixed
+- The app could crash when the PDF tab, the Text and Figures tabs and OCR
+  rendered pages at the same moment: the PDF library is not safe to call
+  from two threads. Every call now goes through one lock.
+- A network filter's block page served in place of a Zotero PDF was saved as
+  the paper's file. A download is now checked to be a PDF, and asked for
+  again when it is not.
+- Syncing with Zotero no longer puts an older copy of a paper's OCR file over
+  a newer one on this computer.
+- An extracted author reading "et al." holds the Info for review instead of
+  writing it to Zotero.
+- `scripts/extract_references.py` no longer stops on a Korean Windows
+  console when a title has a character the console cannot print.
+- The unattended figure run no longer resubmits figures a running job has
+  already finished, reads a finished job only once, lets the next batch start
+  while one waits only for captions, logs the figures a reply gave no caption
+  for, and shows the batch under way in `--status`.
+- Dependencies: PyQt6 6.12, peewee 4.5.3, pyzotero 1.16, truststore 0.10.5,
+  platformdirs 4.14.5, and security fixes in Pillow 13.0.0, certifi
+  2026.10.19 and pypdfium2 5.15.2.
+
+---
+
 ## [0.2.3] - 2026-10-07
 
 Shorter caption answers, and no reply left behind on the server.
