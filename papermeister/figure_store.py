@@ -37,7 +37,7 @@ import json
 from dataclasses import dataclass, field
 
 from . import figures
-from .models import Figure, PaperFile, db
+from .models import Figure, Paper, PaperFile, db
 
 REASSEMBLY = 'reassembly'
 USER = 'user'
@@ -252,9 +252,19 @@ def apply_plan(plan: StorePlan) -> None:
             row.save()
 
 
+def shown_file():
+    """The files the app shows: not those trashed on their own in Zotero. A
+    paper in the trash keeps all of its files, so the Trash view shows it as
+    it was. Needs PaperFile and Paper in the query."""
+    return PaperFile.trashed_at.is_null() | Paper.trashed_at.is_null(False)
+
+
 def figures_for_paper(paper_id: int) -> list[Figure]:
-    """A paper's figures in reading order, without folded ones or placeholders."""
+    """A paper's figures in reading order, without folded ones, placeholders,
+    or those of a file trashed on its own (`shown_file`)."""
     return list(Figure.select()
+                .join(PaperFile, on=(Figure.paper_file == PaperFile.id))
+                .switch(Figure).join(Paper, on=(Figure.paper == Paper.id))
                 .where((Figure.paper == paper_id) & (Figure.dismissed == False)  # noqa: E712 (peewee)
-                       & (Figure.assembly != PAGE))
+                       & (Figure.assembly != PAGE) & shown_file())
                 .order_by(Figure.page, Figure.id))

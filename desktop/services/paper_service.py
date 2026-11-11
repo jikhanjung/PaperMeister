@@ -222,7 +222,7 @@ class _RowContext:
                             self.refs.get(paper.id, (0, 0)), self.figs.get(paper.id, (0, 0, 0, 0)))
 
     def primary_file(self, paper: Paper) -> PaperFile | None:
-        return _pick_primary(self.files.get(paper.id, []))
+        return _pick_primary(_shown_files(paper, self.files.get(paper.id, [])))
 
     def biblio_statuses(self, paper: Paper) -> set[str]:
         return self.biblio.get(paper.id, set())
@@ -236,7 +236,7 @@ class _RowContext:
 
 def _figure_counts_query(ids):
     """Per paper: figures (not folded, not placeholders), captioned, split, panels."""
-    from papermeister.figure_store import PAGE
+    from papermeister.figure_store import PAGE, shown_file
     from papermeister.models import FigurePanel
     panels = (FigurePanel.select(FigurePanel.figure, fn.COUNT(FigurePanel.id).alias('k'))
               .group_by(FigurePanel.figure).alias('pn'))
@@ -245,7 +245,10 @@ def _figure_counts_query(ids):
                           fn.SUM(Figure.panel_key != '').alias('split'),
                           fn.COALESCE(fn.SUM(panels.c.k), 0).alias('panels'))
             .join(panels, JOIN.LEFT_OUTER, on=(panels.c.figure_id == Figure.id))
-            .where((Figure.paper << ids) & (Figure.dismissed == False) & (Figure.assembly != PAGE))  # noqa: E712
+            .switch(Figure).join(PaperFile, on=(Figure.paper_file == PaperFile.id))
+            .switch(Figure).join(Paper, on=(Figure.paper == Paper.id))
+            .where((Figure.paper << ids) & (Figure.dismissed == False) & (Figure.assembly != PAGE)  # noqa: E712
+                   & shown_file())
             .group_by(Figure.paper))
 
 
@@ -288,14 +291,24 @@ def _pick_primary(files: list[PaperFile]) -> PaperFile | None:
     return files[0]  # all JSON — return first
 
 
+def _shown_files(paper, files: list[PaperFile]) -> list[PaperFile]:
+    """Leave out files trashed on their own in Zotero; a paper in the trash
+    keeps them all (figure_store.shown_file, the same rule for figures)."""
+    if paper.trashed_at is not None:
+        return files
+    return [f for f in files if f.trashed_at is None]
+
+
 def _primary_file(paper) -> PaperFile | None:
     """Return the best PaperFile for a paper.
 
     Prefer an actual PDF (the OCR target) so a paper's pill reflects its PDF,
     not a skipped supplementary (.txt/.doc) or a derived JSON sibling. Falls
-    back to any non-JSON, then the first file.
+    back to any non-JSON, then the first file. A file trashed on its own is
+    not a candidate (`_shown_files`).
     """
-    return _pick_primary(list(PaperFile.select().where(PaperFile.paper == paper).order_by(PaperFile.id)))
+    files = list(PaperFile.select().where(PaperFile.paper == paper).order_by(PaperFile.id))
+    return _pick_primary(_shown_files(paper, files))
 
 
 def _row_from_paper(paper: Paper, source_name: str, ctx: _RowContext | None = None) -> PaperRow:
