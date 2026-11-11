@@ -5,9 +5,11 @@
 
 ---
 
-## 현재 상태 (2026-11-10)
+## 현재 상태 (2026-11-12)
 
-- **최신 릴리스 v0.2.3**(2026-10-07, 3플랫폼). 코어(Phase 1~3 + D), references(P11~P14), 4월 배치 재OCR([114](./devlog/20261022_114_April_Batch_ReOCR_And_Fragment_Guard.md)), **P16 도판 1차 완주**까지 끝났다
+- **최신 릴리스 v0.2.4**(2026-11-12 08:29 KST 발행, 3플랫폼, build 499, 릴리스 커밋 `c24be87`) — v0.2.3 이후 버그 수정·의존성 갱신만 있어 patch로 올렸다.
+  release.yml의 Ubuntu 테스트가 apt DNS 장애(Ubuntu 미러 주소를 못 찾음, 코드와 무관)로 두 번 실패해, 사용자 결정으로 30분 뒤 실패한 잡만 재실행했고 세 번째에 통과했다.
+  산출물 4개 + SHA256SUMS, 체크섬은 GitHub asset digest와 일치. 코어(Phase 1~3 + D), references(P11~P14), 4월 배치 재OCR([114](./devlog/20261022_114_April_Batch_ReOCR_And_Fragment_Guard.md)), **P16 도판 1차 완주**까지 끝났다
 - **라이브러리**(10-27, 휴지통 제외): 논문 9,766, PDF 9,770, 도판 97,435. **대기 0** — 대기하던 27개(10-22 동기화분 12 + 6~10월에 들어와 Process를 안 돌린 15,
   실패 이력 없음, paper 9899~9925 / PaperFile 20022~20048)를 10-23에 OCR → Info → References → 도판까지 끝냈다
   (Info는 Zotero에 쓴 것 1·쓸 것 없음 1·검토 대기 16·이미 같음 9, references 1,881·보유 논문 연결 195, 도판 218·캡션 190·분할 75). 부모 없던 PDF 3개는 `auto_promote_standalone`이 Zotero 부모 항목을 만들었다.
@@ -27,7 +29,9 @@
   CI 전부 green(Linux·Windows 테스트, lock-check, pip-audit, CodeQL). **Windows Anaconda env는 아직 옛 버전** — 아래 사용자 액션
   11-10: Dependabot PR #44(platformdirs 하한 4.14.5, lock 변경 없음, `b5ad7b0`)와 #45(pypdfium2 5.15.2, `c4a9638`)를 병합해 열린 Dependabot PR은 0개다.
   #45는 lock 커밋의 CI가 `action_required`로 멈춰 있어 사용자가 Approve and run 한 뒤 Linux·Windows 테스트(둘 다 5.15.2 설치 확인), lock-check, pip-audit, CodeQL 전부 green을 보고 병합했다.
-  5.15부터 릴리스 wheel이 pdfium-binaries가 아닌 소스 빌드다. **Windows Anaconda env에도 이 lock을 반영해야 하고, 프로즌 빌드는 미확인** — 아래 사용자 액션
+  5.15부터 릴리스 wheel이 pdfium-binaries가 아닌 소스 빌드다. **Windows Anaconda env에도 이 lock을 반영해야 하고, v0.2.4 설치본은 미확인** — 아래 사용자 액션
+- **Zotero에서 첨부 하나만 휴지통에 넣으면 앱에서 사라진다**(11-12, PR #47, 118 §8.4) — 도판(Figures·Text 탭), 대표 PDF, 목록 행, Stages 도판 수가 `figure_store.shown_file()` 한 규칙을 따른다.
+  논문째 휴지통에 간 것은 파일을 모두 보여준다(Trash 보기). 파이프라인 레인은 이 함수들을 안 써서 그대로다
 
 ## 결정 대기
 
@@ -35,25 +39,32 @@
   넣으면(fine-grained PAT, `contents: write`) PR별로 green을 확인하고 바로 병합할 수 있다. 안 넣으면 #43처럼 모아서 한 PR로 하거나, #45처럼 Actions에서 `action_required`로 멈춘 실행을 Approve and run 한다
 
 - **P16 범위 밖 200쪽 초과 ~379파일**(초록집·합본, 도판 ~6만 추정) — 돌릴지
-- **재OCR 뒤 references 재추출 여부** — 본문이 새로 나왔으므로 파싱이 달라질 수 있다. 511k행을 버리는 큰 결정이라 몇 편 비교 후
 - **references 잔여 130편**(give-up 48 — Treatise·化石 합본·단행본 / 직전 PARTIAL 53 / 처리된 PDF 없음 67) — "Retry Failed References…"로 한 번 볼지 영구 제외할지
-- **같은 DOI·제목인데 다른 문서인 5묶음**(118 §2, 병합 안 함) — 본문/부록이 항목 둘로 나뉜 2쌍(`10.1098/rsbl.2004.0194` 1746·1745, `10.1038/s41559-020-01291-1` 2315·2314)은 부록을 본문 항목 밑으로 옮길지 그대로 둘지.
-  메타데이터가 틀린 3묶음은 고칠 것 — diva 1615(Stein 2008)·190(Kesidis 2020) 학위논문, molbev 925(Tel Aviv 석사논문), Fossils and Strata 4의 챕터 셋 2440·538·2159(`book` → `bookSection`)
-- **앱이 휴지통으로 간 첨부를 숨기지 않는다**(118 §8.4) — `figures_for_paper()`·`_primary_file()`이 `PaperFile.trashed_at`을 거르지 않아, Zotero에서 첨부 하나만 휴지통에 넣으면 그 도판이 Figures 탭에 남는다. 고칠지
-- **passages가 본문이 아닌 파일에서 나온 논문** — 4482(Geyer 2020)는 11쪽 PDF가 아니라 1쪽 PNG의 텍스트다. passages는 마지막으로 OCR한 파일이 덮어쓴다. PDF가 둘 이상인 32편(서로 다른 문서)을 점검할지
-- **needs_review 일괄 검토**(실측 5,066편, 10-26) — Library "Needs Review" → Metadata 탭 Info 대조. 끝나면 non-dry `reflect_biblio.py` 확인 패스 한 번
 - **DOI 필드의 JSTOR SICI 링크 148 + 인코딩된 SICI 3** — 10-22에 그대로 두기로 함(사용자). 진짜 DOI는 대개 JSTOR `10.2307/…`라 Crossref 제목 검색으로 찾을 수 있다(1편 1요청, 천천히)
 - **6355 Manuel 2009(Early evolution of symmetry…)의 Zotero 첨부 `732NKRFK`는 PDF가 아니라 ScienceDirect 페이지 HTML이다**(md5 일치, 117) — 본문 8 passage와 JSON 사이블링 `472HNXXQ`가 그 내용.
   진짜 PDF를 Zotero에 넣으면: `pdf_cache/732NKRFK/` 삭제 → PaperFile 8388 hash 비우고 `pending` + passage 삭제 → JSON 사이블링 휴지통 → 재OCR
 - **6988 Barraclough & Nee 2001은 PDF가 없다** — 붙어 있던 건 다른 논문(Zimkus 2010)이라 10-22에 뺐다. 진짜 PDF는 라이브러리에 없다
 - **RunPod Reserved Pod 이미지 재빌드·push**(10-22 요청, 멈춤) — `deploy/chandra2-vllm-pod`의 PyMuPDF → pypdfium2 반영분. 이미지 이름·레지스트리가 저장소에 없고(README는 자리표시자) Docker Desktop이 꺼져 있었다
 
+## 결정된 것 (2026-11-12, 사용자)
+
+다시 묻지 말 것. 바꾸려면 사용자가 먼저 말한다.
+
+- **재OCR 뒤 references 재추출: 하지 않는다** — 511k행은 그대로 둔다
+- **같은 DOI·제목인데 다른 문서인 5묶음(118 §2): 그대로 둔다** — 병합도, 메타데이터 수정도, 부록 이동도 하지 않는다.
+  본문/부록 2쌍(`10.1098/rsbl.2004.0194` 1745 본문·1746 부록, `10.1038/s41559-020-01291-1` 2314 본문·2315 부록)과
+  메타데이터가 틀린 3묶음(diva 1615 Stein 2008·190 Kesidis 2020 학위논문, molbev 925 Tel Aviv 석사논문·915 MBE 논문, Fossils and Strata 4 챕터 2440·538·2159)
+  모두 사용자가 "그대로 둠"을 골랐다. 참고: 부록을 Zotero에서 다른 항목 밑으로 옮겨도 동기화는 로컬 PaperFile을 새 부모로 옮기지 않는다(`ingestion.py`는 키로 찾은 기존 행을 그대로 둔다)
+- **휴지통으로 간 첨부를 앱에서 숨긴다** — 고쳤다(위 현재 상태, PR #47)
+- **passages가 본문이 아닌 파일에서 나온 논문(4482 Geyer 2020 등, PDF가 둘 이상인 32편): 무시한다** — 점검하지 않는다
+- **needs_review 일괄 검토(5,066편): 미룬다** — 사용량에 여유가 있을 때 진행한다. 그때 Library "Needs Review" → Metadata 탭 Info 대조, 끝나면 non-dry `reflect_biblio.py` 확인 패스 한 번
+
 ## 사용자 액션 대기
 
 - [ ] **Windows Anaconda env를 새 lock으로** — 앱·러너·`--execute` 스크립트가 쓰는 라이브 환경이다(PyQt6 6.12 등 PR #43, pypdfium2 5.15.2 PR #45):
   `"…/envs/PaperMeister/python.exe" -m pip install --require-hashes -r requirements.lock` 후 앱 기동·PDF 탭·도판 러너 틱 한 번 확인
 
-- [ ] **설치본 수동 확인** — CI 스모크는 "기동한다"까지만 본다. 제자리 업그레이드(AppId 고정)와 **프로즌 빌드에서 PDF 탭이 그려지는지**(PyInstaller 번들의 `pdfium.dll` — pypdfium2 5.15부터 소스 빌드 wheel이라 다음 릴리스 빌드에서 특히 볼 것)
+- [ ] **설치본 수동 확인** — CI 스모크는 "기동한다"까지만 본다. 제자리 업그레이드(AppId 고정)와 **프로즌 빌드에서 PDF 탭이 그려지는지**(PyInstaller 번들의 `pdfium.dll` — pypdfium2 5.15부터 소스 빌드 wheel이다. **v0.2.4 설치본**(`PaperMeister_v0.2.4_build499_Installer.exe`)으로 확인할 것)
 - [ ] **백업 신선도 감시를 서버에** — 백업은 이 PC가 깨어 있을 때만 돈다. 실패 모드가 "조용히 안 돎"이라 서버 쪽에서:
   `find /mnt/disk1/backups/papermeister -name 'papermeister-*.db.gz' -mtime -2 | grep -q . || echo stale`
 - [ ] **서버의 옛 `~/backups` 정리** — retention은 새 디렉터리만 청소한다(10-22 기준 9월 파일 3개, 3.3 GB): `ssh jikhanserver "ls -t ~/backups/papermeister-*.db.gz"` 확인 후 삭제
