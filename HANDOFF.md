@@ -29,7 +29,7 @@
   CI 전부 green(Linux·Windows 테스트, lock-check, pip-audit, CodeQL).
   11-10: Dependabot PR #44(platformdirs 하한 4.14.5, lock 변경 없음, `b5ad7b0`)와 #45(pypdfium2 5.15.2, `c4a9638`)를 병합해 열린 Dependabot PR은 0개다.
   #45는 lock 커밋의 CI가 `action_required`로 멈춰 있어 사용자가 Approve and run 한 뒤 Linux·Windows 테스트(둘 다 5.15.2 설치 확인), lock-check, pip-audit, CodeQL 전부 green을 보고 병합했다.
-  5.15부터 릴리스 wheel이 pdfium-binaries가 아닌 소스 빌드다. **v0.2.4 설치본은 미확인** — 아래 사용자 액션
+  5.15부터 릴리스 wheel이 pdfium-binaries가 아닌 소스 빌드다 — 11-12에 v0.2.4 설치본으로 제자리 업그레이드해 프로즌 빌드의 PDF 탭이 그려지는 것을 사용자가 확인했다
   11-12: **Windows Anaconda env를 lock에 맞췄다** — 사용자가 `pip install --require-hashes -r requirements.lock`(15개 갱신: PyQt6/Qt 6.11.0→6.12.0, pypdfium2 5.13.0→5.15.2,
   peewee 4.3.0→4.5.3, Pillow 12.3.0→13.0.0, pyzotero 1.13.7→1.16.0 등). `pip check` 깨끗, PDFium 159.0.8149.0 소스 빌드 로드, 앱 PDF·Figures 탭 정상,
   도판 틱(pythonw)도 새 env로 오류 없이 돈다(큐가 비어 렌더는 안 거침). PowerShell에서 따옴표 경로를 실행하려면 `& "…\python.exe"`(또는 env 활성화 후 `python`)
@@ -64,7 +64,6 @@
 
 ## 사용자 액션 대기
 
-- [ ] **설치본 수동 확인** — CI 스모크는 "기동한다"까지만 본다. 제자리 업그레이드(AppId 고정)와 **프로즌 빌드에서 PDF 탭이 그려지는지**(PyInstaller 번들의 `pdfium.dll` — pypdfium2 5.15부터 소스 빌드 wheel이다. **v0.2.4 설치본**(`PaperMeister_v0.2.4_build499_Installer.exe`)으로 확인할 것)
 - [ ] **백업 신선도 감시를 서버에** — 백업은 이 PC가 깨어 있을 때만 돈다. 실패 모드가 "조용히 안 돎"이라 서버 쪽에서:
   `find /mnt/disk1/backups/papermeister -name 'papermeister-*.db.gz' -mtime -2 | grep -q . || echo stale`
 - [ ] **서버의 옛 `~/backups` 정리** — retention은 새 디렉터리만 청소한다(10-22 기준 9월 파일 3개, 3.3 GB): `ssh jikhanserver "ls -t ~/backups/papermeister-*.db.gz"` 확인 후 삭제
