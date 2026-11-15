@@ -101,6 +101,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: papermeister-windows
+          retention-days: 3
           path: |
             PaperMeister-Windows-*.zip
             PaperMeister_*_Installer.exe
@@ -165,6 +166,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: papermeister-linux
+          retention-days: 3
           path: build_linux/PaperMeister-Linux-*.AppImage
 
   # macOS leg — PyInstaller onedir → .app → .dmg (hdiutil). NOT notarized/signed,
@@ -212,4 +214,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: papermeister-macos
+          retention-days: 3
           path: PaperMeister-macOS-*.dmg
