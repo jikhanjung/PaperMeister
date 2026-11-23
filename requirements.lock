@@ -4,8 +4,9 @@ anyio==4.14.2 ; sys_platform != 'emscripten' \
     --hash=sha256:9f505dda5ac9f0c8309b5e8bd445a8c2bf7246f3ce950121e45ea15bc41d1494 \
     --hash=sha256:cfa139f3ed1a23ee8f88a145ddb5ac7605b8bbfd8592baacd7ce3d8bb4313c7f
     # via httpx2
-bibtexparser==1.4.4 \
-    --hash=sha256:093b6c824f7a71d3a748867c4057b71f77c55b8dbc07efc993b781771520d8fb
+bibtexparser==2.1.0 \
+    --hash=sha256:3b4b1de50ce45ee9091ccca72e1efc8732ab3ef615b70bcecc537c17cd84753e \
+    --hash=sha256:9f48851eef4693cb7ef6897f7628966c5d0ef49b6403b13a862679a4c313d176
     # via pyzotero
 certifi==2026.10.19 \
     --hash=sha256:035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae \
@@ -226,10 +227,12 @@ platformdirs==4.14.5 \
     --hash=sha256:32e9921db7385aa8169bee4fe9501923e5715ba9fb7ea3b9c69b0d8e0639f7a1 \
     --hash=sha256:8e778c6fa421516f4d3369449f8df3b0e1b72c0e0005fe88e3ec772d0a14e750
     # via -r requirements.txt
-pyparsing==3.3.2 \
-    --hash=sha256:850ba148bd908d7e2411587e247a1e4f0327839c40e2e5e6d05a007ecc69911d \
-    --hash=sha256:c777f4d763f140633dcb6d8a3eda953bf7a214dc4eff598413c070bcdc117cbc
-    # via bibtexparser
+pylatexenc==2.11 \
+    --hash=sha256:305a072a99ce736246049c9da05841b9d718c0f7ea8888f5f596cf15cb621053 \
+    --hash=sha256:e78e7391d6c104f1ed150e21cfaa58016cdb50aa54406a2eecb793649ffdfdd0
+    # via
+    #   bibtexparser
+    #   pyzotero
 pypdfium2==5.15.2 \
     --hash=sha256:0185193bbdf0cc39f0bf31954c25f12edb81048bcb628ea4fc3dccf8d2ce2aef \
     --hash=sha256:2dd2ef2e966181b199870e109ae3c17af4415fc012ba12b7f8d7e08d521bd480 \
@@ -303,9 +306,9 @@ pyqt6-sip==13.13.0 \
     --hash=sha256:fe966368ecd09319d7b6df31cb3dc484128e2b36177fb814faa5b8b7e6525b37 \
     --hash=sha256:ff5d5bd3920d1e2bc251a931233c7909df08fa12786c2ddbcef935b6105bfb0c
     # via pyqt6
-pyzotero==1.16.0 \
-    --hash=sha256:ba17e165a582c443feb3443d13a26c212335e1914a79f99e7a00228fafbc0ce2 \
-    --hash=sha256:d0914227135e798f13b5f0a81f54322a392ef2bd50e95d7c62ffc58015efb9f9
+pyzotero==1.17.0 \
+    --hash=sha256:32932028ced7db3b3a27e22546a4a90f97e4abbc6959c5a69567076e3198f4b3 \
+    --hash=sha256:3477de592b1e3180c044ffaa8696b4970efd462f3392285a8d2d13d7c456b4b1
     # via -r requirements.txt
 requests==2.34.2 \
     --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0 \
